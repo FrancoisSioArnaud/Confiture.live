@@ -517,26 +517,43 @@ Si le participant faisait partie d'une ligne entièrement jouée, l'application 
 
 ---
 
-## 17. Action “plateau joué”
+## 17. Actions directes de plateau
 
-L'organisateur peut sélectionner une ligne de tableau.
+Il n'y a pas de ligne sélectionnée en V0.
 
-Une fois une ligne sélectionnée, il peut lancer des actions sur le plateau.
+Chaque ligne du tableau affiche directement deux actions dans la colonne fixe de gauche :
 
-Action principale :
+1. ouvrir le drawer d'appel ;
+2. marquer le plateau comme joué.
 
-- marquer tout le plateau comme joué.
+## 17.1 Ouvrir le drawer d'appel
+
+Cette action ouvre le drawer d'appel des musiciens pour la ligne concernée.
+
+Le drawer permet :
+
+- de voir les musiciens du plateau en grand ;
+- de marquer un musicien comme ayant joué ;
+- de marquer tout le plateau comme joué ;
+- d'indiquer qu'un musicien n'est pas disponible ;
+- de choisir un remplaçant ;
+- d'ajouter une case vide volontaire sur la ligne si l'organisateur veut faire jouer le plateau sans un instrument.
+
+## 17.2 Marquer le plateau comme joué
 
 Cette action peut être faite :
 
-- depuis le tableau ;
+- depuis le bouton direct de la ligne dans la colonne gauche ;
 - depuis le drawer d'appel des musiciens.
+
+Le bouton utilise la même icône que le bouton `a joué` d'un musicien.
 
 Quand le plateau est marqué comme joué :
 
-- tous les musiciens du plateau sont passés à l'état `joué` ;
+- tous les musiciens du plateau passent à l'état `joué` ;
 - les trous volontaires du plateau sont conservés dans l'historique ;
-- les cases deviennent grisées.
+- les cases deviennent grisées ;
+- la ligne reste à sa place.
 
 Important :
 
@@ -552,20 +569,44 @@ Par défaut, l'application évite les trous.
 
 Cependant, l'organisateur doit pouvoir faire jouer un plateau sans musicien sur un instrument donné.
 
-Il faut donc pouvoir ajouter une case vide volontaire dans une colonne sans forcément créer un lien avec un participant.
+Il existe donc deux types de trous volontaires :
+
+1. trou lié, créé via `Veux jouer sans` ;
+2. trou manuel non lié, créé pour une ligne précise.
+
+## 18.1 Trou manuel non lié
+
+Un trou manuel non lié sert à faire jouer une ligne sans musicien sur un instrument, sans rattacher ce choix à un participant précis.
 
 Cas d'usage :
 
-- faire jouer un plateau sans bassiste ;
-- faire jouer guitare/voix sans batterie ;
-- valider un plateau même si tous les instruments ne sont pas représentés.
+- le plateau part sans bassiste ;
+- aucun pianiste n'est disponible pour cette ligne ;
+- l'organisateur veut valider le plateau sans attendre un remplaçant.
 
-Cette feature reste à préciser, notamment :
+## 18.2 Ajout d'un trou manuel
 
-- comment ajouter cette case vide ;
-- comment la supprimer ;
-- comment elle interagit avec le check ;
-- comment elle décale la colonne concernée.
+En V0, l'ajout d'un trou manuel se fait depuis le drawer d'appel.
+
+Dans le drawer, chaque instrument de la ligne peut proposer une action :
+
+> Jouer sans cet instrument
+
+Effet :
+
+- une case `Sans <instrument>` est créée sur cette ligne ;
+- aucun musicien n'est affecté à cette case ;
+- le prochain musicien de cette colonne est repoussé à la ligne suivante disponible ;
+- la colonne se recalcule automatiquement ;
+- le trou ne fait pas partie des boucles.
+
+Cette action peut aussi être disponible plus tard depuis le menu d'une colonne ou d'une case, mais le drawer d'appel est le point d'entrée V0 recommandé, car il correspond au moment où l'organisateur constate que le plateau va jouer sans cet instrument.
+
+## 18.3 Suppression d'un trou manuel
+
+Un trou manuel non joué peut être supprimé via son menu `...`.
+
+Si le plateau est déjà joué, le trou reste dans l'historique et n'est plus supprimable sans annuler le passage du plateau ou de la case concernée.
 
 ---
 
@@ -944,50 +985,134 @@ Objectif : éviter les conflits pendant une soirée live.
 
 ---
 
-## 31. Points encore à définir
+## 31. Décisions complémentaires appliquées
 
-### 31.1 Ajout manuel d'une case vide sans link
+Les points qui restaient ouverts sont tranchés avec les recommandations retenues par défaut.
 
-Il faut préciser :
+## 31.1 Ajout manuel d'une case vide sans link
 
-- où se trouve l'action ;
-- comment choisir la colonne ;
-- comment choisir la ligne ;
-- comment elle décale la colonne ;
-- comment elle est supprimée.
+Décision V0 : l'ajout se fait depuis le drawer d'appel.
 
-### 31.2 Suppression d'un trou
+Process :
 
-À préciser :
+1. l'organisateur ouvre le drawer d'appel d'un plateau ;
+2. il choisit l'instrument à laisser vide ;
+3. il clique sur `Jouer sans cet instrument` ;
+4. l'application crée une case `Sans <instrument>` sur la ligne ;
+5. le musicien qui aurait dû occuper cette place est déplacé à la prochaine ligne suivante disponible ;
+6. la colonne se recalcule sans créer de trou automatique supplémentaire.
 
-- suppression depuis menu `...` ;
-- suppression impossible si le plateau est déjà joué ;
-- effet sur le recalcul de colonne.
+Règles :
 
-### 31.3 Annulation d'un plateau joué
+- le trou manuel ne fait pas partie des boucles ;
+- il n'est pas lié à un participant ;
+- il peut être supprimé tant que la ligne n'est pas jouée ;
+- il est conservé dans l'historique si le plateau est joué.
 
-À préciser :
+## 31.2 Suppression d'un trou
 
-- annuler un musicien seulement ;
-- annuler toute la ligne ;
-- comportement visuel ;
-- confirmation.
+Un trou non joué peut être supprimé depuis son menu `...`.
 
-### 31.4 Synchronisation backend
+Effet :
 
-À préciser techniquement :
+- le trou disparaît ;
+- la colonne concernée se recalcule ;
+- les musiciens suivants remontent pour combler la place ;
+- si le trou était lié, il est d'abord retiré de son groupe lié.
 
-- format de la file d'actions locales ;
-- retry ;
-- affichage d'un état de sync ;
-- récupération après fermeture de l'app.
+Un trou déjà joué n'est pas supprimable directement. Pour le retirer de l'historique, il faut annuler le passage concerné.
 
-### 31.5 V1 QR code
+## 31.3 Annulation d'un plateau joué
 
-À détailler plus tard :
+Quand une case jouée est annulée, l'application propose :
 
-- QR code unique par jam ou par participant ;
-- page d'inscription participant ;
-- instruments visibles ;
-- choix des partenaires ;
-- validation côté organisateur.
+- annuler seulement ce musicien / cette case ;
+- annuler tout le plateau.
+
+Si l'organisateur annule seulement une case :
+
+- la case garde sa position ;
+- elle redevient `à venir` ;
+- le reste du plateau reste joué.
+
+Si l'organisateur annule tout le plateau :
+
+- toutes les cases de la ligne redeviennent `à venir` ;
+- les trous de la ligne redeviennent modifiables ;
+- le calcul des passages futurs est mis à jour.
+
+## 31.4 Synchronisation backend
+
+Décision V0 : le local est source de vérité pendant la jam.
+
+Chaque action utilisateur est enregistrée dans une file locale d'actions.
+
+Pour chaque action :
+
+1. l'action est appliquée immédiatement localement ;
+2. l'interface se met à jour immédiatement ;
+3. l'application tente de persister l'action côté backend ;
+4. si l'appel backend échoue, l'action reste dans une file de retry ;
+5. l'application retente régulièrement la synchronisation.
+
+Affichage recommandé :
+
+- aucune alerte bloquante pendant la jam ;
+- petit indicateur discret si des actions restent à synchroniser ;
+- message clair si l'utilisateur tente de quitter avec des actions non synchronisées.
+
+## 31.5 Conflit multi-appareil
+
+En V0, l'usage multi-appareil concurrent est bloqué.
+
+Une jam ne doit être modifiable que depuis un seul appareil à la fois.
+
+Si une jam est déjà ouverte en mode édition sur un appareil, un second appareil doit être empêché de la modifier ou placé en lecture seule.
+
+## 31.6 Authentification
+
+En V0, il n'y a pas d'authentification organisateur.
+
+L'accueil affiche toutes les jams du service.
+
+En V1 :
+
+- l'organisateur peut créer un compte ;
+- les jams sont rattachées à son compte ;
+- l'organisateur voit uniquement ses propres jams.
+
+## 31.7 QR code V1
+
+À détailler dans une spec V1 séparée.
+
+Intentions connues :
+
+- inscription participant via QR code ;
+- page participant dédiée ;
+- saisie du nom ;
+- choix de l'instrument parmi ceux configurés par l'organisateur ;
+- possibilité de choisir avec qui le participant souhaite jouer.
+
+---
+
+## 32. Synthèse V0
+
+La V0 est une interface organisateur mobile/tablette qui permet de gérer une jam via un tableau par instruments.
+
+Les règles centrales sont :
+
+- une colonne = un instrument ;
+- une ligne = un plateau ;
+- les colonnes avancent indépendamment ;
+- les musiciens sont ajoutés à la suite de leur colonne ;
+- les boucles réaffichent les musiciens disponibles après leur première rotation ;
+- le check `a joué` est visible seulement pour les prochains musiciens jouables ;
+- le plateau peut être marqué joué depuis le tableau ou le drawer d'appel ;
+- les liens permettent de faire passer plusieurs cases sur la même ligne ;
+- `Veux jouer sans` crée des trous liés ;
+- le drawer d'appel permet aussi de créer un trou manuel non lié ;
+- `N'est pas disponible` sert à trouver un remplaçant sans créer d'état durable ;
+- `Marquer comme parti` retire le musicien des passages futurs ;
+- les passages joués restent dans l'historique ;
+- le local est source de vérité pendant la jam ;
+- l'usage multi-appareil concurrent est bloqué en V0.

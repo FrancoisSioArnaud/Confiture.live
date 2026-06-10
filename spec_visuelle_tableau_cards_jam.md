@@ -818,3 +818,123 @@ Nicolas
 - Aucun drag horizontal n’existe.
 - Les lignes jouées ne remontent pas automatiquement.
 - Les musiciens partis disparaissent du futur mais restent dans l’historique s’ils ont joué.
+
+---
+
+## 24. Compléments UI appliqués par recommandation
+
+Cette section verrouille les points visuels encore ouverts.
+
+### 24.1 Trou manuel non lié
+
+Un trou manuel non lié est affiché comme un trou volontaire classique, mais sans badge de link.
+
+Affichage :
+
+```text
+Sans basse
+⋯
+```
+
+Style :
+
+- fond distinct ;
+- bordure pointillée ou hachurée ;
+- libellé explicite `Sans <instrument>` ;
+- aucun badge `🔗` si le trou n'est pas lié.
+
+Actions dans le menu `⋯` tant que le plateau n'est pas joué :
+
+- supprimer le trou ;
+- lier le trou ;
+- modifier si nécessaire.
+
+Une fois joué, le trou est grisé et conservé comme élément d'historique.
+
+### 24.2 Ajout d'un trou manuel depuis le drawer d'appel
+
+Dans le drawer d'appel, chaque instrument peut proposer l'action :
+
+```text
+Jouer sans cet instrument
+```
+
+Cette action crée une card `Sans <instrument>` sur la ligne appelée.
+
+Le musicien qui devait occuper cette place est déplacé à la prochaine ligne suivante disponible.
+
+### 24.3 Suppression d'un trou
+
+Un trou non joué est supprimable depuis son menu `⋯`.
+
+Si le trou est lié, la suppression le retire aussi du groupe lié.
+
+Un trou joué n'est pas supprimable directement depuis le tableau. Il faut d'abord annuler le passage de la case ou du plateau.
+
+### 24.4 Annulation d'un passage joué
+
+Depuis une card jouée, le menu `⋯` propose :
+
+```text
+Annuler le passage
+```
+
+Après clic, un dialogue propose :
+
+```text
+Annuler uniquement cette case
+Annuler tout le plateau
+```
+
+Recommandation visuelle :
+
+- dialogue court ;
+- message clair ;
+- action destructive visuellement différenciée ;
+- aucun mouvement automatique de ligne pendant l'annulation.
+
+### 24.5 État de synchronisation
+
+La synchronisation ne doit pas gêner l'organisateur pendant la jam.
+
+Affichage recommandé :
+
+- petit indicateur discret dans la barre supérieure ;
+- `Synchronisé` si tout est à jour ;
+- `À synchroniser` si des actions locales n'ont pas encore été persistées ;
+- pas de snackbar répétitif à chaque retry.
+
+### 24.6 Mode lecture seule multi-appareil
+
+En V0, si une jam est déjà ouverte en édition sur un autre appareil, l'interface du second appareil doit être en lecture seule ou bloquée.
+
+Affichage recommandé :
+
+```text
+Jam ouverte sur un autre appareil
+Modification désactivée
+```
+
+Les boutons d'action du tableau sont alors disabled.
+
+---
+
+## 25. Règles finales de densité mobile
+
+Les cards doivent rester compactes.
+
+Priorité du contenu dans une card :
+
+1. nom du musicien ou libellé du trou ;
+2. tag link si présent ;
+3. tag boucle si présent ;
+4. check si la case est prochainement jouable ;
+5. menu `⋯`.
+
+À éviter :
+
+- phrases longues dans les cards ;
+- répétition du nom de l'instrument hors colonne `Autres` ;
+- trop d'icônes visibles ;
+- statistiques dans les headers de colonne ;
+- état `parti` visible dans les futures lignes.
