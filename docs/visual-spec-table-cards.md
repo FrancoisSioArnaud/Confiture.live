@@ -765,3 +765,35 @@ Note : `parti` ne s'affiche dans le tableau que si le passage a déjà été jou
 - `Faire passer en même temps ?`
 - tag boucle : `🔁 2`, `🔁 3`, etc.
 
+
+---
+
+## Drawers V0 branchés au store local
+
+Les drawers V0 utilisent le composant partagé `AppDrawer` pour garder un format cohérent : header avec titre et fermeture, contenu scrollable, et barre d'actions sticky en bas quand une validation est nécessaire.
+
+Drawers disponibles en V0 locale :
+
+- `ParticipantFormDrawer` : ajout participant, instruments multiples, détail `Autres`, paires à lier et validation de nom unique ;
+- `CallPlateauDrawer` : appel d'une ligne, actions `A joué`, `N'est pas disponible` et action globale `Plateau joué` ;
+- `UnavailableReplacementDrawer` : choix d'un remplaçant dans la même colonne, avec confirmation si une carte liée doit être déliée ;
+- `WantsToPlayWithoutDrawer` : choix d'instruments à remplacer par des trous liés ;
+- `InsertBetweenCardsDialog` : choix entre ajouter un participant ou ajouter un trou.
+
+Les actions restent locales et passent par le store Zustand, qui délègue les règles métier au moteur pur.
+
+---
+
+## Drag vertical V0
+
+Le tableau utilise `dnd-kit` uniquement pour déplacer verticalement une carte dans sa colonne.
+
+Règles V0 :
+
+- activation par long press ;
+- axe horizontal verrouillé à `x = 0` ;
+- drop accepté seulement si la cible est dans le même instrument ;
+- aucune action ne permet de changer d'instrument ;
+- les cartes jouées ne sont pas sources de drag ;
+- au drop valide, l'UI appelle l'action locale `MOVE_ENTRY_VERTICAL` via le store Zustand ;
+- les groupes linkés restent alignés par la projection du moteur, donc les trous linkés suivent le groupe projeté.

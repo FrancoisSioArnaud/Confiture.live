@@ -1,93 +1,59 @@
 # Confiture.live
 
-Application web mobile/tablette pour organiser des jam sessions en bar.
+Confiture est une application web mobile/tablette pour aider les organisateurs de jam session en bar à gérer rapidement les musiciens, instruments et passages.
 
-## Objectif
-
-Confiture permet aux organisateurs de jam de gérer les inscriptions de musiciens, les instruments, les plateaux, les passages joués, les liens entre musiciens, les trous volontaires et les remplacements rapides pendant une soirée.
-
-## État actuel du repo
-
-Ce dépôt contient les fichiers de cadrage prêts à être ajoutés à Git.
-
-Le code applicatif n’est pas encore généré. Les dossiers `backend/` et `frontend/` sont présents pour préparer la structure du monorepo.
-
-## Structure
+Ce dépôt est un monorepo avec :
 
 ```text
 confiture.live/
+├── backend/   # Django + Django REST Framework
+├── frontend/  # React + JavaScript + MUI via Vite
+├── docs/      # spécifications produit, UI et techniques
 ├── AGENTS.md
-├── README.md
-├── backend/
-│   └── .gitkeep
-├── frontend/
-│   └── .gitkeep
-└── docs/
-    ├── README.md
-    ├── product-spec.md
-    ├── visual-spec-table-cards.md
-    ├── technical-stack.md
-    └── codex-ready-technical-spec.md
+└── README.md
 ```
 
-## Stack prévue
+## Backend
 
-Backend :
+Le backend Django est dans `backend/` avec le projet `config` et l'app principale `jams`.
 
-- Django
-- Django REST Framework
-- PostgreSQL
-- Django admin
-- pytest + pytest-django
+### Installation et démarrage
 
-Frontend :
-
-- React
-- JavaScript
-- MUI
-- React Router
-- TanStack Query
-- Zustand
-- Dexie.js
-- dnd-kit
-- React Hook Form
-- Zod
-- date-fns
-- Vitest
-- React Testing Library
-
-## Décisions clés
-
-- Frontend en JavaScript, pas TypeScript.
-- Design system centralisé dans `frontend/src/theme/designTokens.js` une fois le front créé.
-- Drag and drop vertical uniquement, jamais horizontal.
-- V0 sans authentification : toutes les jams du service sont visibles.
-- V1 avec compte organisateur.
-- Moteur de tableau pur, testé, indépendant de React/MUI.
-- Sync local-first avec Dexie + retry backend.
-- Édition simultanée multi-appareil bloquée en V0.
-
-## Démarrage Codex recommandé
-
-Lire d’abord :
-
-```text
-AGENTS.md
-docs/codex-ready-technical-spec.md
-docs/product-spec.md
-docs/visual-spec-table-cards.md
-docs/technical-stack.md
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver
 ```
 
-Puis avancer par phases :
+Par défaut, le backend utilise SQLite pour faciliter le démarrage local. Pour PostgreSQL, définir `DATABASE_URL`, par exemple :
 
-1. setup monorepo ;
-2. setup frontend React JS + MUI + thème ;
-3. setup backend Django ;
-4. moteur pur de tableau + tests ;
-5. UI tableau avec fake data ;
-6. actions locales Zustand ;
-7. drawers principaux ;
-8. API Django ;
-9. Dexie + sync ;
-10. polish responsive.
+```bash
+export DATABASE_URL="postgres://user:password@localhost:5432/confiture"
+```
+
+## Frontend
+
+Le frontend React est dans `frontend/`. Il est volontairement en JavaScript uniquement : pas de TypeScript, pas de fichiers `.ts` ou `.tsx`.
+
+### Installation et démarrage
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### Tests et build
+
+```bash
+cd frontend
+npm run test
+npm run build
+```
+
+## État de cette étape
+
+Cette étape met en place la structure technique de base uniquement : Django/DRF, Vite React JavaScript, MUI, thème centralisé, React Router et pages placeholder. Les modèles métier, l'API métier, le moteur de tableau, Dexie sync et le drag and drop seront ajoutés dans des étapes ultérieures.
