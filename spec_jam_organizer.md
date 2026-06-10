@@ -1,239 +1,176 @@
-# Spécification produit — Outil de gestion de jam session
+# Spec produit — Gestion de jam session pour organisateurs
 
 ## 1. Vision produit
 
-Le produit est une interface mobile/tablette destinée aux organisateurs de jam sessions dans des bars.
+Le produit est une application mobile/tablette destinée aux organisateurs de jam sessions dans des bars.
 
-L'objectif principal est de remplacer la liste papier ou la gestion mentale pendant une jam, afin de :
+L'objectif est de remplacer la liste papier ou les notes improvisées par un outil simple permettant :
 
-- éviter le chaos de la liste d'inscription ;
-- faire tourner les musiciens plus équitablement ;
-- gagner du temps pendant la soirée ;
-- permettre à l'organisateur de savoir rapidement qui doit jouer, qui a déjà joué, qui n'a pas encore joué, et qui est parti.
+- d'inscrire les musiciens rapidement ;
+- de gérer l'ordre de passage par instrument ;
+- de former des plateaux cohérents ;
+- de suivre qui a déjà joué ;
+- de gérer les cas réels d'une jam : musiciens partis, musiciens absents au moment de l'appel, formations réduites, musiciens qui veulent jouer ensemble, musiciens multi-instruments.
 
-La V0 est centrée uniquement sur l'organisateur. Les participants ne s'inscrivent pas encore eux-mêmes via QR code.
+Le produit doit rester utilisable pendant une soirée bruyante, rapide, avec peu de disponibilité mentale pour l'organisateur.
 
 ---
 
-## 2. Plateformes visées
+## 2. Plateformes
 
 ### V0
 
-- Interface mobile first.
+- Interface mobile-first.
 - Compatible tablette en responsive.
-- Même logique fonctionnelle sur mobile et tablette.
-- Pas d'interface desktop prioritaire.
+- Même logique UX sur mobile et tablette.
+- Pas d'interface desktop dédiée.
 
-### Contraintes d'usage
+### Responsive tablette
 
-L'interface doit être utilisable :
+La tablette utilise les mêmes écrans et les mêmes actions, mais avec plus d'espace :
 
-- en soirée ;
-- debout ;
-- rapidement ;
-- dans un environnement bruyant ;
-- avec une main si possible ;
-- avec des erreurs de manipulation possibles.
+- colonnes plus larges ;
+- drawers plus confortables ;
+- tableau horizontalement moins compressé.
 
 ---
 
-## 3. Utilisateurs
+## 3. Authentification et accès
 
-## 3.1 Organisateur
+### V0
 
-Personne qui crée et gère la jam.
-
-Il peut :
-
-- créer une jam ;
-- configurer les instruments disponibles ;
-- ajouter des participants ;
-- organiser les plateaux ;
-- appeler les musiciens ;
-- valider les passages joués ;
-- gérer les absents, les musiciens partis, les liens entre musiciens et les trous volontaires.
-
-## 3.2 Participant
-
-Musicien présent à la jam.
-
-En V0, il n'utilise pas directement l'application.
-
-En V1, il pourra s'inscrire depuis son propre téléphone via QR code.
-
----
-
-## 4. Périmètre V0
-
-La V0 contient uniquement l'interface organisateur.
-
-L'organisateur peut :
-
-- créer une jam session ;
-- modifier une jam existante ;
-- configurer les instruments ;
-- ajouter des participants ;
-- assigner un ou plusieurs instruments à un participant ;
-- gérer un tableau avec une colonne par instrument ;
-- réordonner verticalement les musiciens dans chaque colonne ;
-- créer des liens entre musiciens ou participations ;
-- créer des trous volontaires ;
-- indiquer qu'un musicien veut jouer sans certains instruments ;
-- valider qu'un musicien a joué ;
-- valider qu'un plateau entier a joué ;
-- ouvrir un drawer d'appel des musiciens ;
-- gérer un musicien non disponible au moment de l'appel ;
-- marquer un musicien comme parti ;
-- consulter les statistiques principales de la jam.
-
----
-
-## 5. Périmètre V1 et plus
-
-Les éléments suivants ne sont pas dans la V0.
+- Pas d'authentification organisateur.
+- L'écran d'accueil affiche toutes les jams du service.
+- Les jams sont triées par date indicative.
+- Un bouton permet de créer une nouvelle jam.
 
 ### V1
 
-- Authentification organisateur.
-- Compte organisateur.
-- Chaque organisateur voit uniquement ses propres jams.
-- Inscription participant via QR code.
-- Page participant dédiée.
-- Choix, par le participant, de son nom et de son instrument.
-- Choix éventuel des personnes avec qui il souhaite jouer.
-- Options avancées d'alignement de liens :
-  - remonter vers le plus avancé ;
-  - descendre vers le plus en retard ;
-  - trouver un juste milieu.
-
-### Hors périmètre permanent
-
-- Pas de drag and drop horizontal, ni en V0, ni en V1, ni plus tard.
-- Le déplacement d'un participant d'un instrument à un autre se fait uniquement via édition, jamais par drag horizontal.
+- L'organisateur peut créer un compte.
+- Une fois connecté, il voit uniquement ses jams.
+- L'inscription participant par QR code est prévue en V1, pas en V0.
 
 ---
 
-## 6. Accueil V0
+## 4. Écran liste des jams
 
-En V0, l'application affiche toutes les jams du service.
+### Objectif
 
-L'organisateur peut :
+Permettre à l'organisateur d'ouvrir une jam existante ou d'en créer une nouvelle.
 
-- voir la liste des jams existantes ;
-- ouvrir une jam ;
-- créer une nouvelle jam.
+### Contenu
 
-En V1, cette vue sera remplacée ou filtrée par un compte organisateur.
-
----
-
-## 7. Création et édition d'une jam
-
-La création et l'édition d'une jam utilisent le même drawer.
-
-En mode création, le drawer affiche les champs de configuration.
-
-En mode édition, le drawer affiche les mêmes champs, avec en plus les informations de suivi de la jam.
-
-## 7.1 Champs de configuration
-
-Une jam contient :
+Chaque jam affiche :
 
 - nom ;
 - date indicative ;
-- liste des instruments disponibles ;
-- ordre d'affichage des instruments.
+- nombre de musiciens uniques ;
+- nombre de plateaux joués ;
+- date de dernière modification en information secondaire si utile.
 
-La date est uniquement informative. Elle ne bloque pas l'accès, ne déclenche pas de statut actif/terminé, et peut être modifiée à tout moment.
+### Tri
 
-## 7.2 Instruments par défaut
+Les jams sont triées par date indicative.
 
-Les instruments activés par défaut sont, dans cet ordre :
+### Empty state
 
-1. Chant
-2. Guitare
-3. Basse
-4. Batterie
-5. Piano
-6. Autres
+Si aucune jam n'existe :
 
-## 7.3 Instruments personnalisés
+> Aucune jam créée pour l'instant.
 
-L'organisateur peut ajouter un instrument personnalisé en lui donnant un nom.
+Action principale :
 
-En V0, un instrument personnalisé est ajouté uniquement à la jam en cours.
+> Créer une jam
 
-Exemples :
+---
 
-- Saxophone
-- Percussions
-- Harmonica
-- Violon
+## 5. Création / édition d'une jam
 
-## 7.4 Réorganisation des instruments
+Le drawer de création et le drawer d'édition sont le même écran.
 
-L'organisateur peut réorganiser l'ordre des instruments.
+En mode édition, on affiche en plus les informations de suivi.
 
-Cet ordre détermine :
+### Champs communs création / édition
+
+- nom de la jam ;
+- date indicative ;
+- instruments disponibles ;
+- ordre des instruments ;
+- ajout d'un instrument personnalisé.
+
+### Instruments activés par défaut
+
+Ordre par défaut :
+
+1. chant
+2. guitare
+3. basse
+4. batterie
+5. piano
+6. autres
+
+### Ajout d'un instrument personnalisé
+
+L'organisateur peut ajouter un instrument en lui donnant un nom libre.
+
+Un instrument ajouté est disponible uniquement dans la jam en cours.
+
+### Réorganisation des instruments
+
+L'organisateur peut réordonner les instruments.
+
+Cet ordre pilote :
 
 - l'ordre des colonnes dans le tableau ;
-- l'ordre d'affichage dans les formulaires ;
-- l'ordre d'affichage dans le drawer d'appel des musiciens.
+- l'ordre des instruments dans le drawer participant ;
+- l'ordre d'affichage dans le drawer d'appel.
 
-## 7.5 Informations de suivi en édition
-
-En mode édition, le drawer affiche aussi :
+### Informations de suivi affichées en édition
 
 - nombre de musiciens uniques ;
 - nombre de participations instrumentales ;
 - nombre de plateaux joués ;
-- nombre de musiciens n'ayant pas encore joué un instrument une première fois.
+- nombre de musiciens n'ayant pas encore joué au moins un de leurs instruments.
 
-### Définition : musiciens n'ayant pas encore joué un instrument une première fois
-
-Cette statistique compte les participations instrumentales qui n'ont jamais été passées à l'état `joué`.
+Définition : un musicien est compté comme n'ayant pas encore joué un instrument si au moins une de ses participations instrumentales actives n'a jamais été passée en `joué`.
 
 Exemple :
 
-- Nicolas joue batterie.
-- Il joue une première fois.
-- Même s'il peut rejouer ensuite en boucle, il n'est plus compté comme musicien n'ayant pas encore joué la batterie.
-
-Si Nicolas est inscrit en chant et en guitare :
-
-- s'il a joué chant mais pas guitare, il reste compté pour guitare ;
-- la statistique concerne donc le couple `participant + instrument`.
+- Nicolas a joué batterie une fois : il est considéré comme ayant joué la batterie.
+- S'il rejoue ensuite en boucle, cela ne le remet pas dans les musiciens n'ayant pas joué.
+- Si Nicolas a aussi chant et n'a jamais joué chant, il reste compté pour chant.
 
 ---
 
-## 8. Tableau principal de gestion
+## 6. Structure du tableau
 
-La jam est gérée depuis un tableau.
+La jam se gère via un tableau.
 
 - Chaque colonne correspond à un instrument.
-- Chaque ligne correspond à un plateau en préparation ou joué.
-- Chaque case contient soit :
-  - un participant ;
-  - un trou volontaire.
+- Chaque ligne correspond à un plateau potentiel.
+- Chaque cellule contient une carte musicien, une carte trou volontaire, ou une cellule d'insertion entre deux cartes.
+- Les colonnes sont indépendantes par défaut.
+- Il n'y a jamais de drag and drop horizontal, ni en V0 ni plus tard.
+- Le drag and drop est uniquement vertical dans une colonne.
 
-Une ligne est considérée comme un plateau en préparation jusqu'au moment où les musiciens concernés sont validés comme ayant joué.
+### Colonne gauche d'actions de plateau
 
-Quand les musiciens sont validés, leurs cases deviennent grisées.
+Chaque ligne contient à gauche deux boutons directs :
+
+1. ouvrir le drawer d'appel ;
+2. marquer le plateau joué.
+
+Il n'existe pas d'état “ligne sélectionnée” en V0.
+
+Les actions de ligne agissent directement sur la ligne concernée.
 
 ---
 
-## 9. Principe de base : ordre automatique par colonne
+## 7. Principe de base : réorder automatique par colonne
 
-Chaque colonne fonctionne comme une file d'attente indépendante.
+Chaque colonne est une file d'attente indépendante.
 
-Quand un participant est ajouté à un instrument, il est placé à la suite du dernier participant réel de cette colonne, avant les répétitions de boucle.
-
-Par défaut :
-
-- il n'y a jamais de trou automatique ;
-- les colonnes sont indépendantes ;
-- les musiciens se placent les uns après les autres dans leur colonne ;
-- les boucles complètent la suite quand tous les musiciens disponibles ont été affichés.
+Quand un participant est ajouté à un instrument, il est placé à la suite du dernier musicien de cette colonne, avant les répétitions de boucle.
 
 Exemple guitare :
 
@@ -243,7 +180,7 @@ Paul
 Emma
 ```
 
-Si Julie est ajoutée en guitare :
+Si Julie est ajoutée :
 
 ```text
 Nicolas
@@ -252,29 +189,17 @@ Emma
 Julie
 ```
 
----
+### Aucune cellule vide par défaut
 
-## 10. Drag and drop vertical
+Par défaut, le système comble toujours les colonnes.
 
-L'organisateur peut réordonner les participants verticalement dans une colonne.
-
-Règles :
-
-- drag vertical uniquement ;
-- aucun drag horizontal ;
-- le drag horizontal n'existera dans aucune version ;
-- déplacer un participant dans une colonne décale automatiquement les autres participants de cette colonne ;
-- les trous et liens doivent être pris en compte dans le recalcul.
-
-Le changement d'instrument d'un participant se fait via la fiche d'édition du participant.
+Les trous n'existent que s'ils sont ajoutés explicitement par l'organisateur.
 
 ---
 
-## 11. Boucles automatiques
+## 8. Boucles automatiques
 
-Quand tous les participants disponibles d'une colonne ont été affichés, la colonne boucle automatiquement.
-
-La boucle réaffiche les musiciens encore disponibles dans l'ordre de référence.
+Quand on arrive à la fin des musiciens disponibles d'une colonne, l'app réaffiche les musiciens dans leur ordre d'arrivée de référence.
 
 Exemple :
 
@@ -296,7 +221,7 @@ Exemple :
 5
 ```
 
-Si un musicien 6 arrive avant que le musicien 1 ne rejoue, il est ajouté avant la boucle suivante :
+Si un musicien 6 arrive avant que le musicien 1 rejoue, il est ajouté avant la boucle suivante :
 
 ```text
 1
@@ -313,806 +238,470 @@ Si un musicien 6 arrive avant que le musicien 1 ne rejoue, il est ajouté avant 
 6
 ```
 
-## 11.1 Ordre de référence
+### Affichage des boucles
 
-L'ordre de référence correspond à l'ordre naturel d'inscription dans la colonne.
+L'app affiche toujours assez de lignes futures pour voir trois lignes pleines composées uniquement de musiciens ayant déjà bouclé.
 
-Si l'organisateur modifie ponctuellement l'ordre visible de la première rotation, cela ne modifie pas forcément l'ordre de référence des boucles suivantes.
+### Ordre de boucle
 
-Exemple :
-
-Ordre initial :
-
-```text
-1
-2
-3
-4
-5
-```
-
-L'organisateur réorganise ponctuellement :
-
-```text
-2
-1
-3
-4
-5
-```
-
-La boucle peut ensuite repartir sur l'ordre de référence :
-
-```text
-1
-2
-3
-4
-5
-```
-
-## 11.2 Quantité de boucle visible
-
-L'interface doit afficher assez de lignes futures pour voir trois lignes pleines composées uniquement de musiciens ayant déjà bouclé.
-
-Objectif : permettre à l'organisateur d'anticiper les prochains plateaux sans afficher une boucle infinie trop longue.
+Les boucles se basent sur l'ordre d'arrivée de référence, pas forcément sur les déplacements manuels ponctuels de la première rotation.
 
 ---
 
-## 12. Participants
+## 9. Participants
 
-## 12.1 Création d'un participant
+### Création d'un participant
 
-L'organisateur peut ajouter un participant depuis la page de gestion.
+L'organisateur peut ajouter un participant depuis le drawer participant.
 
 Champs :
 
 - nom ;
 - un ou plusieurs instruments ;
-- précision texte si instrument = `Autres`.
+- détail libre si instrument = autres ;
+- section “faire passer en même temps” si plusieurs instruments sont sélectionnés.
 
-## 12.2 Unicité du nom
+### Nom unique obligatoire
 
-Deux participants ne peuvent pas avoir exactement le même nom.
+Deux musiciens ne peuvent pas avoir exactement le même nom dans une jam.
 
-Si un nom existe déjà, l'application doit empêcher la création ou demander à modifier le nom.
+Si le nom existe déjà, l'app affiche une erreur et empêche la validation.
 
-Exemples :
+### Instrument “autres”
 
-- Nicolas
-- Nicolas G.
-- Nico batterie
+La colonne “autres” est une colonne fourre-tout.
 
-## 12.3 Participant multi-instruments
+Quand “autres” est sélectionné, un champ libre permet d'indiquer l'instrument réel.
 
-Un participant peut être inscrit sur plusieurs instruments.
+Exemple :
 
-Exemple : Nicolas joue chant et guitare.
+```text
+Léa — saxophone
+Marc — trompette
+```
 
-Dans ce cas :
+### Édition d'un participant
 
-- Nicolas apparaît dans la colonne Chant ;
-- Nicolas apparaît dans la colonne Guitare ;
-- les deux cases portent le même nom ;
-- les deux participations peuvent être liées ou non.
-
-Si elles ne sont pas liées, elles peuvent être appelées séparément.
-
-## 12.4 Édition d'un participant
-
-Chaque fiche participant propose une action d'édition.
+Chaque carte participant donne accès à l'édition via le menu `⋯`.
 
 L'édition permet de modifier :
 
 - nom ;
 - instruments ;
-- précision de l'instrument si `Autres` ;
-- liens entre ses propres instruments.
+- détail de l'instrument “autres” ;
+- liens entre instruments du même participant.
+
+Si un participant déjà joué est modifié, l'historique joué reste conservé.
 
 ---
 
-## 13. Section “faire passer en même temps”
+## 10. Participant multi-instruments
 
-Quand un participant possède plusieurs instruments, la modale de création/édition affiche une section :
+Un participant peut avoir plusieurs instruments.
+
+Exemple : Nicolas fait chant + guitare.
+
+Il apparaît dans plusieurs colonnes, avec le même nom.
+
+```text
+Chant      Guitare
+Nicolas    Nicolas
+```
+
+### Faire passer en même temps
+
+Dans le drawer création/édition participant, si plusieurs instruments sont sélectionnés, une section apparaît :
 
 > Faire passer en même temps ?
 
-Cette section liste les liens possibles entre ses instruments.
+Elle affiche les paires possibles entre instruments.
 
-Exemple : Nicolas a chant, guitare et batterie.
+Exemple pour chant + guitare + batterie :
 
-Options affichées :
+- chant + guitare ;
+- chant + batterie ;
+- guitare + batterie.
 
-- Chant + Guitare
-- Chant + Batterie
-- Guitare + Batterie
+Les liens sont traités par paires.
 
-Chaque option peut être cochée.
-
-Si deux liens se rejoignent par transitivité, l'application doit traiter l'ensemble comme un même groupe.
+Si plusieurs liens créent un groupe par transitivité, l'app affiche un aperçu du groupe final.
 
 Exemple :
 
-- Chant + Guitare coché ;
-- Guitare + Batterie coché ;
-- alors Chant + Guitare + Batterie forment un même groupe lié.
-
-L'interface doit afficher clairement les liens créés.
+- chant + guitare coché ;
+- guitare + batterie coché ;
+- résultat : chant + guitare + batterie passent ensemble.
 
 ---
 
-## 14. Colonne “Autres”
+## 11. Links entre musiciens
 
-La colonne `Autres` est une colonne fourre-tout.
-
-Quand elle est sélectionnée pour un participant, un champ libre permet de préciser l'instrument réel.
-
-Exemples :
-
-- Léa — Saxophone
-- Marc — Trompette
-- Sofiane — Violon
-
-Le champ libre sert uniquement à l'affichage dans la case.
-
-Si un instrument devient suffisamment structurant pour la jam, l'organisateur peut créer une vraie colonne dédiée via les instruments personnalisés.
-
----
-
-## 15. Actions dans une case participant
-
-Chaque case participant peut proposer des actions.
-
-Actions principales :
-
-- check `a joué` quand le participant est prochain à jouer ;
-- menu `...` pour les actions secondaires ;
-- link ;
-- édition ;
-- marquer comme parti ;
-- veux jouer sans.
-
-Sur mobile, il faut éviter d'afficher trop d'icônes en permanence.
-
-La proposition actuelle :
-
-- actions principales visibles selon contexte ;
-- actions secondaires dans le menu `...`.
-
----
-
-## 16. Check “a joué”
-
-Le bouton check indique qu'un participant a joué son instrument.
-
-Il n'est pas visible pour tout le monde.
-
-Il est visible uniquement pour les prochains musiciens qui vont jouer dans chaque colonne.
-
-Quand un participant est validé comme ayant joué :
-
-- sa case devient grisée ;
-- son passage est figé dans l'historique ;
-- il est considéré comme ayant joué cet instrument au moins une fois ;
-- il n'est plus compté dans les musiciens n'ayant pas encore joué cet instrument une première fois.
-
-## 16.1 Annuler “a joué”
-
-L'annulation est prévue uniquement en cas d'erreur.
-
-Une action explicite sur une case jouée ouvre une confirmation :
-
-> Annuler le passage de ce musicien ?
-
-Si confirmé :
-
-- le participant redevient non joué sur ce passage ;
-- il garde sa position ;
-- le recalcul futur se fait en conséquence.
-
-Si le participant faisait partie d'une ligne entièrement jouée, l'application peut demander s'il faut annuler :
-
-- uniquement ce participant ;
-- ou tout le plateau.
-
----
-
-## 17. Actions directes de plateau
-
-Il n'y a pas de ligne sélectionnée en V0.
-
-Chaque ligne du tableau affiche directement deux actions dans la colonne fixe de gauche :
-
-1. ouvrir le drawer d'appel ;
-2. marquer le plateau comme joué.
-
-## 17.1 Ouvrir le drawer d'appel
-
-Cette action ouvre le drawer d'appel des musiciens pour la ligne concernée.
-
-Le drawer permet :
-
-- de voir les musiciens du plateau en grand ;
-- de marquer un musicien comme ayant joué ;
-- de marquer tout le plateau comme joué ;
-- d'indiquer qu'un musicien n'est pas disponible ;
-- de choisir un remplaçant ;
-- d'ajouter une case vide volontaire sur la ligne si l'organisateur veut faire jouer le plateau sans un instrument.
-
-## 17.2 Marquer le plateau comme joué
-
-Cette action peut être faite :
-
-- depuis le bouton direct de la ligne dans la colonne gauche ;
-- depuis le drawer d'appel des musiciens.
-
-Le bouton utilise la même icône que le bouton `a joué` d'un musicien.
-
-Quand le plateau est marqué comme joué :
-
-- tous les musiciens du plateau passent à l'état `joué` ;
-- les trous volontaires du plateau sont conservés dans l'historique ;
-- les cases deviennent grisées ;
-- la ligne reste à sa place.
-
-Important :
-
-- les lignes jouées ne remontent pas automatiquement ;
-- on ne modifie pas l'ordre des lignes pour regrouper les lignes jouées ;
-- cela simplifie la logique et évite des mouvements inattendus.
-
----
-
-## 18. Lignes incomplètes et colonnes vides volontaires
-
-Par défaut, l'application évite les trous.
-
-Cependant, l'organisateur doit pouvoir faire jouer un plateau sans musicien sur un instrument donné.
-
-Il existe donc deux types de trous volontaires :
-
-1. trou lié, créé via `Veux jouer sans` ;
-2. trou manuel non lié, créé pour une ligne précise.
-
-## 18.1 Trou manuel non lié
-
-Un trou manuel non lié sert à faire jouer une ligne sans musicien sur un instrument, sans rattacher ce choix à un participant précis.
-
-Cas d'usage :
-
-- le plateau part sans bassiste ;
-- aucun pianiste n'est disponible pour cette ligne ;
-- l'organisateur veut valider le plateau sans attendre un remplaçant.
-
-## 18.2 Ajout d'un trou manuel
-
-En V0, l'ajout d'un trou manuel se fait depuis le drawer d'appel.
-
-Dans le drawer, chaque instrument de la ligne peut proposer une action :
-
-> Jouer sans cet instrument
-
-Effet :
-
-- une case `Sans <instrument>` est créée sur cette ligne ;
-- aucun musicien n'est affecté à cette case ;
-- le prochain musicien de cette colonne est repoussé à la ligne suivante disponible ;
-- la colonne se recalcule automatiquement ;
-- le trou ne fait pas partie des boucles.
-
-Cette action peut aussi être disponible plus tard depuis le menu d'une colonne ou d'une case, mais le drawer d'appel est le point d'entrée V0 recommandé, car il correspond au moment où l'organisateur constate que le plateau va jouer sans cet instrument.
-
-## 18.3 Suppression d'un trou manuel
-
-Un trou manuel non joué peut être supprimé via son menu `...`.
-
-Si le plateau est déjà joué, le trou reste dans l'historique et n'est plus supprimable sans annuler le passage du plateau ou de la case concernée.
-
----
-
-## 19. Trous volontaires
-
-Un trou volontaire représente l'absence assumée de musicien dans une colonne sur une ligne donnée.
-
-Un trou peut être :
-
-- créé explicitement ;
-- lié à un participant ou à un groupe ;
-- conservé dans l'historique si le plateau a joué ;
-- supprimé avant passage.
-
-Un trou ne fait jamais partie des boucles.
-
-## 19.1 Trou lié
-
-Un trou lié suit le participant ou le groupe auquel il est lié.
-
-Cas d'usage :
-
-- Nicolas joue guitare/voix ;
-- il veut jouer sans batterie ;
-- l'organisateur crée un trou dans la colonne Batterie lié à Nicolas ;
-- si Nicolas est déplacé, le trou Batterie suit.
-
-Un trou lié :
-
-- suit le groupe verticalement ;
-- empêche qu'un musicien soit proposé automatiquement sur cette ligne pour cet instrument ;
-- est validé avec le plateau quand le plateau est marqué joué ;
-- peut être délié ou supprimé avant passage.
-
----
-
-## 20. Feature “veux jouer sans”
-
-La feature s'appelle :
-
-> Veux jouer sans
-
-Elle permet de créer rapidement un ou plusieurs trous liés à un participant ou à un groupe.
-
-## 20.1 Accès
-
-L'action est accessible depuis le menu `...` d'une case participant dans une colonne.
-
-Exemple :
-
-- dans la colonne Chant ;
-- l'organisateur ouvre le menu `...` de Guillaume ;
-- il clique sur `Veux jouer sans` ;
-- l'application affiche les autres instruments disponibles ;
-- l'organisateur coche un ou plusieurs instruments.
-
-## 20.2 Effet
-
-Pour chaque instrument coché :
-
-- l'application crée un trou dans la colonne correspondante ;
-- ce trou est lié au participant ou au groupe du participant ;
-- le trou suit le participant ou le groupe en cas de déplacement.
-
-Exemple :
-
-- Guillaume joue chant ;
-- il veut jouer sans batterie et sans basse ;
-- l'organisateur coche Batterie et Basse ;
-- l'application crée un trou Batterie et un trou Basse sur la ligne de Guillaume.
-
----
-
-## 21. Link entre musiciens
-
-L'organisateur peut lier plusieurs participants pour qu'ils jouent ensemble sur la même ligne.
+L'organisateur peut lier plusieurs cartes pour les faire passer ensemble sur la même ligne.
 
 Un groupe lié peut contenir :
 
+- plusieurs instruments du même participant ;
 - plusieurs participants différents ;
-- plusieurs instruments d'un même participant ;
-- des trous volontaires.
+- un ou plusieurs trous volontaires ;
+- maximum une carte par instrument.
 
-Règles :
-
-- maximum un élément par instrument dans un groupe lié ;
-- les éléments liés se déplacent ensemble ;
-- les trous liés suivent le groupe ;
-- les liens peuvent être modifiés ou supprimés.
-
-## 21.1 Création d'un link manuel
+### Création / modification d'un link
 
 Process :
 
-1. L'organisateur clique sur le bouton link d'un participant.
-2. Le tableau passe en mode link.
-3. Le participant sélectionné est mis en avant.
-4. Les participants déjà liés sont aussi mis en avant.
-5. L'organisateur sélectionne d'autres participants dans d'autres colonnes.
-6. Il valide avec un bouton en bas.
-7. Les participants sélectionnés sont alignés sur la même ligne.
-
-## 21.2 Délier
+1. l'organisateur clique sur l'icône link d'une carte ;
+2. le tableau passe en mode link ;
+3. la carte source est mise en avant ;
+4. les cartes déjà liées sont mises en avant ;
+5. l'organisateur sélectionne ou désélectionne les cartes à lier ;
+6. il valide avec un bouton sticky en bas ;
+7. les cartes liées sont alignées.
 
 Le même mode sert à lier et délier.
 
-Si l'organisateur clique sur le bouton link d'un participant déjà lié :
+### Alignement V0
 
-- le mode link s'ouvre ;
-- les membres du groupe sont mis en avant ;
-- l'organisateur peut retirer un membre du groupe ;
-- il valide les modifications.
-
-## 21.3 Alignement V0
-
-En V0, quand plusieurs participants sont liés, l'application aligne le groupe sur le participant le plus avancé, c'est-à-dire le plus haut dans le tableau.
-
-Les participants les plus en retard remontent.
+En V0, les cartes liées s'alignent en remontant les cartes les plus en retard vers la carte la plus avancée.
 
 Exemple :
 
-- Nicolas, guitare, ligne 3 ;
-- Jérémy, batterie, ligne 5.
+- Nicolas guitare ligne 3 ;
+- Jérémy batterie ligne 5.
 
-Si on les lie :
+Après link :
 
 - Jérémy remonte ligne 3 ;
-- les batteurs qui étaient ligne 3 et ligne 4 sont poussés vers le bas ;
+- les batteurs précédemment en lignes 3 et 4 sont poussés vers le bas ;
 - aucun trou n'est créé.
 
-## 21.4 Déplacement d'un groupe lié
+### Alignement V1
 
-Si un participant lié est déplacé verticalement, tout son groupe lié change de ligne avec lui.
+En V1, l'organisateur pourra choisir la stratégie :
 
-Les participants des colonnes concernées sont poussés automatiquement.
-
----
-
-## 22. Suppression de la feature lock/unlock
-
-La feature lock/unlock est supprimée.
-
-Il n'y a donc pas de cadenas.
-
-Les musiciens peuvent être déplacés par les règles de réorganisation automatique, sauf s'ils ont déjà joué et sont donc figés dans l'historique.
+- remonter vers le plus avancé ;
+- descendre vers le plus en retard ;
+- choisir manuellement une ligne cible.
 
 ---
 
-## 23. Drawer d'appel des musiciens
+## 12. Drag and drop vertical
 
-L'organisateur peut ouvrir un drawer d'appel depuis une ligne / un plateau.
+Le drag and drop est uniquement vertical dans une colonne.
 
-Objectif : afficher clairement les musiciens à appeler sur scène.
+Il n'y a pas d'affordance visible dédiée.
 
-Le drawer affiche en grand :
+Interaction :
 
-```text
-Chant — Sarah
-Guitare — Nicolas
-Basse — Tom
-Batterie — Jérémy
-Piano — Clara
-Autres — Léa, saxophone
-```
+- long press sur une carte ;
+- drag vertical dans la colonne ;
+- relâcher pour repositionner.
 
-## 23.1 Actions disponibles
+Pendant le drag :
 
-Depuis ce drawer, l'organisateur peut :
-
-- marquer un musicien comme ayant joué ;
-- marquer tout le plateau comme joué ;
-- indiquer qu'un musicien n'est pas disponible ;
-- choisir un remplaçant.
+- les autres cartes non jouées se décalent ;
+- les cartes jouées ne bougent pas ;
+- les groupes liés se déplacent ensemble ;
+- les colonnes concernées poussent les autres cartes ;
+- les actions impossibles sont refusées avec un message clair.
 
 ---
 
-## 24. “N'est pas disponible”
+## 13. Check “a joué”
 
-Cette action sert uniquement à trouver un remplaçant rapidement au moment de l'appel.
+Le bouton check permet de marquer une carte comme jouée.
 
-Elle ne crée pas d'état durable `indisponible`.
+Il est visible uniquement sur les prochains musiciens jouables de chaque colonne.
 
-## 24.1 Principe
+Quand une carte passe en joué :
 
-Si un musicien ne vient pas quand il est appelé :
+- elle devient grisée ;
+- elle est figée ;
+- elle n'est plus draggable ;
+- elle devient historique ;
+- elle ne bouge plus lors des recalculs.
 
-- l'organisateur clique sur `N'est pas disponible` ;
-- l'application affiche les prochains musiciens de la même colonne ;
-- l'application indique pour chacun s'il est lié à d'autres musiciens ;
-- l'organisateur choisit un remplaçant.
+### Annulation
 
-Les musiciens marqués comme partis ne sont pas proposés.
+Sur une carte jouée, l'organisateur peut ouvrir le menu et choisir :
 
-## 24.2 Remplacement
+> Annuler le passage
 
-Quand un remplaçant est choisi :
+Une confirmation est affichée.
 
-- le remplaçant prend la place du musicien absent ;
-- le musicien absent est déplacé à la prochaine ligne suivante disponible ;
-- la colonne est réorganisée automatiquement ;
-- aucun statut durable `indisponible` n'est enregistré.
+Si confirmé :
 
-## 24.3 Si le musicien absent est lié
+- la carte redevient non jouée ;
+- elle garde sa position ;
+- elle redevient déplaçable si applicable.
 
-Si le musicien absent est lié à d'autres musiciens :
+Si le passage faisait partie d'un plateau entièrement joué, l'app demande :
 
-- l'application demande confirmation ;
-- si confirmé, elle le délie ;
-- elle le déplace ensuite comme un musicien non lié.
-
-## 24.4 Si le remplaçant est lié
-
-Si le remplaçant proposé est lié à d'autres musiciens :
-
-- l'application demande confirmation ;
-- si confirmé, elle le délie ;
-- elle le déplace ensuite comme un musicien non lié.
-
-En V0, le délink est définitif.
+- annuler seulement ce musicien ;
+- annuler tout le plateau.
 
 ---
 
-## 25. Marquer comme parti
+## 14. Plateau joué
 
-L'organisateur peut marquer un participant comme parti.
+Chaque ligne a un bouton direct “plateau joué” dans la colonne gauche.
+
+Le même bouton est disponible dans le drawer d'appel.
 
 Effet :
 
-- le participant reste visible dans les passages déjà joués ;
-- il est retiré de tous les passages futurs ;
-- il est supprimé des boucles futures ;
-- tous ses instruments sont concernés ;
-- ses liens futurs avec d'autres musiciens sont supprimés ;
-- les autres musiciens liés restent actifs.
+- toutes les cartes musicien de la ligne passent en joué ;
+- les trous volontaires de la ligne passent en historique ;
+- la ligne ne remonte pas ;
+- la position de la ligne reste stable ;
+- les futures lignes sont recalculées si nécessaire.
 
-Le wording retenu est :
+Il n'y a pas de logique de remontée des lignes jouées.
+
+---
+
+## 15. Drawer d'appel
+
+Le drawer d'appel sert à appeler clairement les musiciens du plateau.
+
+Il est accessible via le bouton d'appel dans la colonne gauche de chaque ligne.
+
+### Format
+
+- full screen sur mobile ;
+- drawer large sur tablette ;
+- ordre des instruments identique au tableau ;
+- bouton “plateau joué” sticky en bas.
+
+### Contenu
+
+Pour chaque instrument :
+
+```text
+Chant
+Sarah
+
+Guitare
+Nicolas
+
+Basse
+Tom
+
+Batterie
+Jérémy
+```
+
+Pour un trou :
+
+```text
+Batterie
+Sans batterie
+```
+
+Pour “autres” :
+
+```text
+Autres
+Léa — saxophone
+```
+
+### Actions par musicien
+
+- “A joué” ;
+- “N'est pas disponible”.
+
+### Action globale
+
+- “Plateau joué”.
+
+Après “Plateau joué”, le drawer se ferme automatiquement.
+
+---
+
+## 16. N'est pas disponible
+
+Depuis le drawer d'appel, l'organisateur peut indiquer qu'un musicien n'est pas disponible.
+
+Cette action ne crée pas de statut durable.
+
+Elle sert uniquement à choisir rapidement un remplaçant.
+
+### Remplaçants proposés
+
+L'app affiche les prochains musiciens de la même colonne.
+
+Chaque remplaçant affiche :
+
+- nom ;
+- s'il est lié ou non ;
+- avec qui il est lié ;
+- s'il rejoue déjà en boucle.
+
+Les musiciens marqués comme partis sont exclus.
+
+### Choix d'un remplaçant non lié
+
+- le remplaçant prend la place du musicien indisponible ;
+- le musicien indisponible est déplacé à la prochaine ligne suivante disponible.
+
+### Si le musicien indisponible est lié
+
+L'app demande confirmation.
+
+Si confirmé :
+
+- le musicien est délié ;
+- il est déplacé seul à la prochaine ligne suivante disponible.
+
+### Si le remplaçant est lié
+
+L'app demande confirmation.
+
+Si confirmé :
+
+- le remplaçant est délié ;
+- il prend la place ;
+- le musicien indisponible est déplacé à la prochaine ligne suivante disponible.
+
+Le délink est définitif en V0.
+
+---
+
+## 17. Trous volontaires
+
+Un trou volontaire représente l'absence volontaire de musicien sur un instrument pour une ligne donnée.
+
+Exemple : Nicolas veut jouer guitare-voix sans batterie.
+
+Dans ce cas, la colonne batterie affiche :
+
+```text
+Sans batterie
+```
+
+### Propriétés
+
+- Un trou ne fait pas partie des boucles.
+- Un trou peut être linké avec un musicien ou un groupe.
+- Un trou linké suit le groupe lié.
+- Un trou peut être validé comme partie du plateau joué.
+- Un trou joué reste dans l'historique.
+- Un trou peut être supprimé tant que la ligne n'est pas jouée.
+
+### Ajouter un trou via “veux jouer sans”
+
+Depuis le menu `⋯` d'une carte participant :
+
+1. l'organisateur clique sur “Veux jouer sans…” ;
+2. un drawer affiche les autres instruments disponibles ;
+3. il peut cocher un ou plusieurs instruments ;
+4. à la validation, l'app crée un trou dans chaque colonne choisie ;
+5. les trous sont linkés au participant ou au groupe du participant.
+
+### Ajouter un trou entre deux cartes
+
+Quand l'organisateur clique entre deux cartes dans une colonne, une modale s'ouvre avec deux choix :
+
+- ajouter un trou ;
+- ajouter un participant.
+
+Si l'organisateur choisit “ajouter un trou” :
+
+- un trou est ajouté à cet endroit dans la colonne ;
+- les cartes suivantes sont poussées vers le bas ;
+- le trou n'est pas linké par défaut.
+
+Si l'organisateur choisit “ajouter un participant” :
+
+- le drawer d'ajout participant s'ouvre ;
+- l'instrument de la colonne est précoché ;
+- après validation, le participant est inséré à cet endroit.
+
+---
+
+## 18. Marquer comme parti
+
+Un participant peut être marqué comme parti depuis le menu `⋯`.
+
+Effet :
+
+- le participant est retiré des futurs passages ;
+- ses passages déjà joués restent visibles dans l'historique ;
+- ses liens futurs sont supprimés ;
+- s'il a plusieurs instruments, toutes ses participations futures sont retirées ;
+- il reste comptabilisé dans les musiciens uniques de la jam.
+
+Wording retenu :
 
 > Marquer comme parti
 
 ---
 
-## 26. États métier
+## 19. États métier
 
-## 26.1 État participant
-
-Un participant peut être :
+### Participant
 
 - actif ;
 - parti.
 
-## 26.2 État passage / case
-
-Une case peut être :
+### Passage / carte
 
 - à venir ;
-- jouée ;
+- joué ;
 - trou volontaire.
 
-États supprimés :
+États explicitement supprimés :
 
 - locké ;
-- indisponible temporairement.
+- indisponible temporairement ;
+- appelé / sur scène.
 
 ---
 
-## 27. Historique
+## 20. Synchronisation et offline
 
-L'application conserve l'historique minimal des passages joués.
+Pendant la jam :
 
-L'historique sert à :
+- chaque action est sauvegardée localement ;
+- chaque action déclenche aussi une persistance backend ;
+- si la persistance backend échoue, le stockage local reste source de vérité ;
+- l'app retente régulièrement la synchronisation backend.
 
-- savoir quels musiciens ont déjà joué ;
-- compter les plateaux joués ;
-- ne pas perdre les passages déjà effectués lorsqu'un musicien part ;
-- permettre l'annulation en cas d'erreur ;
-- calculer les musiciens qui n'ont pas encore joué leur instrument une première fois.
+### Multi-appareil V0
 
----
+En V0, l'usage multi-appareil sur une même jam active est bloqué.
 
-## 28. Persistance et offline
+L'objectif est d'éviter les conflits pendant une jam live.
 
-Pendant une jam, la source de vérité principale est le stockage local de l'appareil.
+### États UI de sync
 
-À chaque action, l'application tente aussi une persistance backend.
+Un indicateur discret affiche :
 
-Si la persistance backend échoue :
+- synchronisé ;
+- sauvegarde locale ;
+- synchronisation en attente ;
+- hors ligne.
 
-- l'action reste conservée localement ;
-- l'application considère le local comme source de vérité ;
-- elle réessaie régulièrement de synchroniser avec le backend.
-
-## 28.1 Multi-appareil V0
-
-En V0, l'usage multi-appareil concurrent est bloqué.
-
-Une jam ne doit pas être modifiée simultanément depuis plusieurs appareils.
-
-Objectif : éviter les conflits pendant une soirée live.
+Aucun gros blocage ne doit gêner l'organisateur pendant la jam, sauf conflit d'ouverture multi-appareil.
 
 ---
 
-## 29. Données principales
+## 21. V1 — QR code participant
 
-## 29.1 Jam
+En V1, l'organisateur peut permettre aux participants de s'inscrire depuis leur propre téléphone.
 
-- id
-- nom
-- date indicative
-- instruments
-- ordre des instruments
-- participants
-- passages joués
-- métadonnées de synchronisation
+Principe :
 
-## 29.2 Instrument
+- l'organisateur génère un QR code ;
+- le participant le scanne ;
+- il arrive sur une page d'inscription ;
+- il renseigne son nom ;
+- il choisit son ou ses instruments parmi ceux de la jam ;
+- il peut choisir avec qui il souhaite jouer parmi les participants déjà inscrits.
 
-- id
-- nom
-- ordre
-- type : défaut / personnalisé
+À préciser plus tard :
 
-## 29.3 Participant
+- QR code unique par jam ou par participant ;
+- validation organisateur nécessaire ou non ;
+- édition par le participant ;
+- gestion des doublons de nom côté participant.
 
-- id
-- nom unique dans la jam
-- état : actif / parti
-- participations instrumentales
-
-## 29.4 Participation instrumentale
-
-- id
-- participant_id
-- instrument_id
-- précision texte optionnelle, notamment pour `Autres`
-- ordre de référence dans la colonne
-
-## 29.5 Case / occurrence de tableau
-
-- id
-- instrument_id
-- participant_id optionnel
-- type : participant / trou
-- état : à venir / jouée
-- ligne affichée
-- groupe_link_id optionnel
-
-## 29.6 Groupe lié
-
-- id
-- membres
-- peut contenir :
-  - participations instrumentales ;
-  - trous volontaires.
-
----
-
-## 30. Règles importantes à respecter
-
-1. Une colonne correspond à un instrument.
-2. Les colonnes sont indépendantes par défaut.
-3. Une ligne représente un plateau en préparation ou joué.
-4. Par défaut, il n'y a pas de trou automatique.
-5. Les trous doivent être créés volontairement.
-6. Les trous ne font pas partie des boucles.
-7. Le drag est uniquement vertical.
-8. Le drag horizontal n'existe pas et n'existera pas.
-9. Le check `a joué` est visible uniquement pour les prochains musiciens qui vont jouer.
-10. Un participant ayant joué un instrument une fois n'est plus compté comme n'ayant pas joué cet instrument.
-11. Un musicien parti reste dans l'historique, mais disparaît du futur.
-12. Les liens alignent les musiciens sur la même ligne.
-13. En V0, les liens font remonter les plus en retard vers le plus avancé.
-14. `N'est pas disponible` sert uniquement au remplacement rapide, sans statut durable.
-15. Le local est source de vérité pendant la jam en cas de perte réseau.
-16. En V0, il n'y a pas d'authentification organisateur.
-17. En V1, les jams seront rattachées à un compte organisateur.
-
----
-
-## 31. Décisions complémentaires appliquées
-
-Les points qui restaient ouverts sont tranchés avec les recommandations retenues par défaut.
-
-## 31.1 Ajout manuel d'une case vide sans link
-
-Décision V0 : l'ajout se fait depuis le drawer d'appel.
-
-Process :
-
-1. l'organisateur ouvre le drawer d'appel d'un plateau ;
-2. il choisit l'instrument à laisser vide ;
-3. il clique sur `Jouer sans cet instrument` ;
-4. l'application crée une case `Sans <instrument>` sur la ligne ;
-5. le musicien qui aurait dû occuper cette place est déplacé à la prochaine ligne suivante disponible ;
-6. la colonne se recalcule sans créer de trou automatique supplémentaire.
-
-Règles :
-
-- le trou manuel ne fait pas partie des boucles ;
-- il n'est pas lié à un participant ;
-- il peut être supprimé tant que la ligne n'est pas jouée ;
-- il est conservé dans l'historique si le plateau est joué.
-
-## 31.2 Suppression d'un trou
-
-Un trou non joué peut être supprimé depuis son menu `...`.
-
-Effet :
-
-- le trou disparaît ;
-- la colonne concernée se recalcule ;
-- les musiciens suivants remontent pour combler la place ;
-- si le trou était lié, il est d'abord retiré de son groupe lié.
-
-Un trou déjà joué n'est pas supprimable directement. Pour le retirer de l'historique, il faut annuler le passage concerné.
-
-## 31.3 Annulation d'un plateau joué
-
-Quand une case jouée est annulée, l'application propose :
-
-- annuler seulement ce musicien / cette case ;
-- annuler tout le plateau.
-
-Si l'organisateur annule seulement une case :
-
-- la case garde sa position ;
-- elle redevient `à venir` ;
-- le reste du plateau reste joué.
-
-Si l'organisateur annule tout le plateau :
-
-- toutes les cases de la ligne redeviennent `à venir` ;
-- les trous de la ligne redeviennent modifiables ;
-- le calcul des passages futurs est mis à jour.
-
-## 31.4 Synchronisation backend
-
-Décision V0 : le local est source de vérité pendant la jam.
-
-Chaque action utilisateur est enregistrée dans une file locale d'actions.
-
-Pour chaque action :
-
-1. l'action est appliquée immédiatement localement ;
-2. l'interface se met à jour immédiatement ;
-3. l'application tente de persister l'action côté backend ;
-4. si l'appel backend échoue, l'action reste dans une file de retry ;
-5. l'application retente régulièrement la synchronisation.
-
-Affichage recommandé :
-
-- aucune alerte bloquante pendant la jam ;
-- petit indicateur discret si des actions restent à synchroniser ;
-- message clair si l'utilisateur tente de quitter avec des actions non synchronisées.
-
-## 31.5 Conflit multi-appareil
-
-En V0, l'usage multi-appareil concurrent est bloqué.
-
-Une jam ne doit être modifiable que depuis un seul appareil à la fois.
-
-Si une jam est déjà ouverte en mode édition sur un appareil, un second appareil doit être empêché de la modifier ou placé en lecture seule.
-
-## 31.6 Authentification
-
-En V0, il n'y a pas d'authentification organisateur.
-
-L'accueil affiche toutes les jams du service.
-
-En V1 :
-
-- l'organisateur peut créer un compte ;
-- les jams sont rattachées à son compte ;
-- l'organisateur voit uniquement ses propres jams.
-
-## 31.7 QR code V1
-
-À détailler dans une spec V1 séparée.
-
-Intentions connues :
-
-- inscription participant via QR code ;
-- page participant dédiée ;
-- saisie du nom ;
-- choix de l'instrument parmi ceux configurés par l'organisateur ;
-- possibilité de choisir avec qui le participant souhaite jouer.
-
----
-
-## 32. Synthèse V0
-
-La V0 est une interface organisateur mobile/tablette qui permet de gérer une jam via un tableau par instruments.
-
-Les règles centrales sont :
-
-- une colonne = un instrument ;
-- une ligne = un plateau ;
-- les colonnes avancent indépendamment ;
-- les musiciens sont ajoutés à la suite de leur colonne ;
-- les boucles réaffichent les musiciens disponibles après leur première rotation ;
-- le check `a joué` est visible seulement pour les prochains musiciens jouables ;
-- le plateau peut être marqué joué depuis le tableau ou le drawer d'appel ;
-- les liens permettent de faire passer plusieurs cases sur la même ligne ;
-- `Veux jouer sans` crée des trous liés ;
-- le drawer d'appel permet aussi de créer un trou manuel non lié ;
-- `N'est pas disponible` sert à trouver un remplaçant sans créer d'état durable ;
-- `Marquer comme parti` retire le musicien des passages futurs ;
-- les passages joués restent dans l'historique ;
-- le local est source de vérité pendant la jam ;
-- l'usage multi-appareil concurrent est bloqué en V0.

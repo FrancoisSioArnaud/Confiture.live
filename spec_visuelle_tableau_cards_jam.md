@@ -1,535 +1,385 @@
-# Spec visuelle — Tableau et cards de gestion de jam
+# Spec visuelle — Tableau, cards et states de jam
 
-## 1. Objectif du tableau
+## 1. Objectif UI
 
-Le tableau est l’interface principale de gestion d’une jam session.
+L'interface doit permettre à un organisateur de jam de gérer rapidement les plateaux depuis un téléphone ou une tablette.
 
-Il permet à l’organisateur de :
+Priorités :
 
-- visualiser les plateaux à venir ;
-- voir les musiciens par instrument ;
-- identifier les musiciens déjà passés ;
-- lancer l’appel d’un plateau ;
-- valider rapidement un plateau joué ;
-- gérer les liens entre musiciens ;
-- gérer les trous volontaires ;
-- comprendre les boucles de passage.
-
-Le tableau est pensé pour un usage mobile et tablette, avec la même logique responsive.
+- lisibilité immédiate ;
+- actions rapides ;
+- cartes compactes ;
+- erreurs limitées ;
+- état du tableau compréhensible en un coup d'œil.
 
 ---
 
-## 2. Structure générale du tableau
+## 2. Layout général du tableau
 
-Le tableau est composé de :
+Le tableau est une grille avec :
 
-- une colonne fixe à gauche pour les actions de plateau ;
+- une colonne gauche dédiée aux actions de plateau ;
 - une colonne par instrument ;
-- une carte par case de musicien ou de trou ;
-- un scroll horizontal si les colonnes dépassent la largeur disponible ;
-- un scroll vertical pour parcourir les lignes de plateau.
+- une carte par musicien ou trou volontaire ;
+- scroll horizontal pour les instruments ;
+- scroll vertical pour les lignes de plateaux.
 
-Exemple :
+### Sticky
 
-```text
-        Chant        Guitare       Basse        Batterie      Piano
-📣 ✓    Sarah        Nicolas       Tom          Emma          Jeanne
-📣 ✓    Léa          Paul          Karim        Lucas         Clara
-📣 ✓    Marc         Julie         Max          Hugo          Alice
-```
+- Le header des instruments est sticky en haut.
+- La colonne gauche d'actions est sticky à gauche.
 
-Chaque ligne correspond à un plateau potentiel.
+### Mobile
 
-Chaque colonne correspond à une file d’attente indépendante d’un instrument.
+Sur mobile :
+
+- colonnes instrument scrollables horizontalement ;
+- cartes compactes ;
+- drawers full screen ;
+- actions principales accessibles sans sous-navigation complexe.
+
+### Tablette
+
+Sur tablette :
+
+- même logique ;
+- plus de colonnes visibles ;
+- colonnes plus larges ;
+- drawers plus confortables.
 
 ---
 
 ## 3. Header du tableau
 
-### 3.1 Header instrument
+Le header de chaque colonne affiche uniquement le nom de l'instrument.
 
-Le header de chaque colonne affiche uniquement le nom de l’instrument.
-
-Exemple :
+Exemples :
 
 ```text
 Chant
-```
-
-```text
 Guitare
-```
-
-```text
+Basse
 Batterie
+Piano
+Autres
 ```
 
-Aucune statistique n’est affichée dans le header du tableau.
-
-À ne pas afficher dans le header :
-
-- nombre de musiciens restants ;
-- nombre de musiciens jamais passés ;
-- état de boucle ;
-- total d’inscrits ;
-- badges ou compteurs.
-
-Ces informations appartiennent à d’autres zones de l’interface, pas au tableau.
-
-### 3.2 Style du header
-
-Recommandation visuelle :
-
-- sticky en haut pendant le scroll vertical ;
-- texte court, très lisible ;
-- aligné avec les cards de sa colonne ;
-- hauteur compacte ;
-- fond légèrement différencié du tableau.
+Aucune statistique n'est affichée dans le header.
 
 ---
 
 ## 4. Colonne gauche — actions de plateau
 
-La colonne gauche contient les actions directes de chaque ligne.
+Chaque ligne du tableau contient deux boutons directs dans la colonne gauche :
 
-Il n’y a pas de notion de ligne sélectionnée en V0.
+1. ouvrir le drawer d'appel ;
+2. marquer le plateau joué.
 
-Chaque ligne affiche directement deux boutons :
+Il n'y a pas de mode “ligne sélectionnée”.
 
-1. ouvrir le drawer d’appel ;
-2. marquer le plateau comme joué.
+### Bouton ouvrir le drawer d'appel
+
+Icône recommandée : mégaphone / appel.
 
 Exemple :
-
-```text
-📣 ✓
-```
-
-### 4.1 Bouton ouvrir le drawer d’appel
-
-Icône recommandée :
 
 ```text
 📣
 ```
 
-Action : ouvrir le drawer d’appel du plateau correspondant.
+Action : ouvre le drawer d'appel pour la ligne.
 
-Le drawer affiche les musiciens de la ligne en grand pour permettre à l’organisateur de les appeler facilement.
+### Bouton plateau joué
 
-### 4.2 Bouton plateau joué
+Icône : le même check que le bouton “musicien joué”.
 
-Icône : même icône que le bouton “musicien joué”.
-
-Recommandation :
-
-```text
-✓
-```
-
-Action : marquer tous les musiciens de la ligne comme ayant joué.
-
-Effet :
-
-- toutes les cards musicien de la ligne passent en état `joué` ;
-- les trous volontaires de la ligne passent en historique ;
-- la ligne reste à sa place ;
-- les lignes jouées ne remontent pas automatiquement ;
-- les colonnes recalculent les futurs passages si nécessaire.
-
-### 4.3 Style de la colonne gauche
-
-Recommandation :
-
-- colonne sticky à gauche ;
-- largeur compacte ;
-- deux boutons empilés ou côte à côte selon la largeur disponible ;
-- boutons très accessibles au doigt ;
-- pas d’autre action visible dans cette colonne.
+Action : marque tous les musiciens de la ligne comme joués et valide les trous de la ligne comme partie du plateau.
 
 ---
 
-## 5. Card musicien — structure commune
+## 5. Card musicien — structure de base
 
-Chaque case contenant un musicien est affichée sous forme de card compacte.
-
-Structure recommandée :
-
-```text
-┌──────────────┐
-│ Nicolas      │
-│ 🔗 A · 🔁2    │
-│ ✓      ⋯     │
-└──────────────┘
-```
-
-Contenu possible :
+Une carte musicien doit afficher :
 
 - nom du musicien ;
-- tag de lien ;
-- tag de boucle ;
-- actions visibles ;
-- menu secondaire.
+- tags d'état si nécessaire ;
+- actions principales.
 
-### 5.1 Nom du musicien
+Structure compacte :
 
-Le nom est l’information principale.
+```text
+Nicolas
+[tag éventuel]
+✓  🔗  ⋯
+```
 
-Règles :
+Dans une colonne instrument standard, on ne répète pas le nom de l'instrument.
 
-- il doit être très lisible ;
-- il ne doit pas être masqué par les badges ;
-- si le nom est long, il peut être tronqué avec ellipsis ;
-- deux musiciens ne peuvent pas avoir exactement le même nom dans une jam.
-
-### 5.2 Instrument affiché dans la card
-
-L’instrument n’est pas répété dans la card, car il est déjà indiqué par la colonne.
-
-Exception : colonne `Autres`.
-
-Dans la colonne `Autres`, la card affiche le nom du musicien et le détail de l’instrument.
-
-Exemple :
+Dans la colonne “Autres”, on affiche le détail de l'instrument :
 
 ```text
 Léa
 saxophone
+✓  🔗  ⋯
 ```
 
 ---
 
-## 6. Actions visibles dans une card
+## 6. Actions visibles sur une card
 
-### 6.1 Bouton “musicien joué”
+### Actions principales
 
-Icône :
+- `✓` : marquer comme joué ;
+- `🔗` : entrer en mode link ;
+- `⋯` : ouvrir les actions secondaires.
 
-```text
-✓
-```
+### Visibilité du check
 
-Le bouton est visible uniquement pour les prochains musiciens qui vont jouer selon la logique de file d’attente.
+Le check est visible uniquement sur les prochains musiciens jouables de chaque colonne.
 
-Il n’est pas visible sur tous les musiciens futurs.
+Les cartes futures plus basses dans la colonne n'affichent pas le check.
 
-Effet :
+### Menu `⋯`
 
-- la card passe en état `joué` ;
-- le passage est conservé dans l’historique ;
-- la card devient grisée ;
-- la card n’est plus draggable.
+Actions secondaires :
 
-### 6.2 Bouton link
-
-Icône :
-
-```text
-🔗
-```
-
-Action : entrer en mode link depuis ce musicien.
-
-Le mode link permet :
-
-- de lier ce musicien à d’autres musiciens ;
-- de délier des musiciens déjà liés ;
-- de lier un trou volontaire au groupe.
-
-### 6.3 Menu secondaire
-
-Icône :
-
-```text
-⋯
-```
-
-Actions possibles :
-
-- modifier le participant ;
+- modifier ;
 - marquer comme parti ;
-- veux jouer sans ;
-- supprimer la participation si elle n’a jamais été jouée ;
-- annuler le passage si la card est déjà jouée.
+- veux jouer sans… ;
+- supprimer cette participation si elle n'a jamais été jouée ;
+- annuler le passage si la carte est déjà jouée.
 
 ---
 
-## 7. État normal
+## 7. Card normale
 
-État par défaut d’un musicien actif, non joué, non lié, hors boucle.
-
-Affichage :
+État par défaut pour un musicien actif non joué.
 
 ```text
-┌──────────────┐
-│ Nicolas      │
-│ 🔗      ⋯    │
-└──────────────┘
+Nicolas
+🔗  ⋯
 ```
 
 Style :
 
 - fond normal ;
-- texte principal fort ;
-- bordure simple ;
-- draggable verticalement ;
-- pas de badge particulier.
+- texte principal très lisible ;
+- carte draggable via long press ;
+- pas de badge si aucun état particulier.
 
 ---
 
-## 8. État prochain à jouer
+## 8. Card prochain à jouer
 
-Un musicien prochain à jouer est le prochain musicien disponible dans sa colonne.
-
-Affichage :
+Le prochain musicien jouable d'une colonne affiche le check.
 
 ```text
-┌──────────────┐
-│ Nicolas      │
-│ ✓  🔗   ⋯    │
-└──────────────┘
+Nicolas
+✓  🔗  ⋯
 ```
 
 Style :
 
-- même base que l’état normal ;
-- bouton check visible ;
-- légère mise en avant possible, mais pas obligatoire ;
-- draggable tant qu’il n’est pas joué.
-
-Règle : le check n’est visible que pour les prochains musiciens jouables.
+- fond normal ;
+- bordure légèrement renforcée ;
+- check visible ;
+- draggable via long press.
 
 ---
 
-## 9. État joué
+## 9. Card jouée
 
-Un musicien joué est un passage validé.
-
-Affichage :
+Une carte jouée représente un passage historique.
 
 ```text
-┌──────────────┐
-│ Nicolas      │
-│ ✓ joué   ⋯   │
-└──────────────┘
+Nicolas
+✓ joué
+⋯
 ```
 
 Style :
 
 - fond gris ;
 - texte atténué ;
-- card figée ;
 - non draggable ;
-- reste visible dans l’historique du tableau ;
-- ne remonte pas automatiquement.
+- pas de check d'action visible ;
+- menu `⋯` disponible pour annulation ou action secondaire.
 
-Actions disponibles :
+Actions possibles :
 
-- menu `⋯` ;
-- action `Annuler le passage`.
-
-Si le passage est annulé :
-
-- la card garde sa position ;
-- elle redevient non jouée ;
-- elle redevient draggable si elle est dans une zone modifiable.
+- annuler le passage ;
+- marquer comme parti.
 
 ---
 
-## 10. État boucle / rejoue
+## 10. Card boucle / rejoue
 
-Quand un musicien réapparaît parce qu’il a déjà joué une première fois, il est affiché en état boucle.
+Quand un musicien réapparaît en boucle, la carte affiche uniquement un petit tag bleu avec :
 
-L’état boucle doit être visible mais discret.
-
-Affichage demandé : petit tag bleu avec icône ou emoji boucle + numéro de boucle.
-
-Exemples :
-
-```text
-🔁2
-```
-
-```text
-↻2
-```
-
-```text
-boucle 2
-```
-
-Recommandation :
-
-```text
-🔁2
-```
-
-Format card :
-
-```text
-┌──────────────┐
-│ Nicolas      │
-│ 🔁2  🔗  ⋯   │
-└──────────────┘
-```
-
-Style du tag boucle :
-
-- petit tag bleu ;
-- texte blanc ou bleu foncé selon contraste ;
-- arrondi fort ;
-- très court ;
-- placé dans la ligne de badges.
-
-Règle de numérotation :
-
-- `🔁2` = deuxième passage potentiel du musicien ;
-- `🔁3` = troisième passage potentiel ;
-- etc.
-
-Le premier passage n’affiche pas de tag boucle.
-
----
-
-## 11. État parti
-
-Un musicien marqué comme parti ne doit plus apparaître dans les futurs passages.
-
-Il reste visible uniquement dans les passages déjà joués.
-
-Affichage dans l’historique :
-
-```text
-┌──────────────┐
-│ Nicolas      │
-│ ✓ joué · parti│
-└──────────────┘
-```
-
-Style :
-
-- même style que joué ;
-- badge ou mention `parti` ;
-- texte atténué ;
-- non draggable.
-
-Règles :
-
-- si un musicien part avant d’avoir joué, il disparaît du tableau futur ;
-- il reste visible dans la liste des participants de la jam avec l’état `parti` ;
-- si un musicien a déjà joué, ses passages joués restent visibles dans le tableau.
-
----
-
-## 12. Trou volontaire
-
-Un trou volontaire est une case explicitement créée par l’organisateur.
-
-Cas d’usage principal : un musicien ou un groupe veut jouer sans un instrument.
-
-Exemple : Nicolas chant + guitare veut jouer sans batterie.
-
-Affichage :
-
-```text
-┌──────────────┐
-│ Ø Sans       │
-│ batterie     │
-│ 🔗 A    ⋯    │
-└──────────────┘
-```
-
-Style :
-
-- fond distinct du musicien normal ;
-- bordure pointillée ou hachurée ;
-- texte clair : `Sans batterie` ;
-- ne doit pas ressembler à une erreur ou à une donnée manquante.
-
-Règles :
-
-- le trou ne fait pas partie des boucles ;
-- le trou peut être linké à un musicien ou à un groupe ;
-- le trou suit le groupe auquel il est lié ;
-- si le plateau est joué, le trou est conservé dans l’historique ;
-- le trou peut être supprimé avant passage.
-
----
-
-## 13. Action “veux jouer sans”
-
-L’action `Veux jouer sans` est accessible dans le menu `⋯` d’une card musicien.
-
-Flow :
-
-1. l’organisateur ouvre le menu `⋯` d’un musicien ;
-2. il clique sur `Veux jouer sans` ;
-3. une liste des autres instruments disponibles s’affiche ;
-4. il coche un ou plusieurs instruments ;
-5. il valide ;
-6. l’app crée un trou dans chaque colonne choisie ;
-7. les trous sont linkés au musicien ou au groupe du musicien.
+- icône ou emoji boucle ;
+- numéro de boucle.
 
 Exemple :
 
 ```text
-Chant        Guitare       Batterie
-Nicolas      Nicolas       Sans batterie
-🔗 A         🔗 A          🔗 A
+Nicolas
+🔁 2
+🔗 ⋯
 ```
 
-Si plusieurs instruments sont cochés, plusieurs trous sont créés.
+Le tag `🔁 2` signifie que le musicien est dans sa deuxième boucle de passage.
+
+Style du tag :
+
+- fond bleu ;
+- texte clair ;
+- petit format ;
+- arrondi ;
+- discret mais visible.
+
+Pas de texte “rejoue” si le tag boucle est présent.
+
+---
+
+## 11. Card participant parti
+
+Un participant marqué comme parti ne s'affiche plus dans les passages futurs.
+
+S'il a déjà joué, ses cartes jouées restent visibles dans l'historique.
+
+Affichage historique :
+
+```text
+Nicolas
+✓ joué · parti
+⋯
+```
+
+Style :
+
+- fond gris joué ;
+- badge ou texte secondaire “parti” ;
+- non draggable.
+
+---
+
+## 12. Card trou volontaire
+
+Un trou volontaire indique qu'aucun musicien ne doit jouer cet instrument sur cette ligne.
+
+Exemple batterie :
+
+```text
+Ø Sans batterie
+🔗 ⋯
+```
+
+Style :
+
+- fond distinct du fond normal ;
+- bordure pointillée ou hachurée ;
+- texte explicite ;
+- ne doit jamais ressembler à un bug ou à une cellule vide accidentelle.
+
+Actions :
+
+- link ;
+- supprimer le trou si la ligne n'est pas jouée ;
+- menu `⋯`.
+
+Si le trou est joué dans un plateau validé, il reste visible dans l'historique.
+
+---
+
+## 13. Insertion entre deux cards
+
+Quand l'organisateur clique entre deux cartes dans une colonne, une modale s'ouvre.
+
+La modale propose deux choix :
+
+```text
+Ajouter ici
+
+Ajouter un trou
+Ajouter un participant
+```
+
+### Ajouter un trou
+
+- ajoute un trou à cet endroit dans la colonne ;
+- pousse les cartes suivantes vers le bas ;
+- le trou n'est pas linké par défaut.
+
+### Ajouter un participant
+
+- ouvre le drawer d'ajout participant ;
+- l'instrument de la colonne est précoché ;
+- le participant est inséré à cet endroit après validation.
+
+### Zone cliquable
+
+La zone entre deux cartes doit être assez grande pour être tapable, mais visuellement discrète.
+
+Affichage recommandé :
+
+- petit séparateur léger ;
+- apparition d'un bouton `+` au tap ou au hover tablette ;
+- pas de bruit visuel permanent.
 
 ---
 
 ## 14. Affichage des links
 
-Les musiciens et trous liés doivent être clairement identifiables.
+Les cartes liées partagent :
 
-Proposition : utiliser un badge de groupe.
-
-Exemples :
-
-```text
-🔗 A
-```
-
-```text
-🔗 B
-```
-
-```text
-🔗 C
-```
-
-Toutes les cards du même groupe lié affichent le même badge.
+- une bordure colorée commune ;
+- un badge de groupe ;
+- une icône link.
 
 Exemple :
 
 ```text
-Chant        Guitare       Batterie
-Nicolas      Nicolas       Sans batterie
-🔗 A         🔗 A          🔗 A
+Nicolas
+🔗 A
 ```
 
-Style recommandé :
+Autre groupe :
 
-- badge court ;
-- même couleur de bordure pour les cards liées ;
-- même identifiant de groupe ;
-- ne pas afficher de longs textes comme `lié avec...` dans le tableau.
+```text
+Sarah
+🔗 B
+```
+
+### Groupe avec trou
+
+Exemple guitare-voix sans batterie :
+
+```text
+Chant        Guitare       Batterie
+Nicolas      Nicolas       Ø Sans batterie
+🔗 A         🔗 A          🔗 A
+```
 
 ---
 
 ## 15. Mode link
 
-Quand l’organisateur clique sur l’icône link d’une card, le tableau passe en mode link.
+Quand l'organisateur clique sur `🔗`, le tableau passe en mode link.
 
-### 15.1 Card source
+### Header de mode
 
-La card source est mise en avant fortement.
+Un bandeau ou footer sticky indique :
 
-Affichage possible :
+```text
+Mode lien
+Sélectionne les musiciens à faire passer ensemble.
+
+Annuler     Valider
+```
+
+### Card source
+
+La carte source est mise en avant fortement.
 
 ```text
 Nicolas
@@ -539,115 +389,86 @@ source
 Style :
 
 - bordure accentuée ;
-- fond légèrement accentué ;
-- badge `source` ou état visuel équivalent.
+- fond accentué ;
+- badge “source”.
 
-### 15.2 Cards déjà liées
+### Cartes déjà liées
 
-Les cards déjà liées à la source sont mises en avant avec le même badge de groupe.
+Les cartes déjà liées sont mises en avant avec le même groupe.
 
-L’organisateur peut recliquer dessus pour les délier.
+```text
+Jérémy
+lié
+```
 
-### 15.3 Cards sélectionnables
+### Cartes compatibles
 
-Les cards compatibles restent cliquables.
+Les cartes compatibles restent cliquables.
 
-Compatibles :
+### Cartes incompatibles
 
-- musicien non joué ;
-- autre colonne ;
-- non parti ;
-- pas déjà incompatible avec le groupe.
+Les cartes incompatibles sont atténuées et non cliquables.
 
-### 15.4 Cards incompatibles
+Incompatibles :
 
-Les cards incompatibles sont visibles mais atténuées.
-
-Exemples de cards incompatibles :
-
-- musicien déjà joué ;
+- carte déjà jouée ;
 - même instrument déjà présent dans le groupe ;
 - participant parti ;
-- case non modifiable.
+- action qui casserait une règle métier.
 
-### 15.5 Barre de validation
+### Délier
 
-En mode link, une barre d’action apparaît en bas :
-
-```text
-Annuler        Valider
-```
-
-Le recalcul du tableau se fait après validation.
+Dans le même mode, recliquer sur une carte déjà liée la retire du groupe.
 
 ---
 
-## 16. Participant multi-instruments
+## 16. “Veux jouer sans…”
 
-Un participant peut apparaître dans plusieurs colonnes avec le même nom.
+Action disponible dans le menu `⋯` d'une card.
 
-Exemple : Nicolas chant + guitare.
+Flow :
 
-Si les instruments sont liés :
+1. clic sur `⋯` ;
+2. choix “Veux jouer sans…” ;
+3. drawer compact ;
+4. liste des autres instruments disponibles ;
+5. sélection d'un ou plusieurs instruments ;
+6. validation ;
+7. création de trous linkés au participant ou au groupe.
+
+Exemple drawer :
 
 ```text
-Chant        Guitare
-Nicolas      Nicolas
-🔗 A         🔗 A
+Nicolas veut jouer sans :
+
+☐ Chant
+☐ Guitare
+☑ Batterie
+☐ Piano
+
+Valider
 ```
 
-Si les instruments ne sont pas liés :
-
-```text
-Chant        Guitare
-Nicolas      Nicolas
-```
-
-Règles :
-
-- même nom affiché dans chaque colonne ;
-- si les cases sont liées, elles ont le même badge de link ;
-- si elles ne sont pas liées, elles se comportent comme deux participations indépendantes ;
-- pas d’avertissement affiché dans le tableau si les instruments ne sont pas liés.
+Si Nicolas est déjà dans un groupe lié, les trous sont liés au groupe complet.
 
 ---
 
-## 17. Colonne `Autres`
+## 17. Drawer d'appel
 
-Dans la colonne `Autres`, la card affiche le nom du musicien et le détail libre de l’instrument.
+Le drawer d'appel est accessible via le bouton `📣` de la colonne gauche.
 
-Exemple :
+### Format
 
-```text
-┌──────────────┐
-│ Léa          │
-│ saxophone    │
-│ 🔗      ⋯    │
-└──────────────┘
-```
+- full screen sur mobile ;
+- drawer large sur tablette ;
+- bouton “Plateau joué” sticky en bas.
 
-Si la card est en boucle :
+### Contenu
+
+Chaque instrument est affiché avec le musicien correspondant en grand.
 
 ```text
-┌──────────────┐
-│ Léa          │
-│ saxophone    │
-│ 🔁2 🔗   ⋯   │
-└──────────────┘
-```
-
----
-
-## 18. Drawer d’appel
-
-Le drawer d’appel est ouvert via le bouton `📣` dans la colonne gauche.
-
-Il affiche les musiciens du plateau en grand.
-
-Exemple :
-
-```text
-Plateau
+Plateau #4
 
 Chant
 Sarah
@@ -672,68 +493,256 @@ Batterie
 Sans batterie
 ```
 
-Actions dans le drawer :
+Pour “Autres” :
 
-- `A joué` par musicien ;
-- `N’est pas disponible` par musicien ;
-- `Plateau joué` pour toute la ligne.
+```text
+Autres
+Léa — saxophone
+```
 
-Le bouton `Plateau joué` dans le drawer a le même effet que le bouton check de la colonne gauche.
+### Actions par musicien
+
+- A joué ;
+- N'est pas disponible.
+
+### Action globale
+
+- Plateau joué.
+
+Après validation du plateau joué, le drawer se ferme automatiquement.
 
 ---
 
-## 19. “N’est pas disponible” dans le drawer
+## 18. “N'est pas disponible”
 
-Quand l’organisateur clique sur `N’est pas disponible`, l’app propose des remplaçants dans la même colonne.
+Depuis le drawer d'appel, l'action ouvre une liste de remplaçants.
 
 Exemple :
 
 ```text
-Remplacer Jérémy à la batterie
+Remplacer Jérémy — Batterie
 
 Lucas
-non lié
+Non lié
 
 Hugo
-lié avec Sarah
+Lié avec Sarah — sera délié
 
 Emma
-non lié
+🔁 2 · non lié
 ```
 
-Règles :
+### Remplaçant non lié
 
-- le remplaçant prend la place du musicien indisponible ;
-- le musicien indisponible est déplacé à la prochaine ligne suivante disponible ;
-- aucun état durable `indisponible` n’est créé ;
-- si le musicien indisponible est lié, il est délié après confirmation ;
-- si le remplaçant est lié, il est délié après confirmation.
+- prend la place actuelle ;
+- le musicien indisponible est déplacé à la prochaine ligne suivante disponible.
+
+### Remplaçant lié
+
+Confirmation :
+
+```text
+Hugo est lié à Sarah.
+Le choisir va le délier et le déplacer seul.
+Continuer ?
+```
+
+Si confirmé :
+
+- le remplaçant est délié ;
+- il prend la place actuelle.
+
+### Musician indisponible lié
+
+Confirmation similaire.
+
+Si confirmé :
+
+- il est délié ;
+- il est déplacé seul.
 
 ---
 
-## 20. Drag vertical
+## 19. Drag and drop
 
-Le drag and drop est uniquement vertical dans une colonne.
+Le drag and drop se fait uniquement en vertical dans une colonne.
 
-Il n’y a jamais de drag horizontal.
+Aucune affordance visuelle dédiée n'est affichée.
 
-Règles :
+Interaction :
 
-- les cards non jouées sont draggable ;
-- les cards jouées ne sont pas draggable ;
-- les trous non joués peuvent être déplacés s’ils sont modifiables ;
-- un groupe lié se déplace ensemble ;
-- les autres cards de la colonne sont poussées pour éviter les trous ;
-- le tableau ne crée pas de trou automatiquement lors d’un drag.
+- long press sur une card ;
+- déplacement vertical ;
+- relâchement.
+
+Pendant le drag :
+
+- la carte suit le doigt ;
+- les cartes non jouées se décalent ;
+- les cartes jouées restent fixes ;
+- les groupes liés bougent ensemble ;
+- les trous linkés suivent leur groupe.
+
+Si une action est impossible, l'app affiche un message clair.
 
 ---
 
-## 21. Priorité visuelle des states
+## 20. Modales de confirmation
 
-Si plusieurs états s’appliquent à une card, l’ordre de priorité visuelle est :
+Les confirmations doivent être réservées aux actions risquées.
+
+### Actions avec confirmation
+
+- annuler un passage joué ;
+- annuler tout un plateau ;
+- marquer comme parti ;
+- choisir un remplaçant lié ;
+- rendre indisponible un musicien lié ;
+- supprimer un trou lié ;
+- supprimer une participation non jouée ;
+- modifier un participant déjà joué.
+
+### Style
+
+Les textes doivent être courts.
+
+Exemple :
+
+```text
+Annuler le passage ?
+
+Nicolas sera remis comme non joué à cette position.
+
+Annuler
+Confirmer
+```
+
+---
+
+## 21. Création / édition participant — UI
+
+Drawer full screen sur mobile.
+
+Champs :
+
+- nom ;
+- instruments en multi-select ;
+- détail “autres” si nécessaire ;
+- section “faire passer en même temps” ;
+- bouton valider sticky en bas.
+
+### Nom déjà utilisé
+
+Erreur bloquante :
+
+```text
+Ce nom est déjà utilisé dans cette jam.
+```
+
+### Instruments
+
+Les instruments sont affichés dans l'ordre défini dans la jam.
+
+Quand le drawer est ouvert depuis une insertion dans une colonne, l'instrument de cette colonne est précoché.
+
+---
+
+## 22. Création / édition jam — UI
+
+Même écran en création et en édition.
+
+Champs :
+
+- nom ;
+- date indicative ;
+- instruments activés ;
+- ajout instrument personnalisé ;
+- réorganisation des instruments.
+
+En édition, afficher les stats :
+
+- musiciens uniques ;
+- participations instrumentales ;
+- plateaux joués ;
+- musiciens n'ayant pas encore joué au moins un instrument.
+
+---
+
+## 23. Écran liste des jams — UI
+
+Liste simple triée par date indicative.
+
+Chaque card jam :
+
+```text
+Jam du jeudi
+12 juin 2026
+18 musiciens · 6 plateaux joués
+```
+
+Action principale :
+
+```text
++ Nouvelle jam
+```
+
+---
+
+## 24. Sync / offline — UI
+
+Indicateur discret en haut de la page jam.
+
+États :
+
+```text
+Synchronisé
+Sauvegarde locale
+Synchronisation en attente
+Hors ligne
+```
+
+En cas de multi-appareil bloqué :
+
+```text
+Cette jam est déjà ouverte ailleurs.
+Pour éviter les conflits, l'édition est bloquée sur cet appareil.
+```
+
+---
+
+## 25. Empty states
+
+### Jam sans participant
+
+```text
+Aucun musicien inscrit.
+Ajoute un participant pour commencer.
+```
+
+### Instrument sans inscrit
+
+La colonne existe mais affiche une invitation discrète à ajouter un participant.
+
+### Aucun remplaçant disponible
+
+```text
+Aucun remplaçant disponible pour cet instrument.
+```
+
+### Tous les musiciens ont joué au moins une fois
+
+Pas de message bloquant.
+
+Le tableau continue avec les boucles.
+
+---
+
+## 26. Priorité visuelle des states
+
+Si plusieurs states s'appliquent, priorité :
 
 1. joué ;
-2. trou volontaire ;
+2. trou ;
 3. mode link actif ;
 4. lié ;
 5. prochain à jouer ;
@@ -741,200 +750,18 @@ Si plusieurs états s’appliquent à une card, l’ordre de priorité visuelle 
 7. normal ;
 8. parti.
 
-Note : `parti` n’apparaît dans le tableau que pour les passages déjà joués conservés en historique.
+Note : `parti` ne s'affiche dans le tableau que si le passage a déjà été joué. Sinon le participant disparaît des passages futurs.
 
 ---
 
-## 22. Résumé des cards
+## 27. Wording retenu
 
-### Normal
+- `A joué`
+- `Plateau joué`
+- `Veux jouer sans…`
+- `Marquer comme parti`
+- `N'est pas disponible`
+- `Sans batterie`, `Sans basse`, etc.
+- `Faire passer en même temps ?`
+- tag boucle : `🔁 2`, `🔁 3`, etc.
 
-```text
-Nicolas
-🔗 ⋯
-```
-
-### Prochain à jouer
-
-```text
-Nicolas
-✓ 🔗 ⋯
-```
-
-### Joué
-
-```text
-Nicolas
-✓ joué ⋯
-```
-
-### Boucle
-
-```text
-Nicolas
-🔁2 🔗 ⋯
-```
-
-### Lié
-
-```text
-Nicolas
-🔗 A ⋯
-```
-
-### Multi-instrument lié
-
-```text
-Chant        Guitare
-Nicolas      Nicolas
-🔗 A         🔗 A
-```
-
-### Trou volontaire
-
-```text
-Sans batterie
-🔗 A ⋯
-```
-
-### Joué + parti
-
-```text
-Nicolas
-✓ joué · parti
-```
-
----
-
-## 23. Décisions UI actées
-
-- Le header du tableau affiche uniquement le nom de la colonne.
-- La colonne gauche contient uniquement deux actions : ouvrir le drawer d’appel et marquer le plateau joué.
-- Le bouton plateau joué utilise la même icône que le bouton musicien joué.
-- Il n’y a pas de ligne sélectionnée.
-- Les actions de ligne sont directes.
-- Le tag boucle est un petit tag bleu avec icône/emoji boucle + numéro de boucle.
-- Le drag and drop est uniquement vertical.
-- Aucun drag horizontal n’existe.
-- Les lignes jouées ne remontent pas automatiquement.
-- Les musiciens partis disparaissent du futur mais restent dans l’historique s’ils ont joué.
-
----
-
-## 24. Compléments UI appliqués par recommandation
-
-Cette section verrouille les points visuels encore ouverts.
-
-### 24.1 Trou manuel non lié
-
-Un trou manuel non lié est affiché comme un trou volontaire classique, mais sans badge de link.
-
-Affichage :
-
-```text
-Sans basse
-⋯
-```
-
-Style :
-
-- fond distinct ;
-- bordure pointillée ou hachurée ;
-- libellé explicite `Sans <instrument>` ;
-- aucun badge `🔗` si le trou n'est pas lié.
-
-Actions dans le menu `⋯` tant que le plateau n'est pas joué :
-
-- supprimer le trou ;
-- lier le trou ;
-- modifier si nécessaire.
-
-Une fois joué, le trou est grisé et conservé comme élément d'historique.
-
-### 24.2 Ajout d'un trou manuel depuis le drawer d'appel
-
-Dans le drawer d'appel, chaque instrument peut proposer l'action :
-
-```text
-Jouer sans cet instrument
-```
-
-Cette action crée une card `Sans <instrument>` sur la ligne appelée.
-
-Le musicien qui devait occuper cette place est déplacé à la prochaine ligne suivante disponible.
-
-### 24.3 Suppression d'un trou
-
-Un trou non joué est supprimable depuis son menu `⋯`.
-
-Si le trou est lié, la suppression le retire aussi du groupe lié.
-
-Un trou joué n'est pas supprimable directement depuis le tableau. Il faut d'abord annuler le passage de la case ou du plateau.
-
-### 24.4 Annulation d'un passage joué
-
-Depuis une card jouée, le menu `⋯` propose :
-
-```text
-Annuler le passage
-```
-
-Après clic, un dialogue propose :
-
-```text
-Annuler uniquement cette case
-Annuler tout le plateau
-```
-
-Recommandation visuelle :
-
-- dialogue court ;
-- message clair ;
-- action destructive visuellement différenciée ;
-- aucun mouvement automatique de ligne pendant l'annulation.
-
-### 24.5 État de synchronisation
-
-La synchronisation ne doit pas gêner l'organisateur pendant la jam.
-
-Affichage recommandé :
-
-- petit indicateur discret dans la barre supérieure ;
-- `Synchronisé` si tout est à jour ;
-- `À synchroniser` si des actions locales n'ont pas encore été persistées ;
-- pas de snackbar répétitif à chaque retry.
-
-### 24.6 Mode lecture seule multi-appareil
-
-En V0, si une jam est déjà ouverte en édition sur un autre appareil, l'interface du second appareil doit être en lecture seule ou bloquée.
-
-Affichage recommandé :
-
-```text
-Jam ouverte sur un autre appareil
-Modification désactivée
-```
-
-Les boutons d'action du tableau sont alors disabled.
-
----
-
-## 25. Règles finales de densité mobile
-
-Les cards doivent rester compactes.
-
-Priorité du contenu dans une card :
-
-1. nom du musicien ou libellé du trou ;
-2. tag link si présent ;
-3. tag boucle si présent ;
-4. check si la case est prochainement jouable ;
-5. menu `⋯`.
-
-À éviter :
-
-- phrases longues dans les cards ;
-- répétition du nom de l'instrument hors colonne `Autres` ;
-- trop d'icônes visibles ;
-- statistiques dans les headers de colonne ;
-- état `parti` visible dans les futures lignes.
