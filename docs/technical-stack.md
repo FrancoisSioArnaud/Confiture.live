@@ -531,3 +531,69 @@ Nginx + Gunicorn
 Le point à sécuriser en priorité est le moteur de projection du tableau.
 
 Il doit être développé comme une logique pure, testée à fond, avant de trop investir dans les détails visuels.
+
+---
+
+## Backend V0 implémenté
+
+Le backend V0 expose une API Django REST Framework locale sans authentification : toutes les jams sont visibles.
+
+Modèles principaux disponibles dans l'app `jams` :
+
+- `Jam` avec verrou d'édition V0 (`editing_locked_by`, `editing_locked_at`) ;
+- `Instrument` ;
+- `Participant` avec statut `active` / `left` et contrainte unique `jam + name` ;
+- `ParticipantEntry` ;
+- `LinkGroup` ;
+- `Hole` ;
+- `PlayedPassage` ;
+- `ClientAction` avec `client_action_id` unique pour l'idempotence.
+
+Endpoints V0 disponibles :
+
+```text
+GET    /api/jams/
+POST   /api/jams/
+GET    /api/jams/:id/
+PATCH  /api/jams/:id/
+POST   /api/jams/:id/actions/
+GET    /api/jams/:id/actions/
+POST   /api/jams/:id/lock-editing/
+POST   /api/jams/:id/unlock-editing/
+```
+
+`POST /api/jams/:id/actions/` stocke l'action client, ignore proprement un `client_action_id` déjà vu, et applique en V0 les actions minimales `ADD_PARTICIPANT`, `MARK_PARTICIPANT_LEFT`, `MARK_ENTRY_PLAYED` et `ADD_HOLE` via `jams/services/action_service.py`.
+
+---
+
+## Frontend API V0 local-first
+
+Le frontend consomme l'API Django via TanStack Query et garde une persistance locale Dexie pour les actions de tableau.
+
+Modules API :
+
+- `frontend/src/shared/api/httpClient.js` centralise `fetch`, la base URL `VITE_API_BASE_URL` et la gestion d'erreur JSON ;
+- `frontend/src/shared/api/jamsApi.js` expose `fetchJams`, `createJam`, `fetchJam`, `updateJam`, `postJamAction`, `lockEditing` et `unlockEditing`.
+
+Flux V0 :
+
+- `/` charge `GET /api/jams/` et trie les jams par date indicative ;
+- `/jams/new` appelle `POST /api/jams/` ;
+- `/jams/:jamId` appelle `GET /api/jams/:id/`, transforme la réponse backend en `jamState`, puis hydrate Zustand ;
+- `/jams/:jamId/edit` appelle `GET /api/jams/:id/` puis `PATCH /api/jams/:id/` ;
+- les actions du tableau restent optimistes : Zustand applique l'action localement puis `POST /api/jams/:id/actions/` tente la synchronisation ;
+- en cas d'échec réseau/API, l'UI affiche un état de synchronisation en attente/erreur et conserve la jam ainsi que les actions en attente dans Dexie.
+
+### Implémentation local-first V0
+
+La V0 frontend persiste les actions de tableau avec Dexie dans `frontend/src/features/sync/localDb.js` et orchestre les retries dans `frontend/src/features/sync/syncQueue.js`.
+
+Le tableau applique toujours les actions localement via Zustand et le moteur pur, puis la queue enregistre l'action avec son `client_action_id`, sauvegarde le `jamState` courant et tente l'envoi à l'API Django. En cas d'échec, l'action reste en attente et l'indicateur de synchronisation affiche un état `pending`, `offline` ou `error` sans bloquer l'organisateur.
+
+La stratégie détaillée est documentée dans `docs/sync-strategy.md`.
+
+### Verrou d'édition multi-appareil V0
+
+Le backend stocke le verrou d'édition sur `Jam` avec `editing_locked_by`, `editing_locked_at` et `editing_lock_token`. `POST /api/jams/:id/lock-editing/` refuse une autre session tant que le lock est actif, mais autorise une reprise si le lock a expiré. `POST /api/jams/:id/unlock-editing/` libère uniquement le lock correspondant au token de session.
+
+Le frontend génère un `client_id` local et un `editing_lock_token` de session, tente le lock à l'ouverture du tableau, affiche un écran bloquant clair en cas de `423 Locked`, et tente un unlock lors de la navigation hors de la page.

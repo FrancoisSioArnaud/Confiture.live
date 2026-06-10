@@ -1,0 +1,8 @@
+Django>=5.2,<5.3
+djangorestframework>=3.16,<3.17
+django-cors-headers>=4.7,<4.8
+dj-database-url>=2.3,<2.4
+psycopg[binary]>=3.2,<3.3
+gunicorn>=23.0,<24.0
+pytest>=8.3,<8.4
+pytest-django>=4.10,<4.11

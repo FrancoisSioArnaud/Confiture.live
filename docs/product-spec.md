@@ -705,3 +705,19 @@ Principe :
 - édition par le participant ;
 - gestion des doublons de nom côté participant.
 
+
+---
+
+## Blocage d'édition simultanée V0
+
+En V0, une même jam ne doit pas être éditée simultanément depuis deux appareils ou deux sessions, afin d'éviter toute résolution de conflit complexe.
+
+Comportement attendu :
+
+- à l'ouverture du tableau d'une jam, l'app tente de prendre un verrou d'édition ;
+- si le verrou est accordé, l'organisateur peut éditer normalement ;
+- si le verrou est déjà détenu par une autre session, l'écran est bloquant et affiche : “Cette jam est déjà ouverte en édition sur un autre appareil.” puis “Réessaie plus tard.” ;
+- à la sortie de la page, l'app tente de libérer le verrou ;
+- si une session disparaît sans libérer le verrou, le backend peut l'expirer automatiquement après un délai V0 raisonnable.
+
+Cette V0 n'ajoute pas de temps réel et ne résout pas les conflits multi-appareils.
