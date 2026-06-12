@@ -82,7 +82,9 @@ export default function ParticipantFormDrawer({
     .filter((instrument) => instrumentIds.includes(instrument.id))
     .sort((left, right) => left.order - right.order);
   const selectedPairs = buildPairs(selectedInstruments);
-  const otherInstrument = jamState.instruments.find((instrument) => instrument.name === "Autres");
+  const otherInstrument = jamState.instruments.find((instrument) => (
+    instrument.id === "other" || instrument.name === "Autre" || instrument.name === "Autres"
+  ));
   const showCustomInstrument = otherInstrument && instrumentIds.includes(otherInstrument.id);
 
   const handleClose = () => {

@@ -4,7 +4,7 @@ import ArrowUpwardRoundedIcon from "@mui/icons-material/ArrowUpwardRounded";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Alert, Button, Card, CardContent, Checkbox, CircularProgress, FormControlLabel, IconButton, Stack, TextField, Typography } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useNavigate, useParams } from "react-router-dom";
 import { z } from "zod";
@@ -12,6 +12,7 @@ import { z } from "zod";
 import { fetchJam, createJam, toJamState, updateJam as updateJamApi } from "../../../shared/api/jamsApi";
 import { useJamTableStore } from "../../jamTable/store/useJamTableStore.js";
 import { designTokens } from "../../../theme";
+import { DEFAULT_JAM_INSTRUMENT_NAMES, DEFAULT_JAM_INSTRUMENTS, getDefaultJamInstruments } from "../defaultInstruments.js";
 
 const jamSchema = z.object({
   name: z.string().trim().min(1, "Le nom est obligatoire."),
@@ -20,7 +21,6 @@ const jamSchema = z.object({
   customInstrumentName: z.string().optional(),
 });
 
-const defaultInstrumentNames = ["Chant", "Guitare", "Basse", "Batterie", "Piano", "Autres"];
 
 function makeInstrumentId(name) {
   return `instrument-${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
@@ -36,7 +36,10 @@ export default function JamFormPage({ mode = "create" }) {
   const updateJamLocal = useJamTableStore((state) => state.updateJam);
   const addInstrument = useJamTableStore((state) => state.addInstrument);
   const reorderInstruments = useJamTableStore((state) => state.reorderInstruments);
-  const sortedInstruments = [...jamState.instruments].sort((left, right) => left.order - right.order);
+  const [createInstruments, setCreateInstruments] = useState(() => getDefaultJamInstruments());
+  const sortedInstruments = mode === "create"
+    ? createInstruments
+    : [...jamState.instruments].sort((left, right) => left.order - right.order);
   const { data: apiJam, isLoading, isError, error } = useQuery({
     queryKey: ["jam", jamId],
     queryFn: () => fetchJam(jamId),
@@ -47,7 +50,9 @@ export default function JamFormPage({ mode = "create" }) {
     defaultValues: {
       name: "",
       indicativeDate: "",
-      activeInstrumentIds: sortedInstruments.map((instrument) => instrument.id),
+      activeInstrumentIds: mode === "create"
+        ? DEFAULT_JAM_INSTRUMENTS.map((instrument) => instrument.id)
+        : sortedInstruments.map((instrument) => instrument.id),
       customInstrumentName: "",
     },
   });
@@ -67,6 +72,18 @@ export default function JamFormPage({ mode = "create" }) {
       navigate(`/jams/${jamId}`);
     },
   });
+
+  useEffect(() => {
+    if (mode === "create") {
+      setCreateInstruments(getDefaultJamInstruments());
+      reset({
+        name: "",
+        indicativeDate: "",
+        activeInstrumentIds: DEFAULT_JAM_INSTRUMENTS.map((instrument) => instrument.id),
+        customInstrumentName: "",
+      });
+    }
+  }, [mode, reset]);
 
   useEffect(() => {
     if (apiJam) {
@@ -90,8 +107,18 @@ export default function JamFormPage({ mode = "create" }) {
     }
     const [instrument] = nextInstruments.splice(index, 1);
     nextInstruments.splice(targetIndex, 0, instrument);
+    const reorderedInstruments = nextInstruments.map((nextInstrument, nextIndex) => ({
+      ...nextInstrument,
+      order: nextIndex,
+    }));
+
+    if (mode === "create") {
+      setCreateInstruments(reorderedInstruments);
+      return;
+    }
+
     reorderInstruments({
-      instrumentOrders: Object.fromEntries(nextInstruments.map((nextInstrument, nextIndex) => [nextInstrument.id, nextIndex])),
+      instrumentOrders: Object.fromEntries(reorderedInstruments.map((nextInstrument) => [nextInstrument.id, nextInstrument.order])),
     });
   };
 
@@ -154,7 +181,7 @@ export default function JamFormPage({ mode = "create" }) {
       <Stack spacing={`${designTokens.spacing.xs}px`}>
         <Typography variant="h1">{mode === "edit" ? "Modifier la jam" : "Nouvelle jam"}</Typography>
         <Typography color="text.secondary">
-          Instruments par défaut : {defaultInstrumentNames.join(", ")}.
+          Instruments par défaut : {DEFAULT_JAM_INSTRUMENT_NAMES.join(", ")}.
         </Typography>
       </Stack>
 
@@ -177,7 +204,7 @@ export default function JamFormPage({ mode = "create" }) {
       ) : null}
 
       <Stack component="form" spacing={`${designTokens.spacing.lg}px`} onSubmit={handleSubmit(onSubmit)}>
-        <TextField label="Nom" {...register("name")} error={Boolean(errors.name)} helperText={errors.name?.message} fullWidth />
+        <TextField label="Nom de la jam" placeholder="Nom de la jam" {...register("name")} error={Boolean(errors.name)} helperText={errors.name?.message} fullWidth />
         <TextField label="Date indicative" type="date" {...register("indicativeDate")} InputLabelProps={{ shrink: true }} fullWidth />
 
         <Stack spacing={`${designTokens.spacing.sm}px`}>
@@ -216,14 +243,14 @@ export default function JamFormPage({ mode = "create" }) {
           />
           {errors.activeInstrumentIds ? <Typography color="error">{errors.activeInstrumentIds.message}</Typography> : null}
           <Typography variant="caption" color="text.secondary">
-            {activeInstrumentIds.length} colonne(s) active(s) pour cette version locale.
+            {activeInstrumentIds.length} {activeInstrumentIds.length === 1 ? "instrument actif" : "instruments actifs"}
           </Typography>
         </Stack>
 
         <Stack direction={{ xs: "column", sm: "row" }} spacing={`${designTokens.spacing.sm}px`}>
           <TextField label="Instrument custom" {...register("customInstrumentName")} fullWidth />
           <Button type="submit" variant="contained" startIcon={<AddRoundedIcon />} disabled={createMutation.isPending || updateMutation.isPending}>
-            Enregistrer
+            {mode === "create" ? "Créer la jam" : "Enregistrer"}
           </Button>
         </Stack>
       </Stack>
