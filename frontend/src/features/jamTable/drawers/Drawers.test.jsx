@@ -1,5 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { ThemeProvider } from "@mui/material/styles";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { muiTheme } from "../../../theme";
@@ -13,7 +15,16 @@ import InsertBetweenCardsDialog from "./InsertBetweenCardsDialog";
 import WantsToPlayWithoutDrawer from "./WantsToPlayWithoutDrawer";
 
 function renderWithTheme(ui) {
-  return render(<ThemeProvider theme={muiTheme}>{ui}</ThemeProvider>);
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  return render(
+    <ThemeProvider theme={muiTheme}>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          {ui}
+        </MemoryRouter>
+      </QueryClientProvider>
+    </ThemeProvider>,
+  );
 }
 
 describe("V0 drawers", () => {

@@ -18,6 +18,10 @@ class JamApiTests(APITestCase):
         self.assertEqual(response.data["name"], "Jam du jeudi")
         self.assertEqual(Jam.objects.count(), 1)
         self.assertEqual(Instrument.objects.filter(jam_id=response.data["id"]).count(), 6)
+        self.assertEqual(
+            list(Instrument.objects.filter(jam_id=response.data["id"]).order_by("order").values_list("name", flat=True)),
+            ["Chant", "Guitare", "Basse", "Batterie", "Piano", "Autre"],
+        )
 
     def test_create_jam_with_custom_instruments(self):
         response = self.client.post(

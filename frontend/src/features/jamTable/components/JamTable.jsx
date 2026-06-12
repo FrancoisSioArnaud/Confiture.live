@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { DndContext, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
-import { Alert, Box, Button, Card, CardContent, Dialog, DialogActions, DialogContent, DialogTitle, Menu, MenuItem, Snackbar, Stack, Typography } from "@mui/material";
+import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import { Alert, Box, Button, Card, CardContent, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Menu, MenuItem, Snackbar, Stack, Typography } from "@mui/material";
 
 import { designTokens } from "../../../theme";
 import ParticipantFormDrawer from "../../participants/components/ParticipantFormDrawer";
@@ -240,6 +241,12 @@ export default function JamTable({
 
   return (
     <>
+      <Stack direction="row" justifyContent="flex-end" sx={{ mb: `${designTokens.spacing.sm}px` }}>
+        <IconButton aria-label="Ajouter un participant" onClick={() => onOpenParticipantDrawer(null)}>
+          <PersonAddIcon />
+        </IconButton>
+      </Stack>
+
       <DndContext
         sensors={sensors}
         modifiers={[restrictDragToVerticalAxis]}
@@ -289,7 +296,7 @@ export default function JamTable({
                   <CardContent>
                     <Stack spacing={`${designTokens.spacing.xs}px`}>
                       <Typography variant="h2">Aucun participant pour l’instant.</Typography>
-                      <Typography color="text.secondary">Ajoute un participant ou un trou volontaire pour préparer le premier plateau.</Typography>
+                      <Typography color="text.secondary">Ajoute un participant pour préparer le premier plateau.</Typography>
                     </Stack>
                   </CardContent>
                 </Card>

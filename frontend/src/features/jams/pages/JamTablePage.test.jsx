@@ -116,8 +116,9 @@ describe("JamTablePage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("Cette jam est déjà ouverte en édition sur un autre appareil.")).toBeInTheDocument();
-    expect(screen.getByText("Réessaie plus tard.")).toBeInTheDocument();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Cette jam est déjà ouverte en édition sur un autre appareil.");
+    expect(alert).toHaveTextContent("Réessaie plus tard.");
     expect(screen.queryByRole("button", { name: "mark played" })).not.toBeInTheDocument();
   });
 });

@@ -789,7 +789,7 @@ Le header du tableau affiche uniquement le nom de chaque colonne.
 Exemple :
 
 ```text
-Chant | Guitare | Basse | Batterie | Piano | Autres
+Chant | Guitare | Basse | Batterie | Piano | Autre
 ```
 
 Il ne doit pas afficher :

@@ -1,17 +1,22 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { ThemeProvider } from "@mui/material/styles";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { muiTheme } from "../../../theme";
 import { createJamTableUiFixture } from "../engine/uiFixtures.js";
 import { projectJamTable } from "../engine/projectJamTable.js";
 import JamTable from "./JamTable";
 
-function renderJamTable(customJamState = null) {
+function renderJamTable(customJamState = null, customProps = {}) {
   const jamState = customJamState ?? createJamTableUiFixture();
   const projection = projectJamTable(jamState);
 
-  render(
+  const defaultProps = {
+    onOpenParticipantDrawer: () => {},
+  };
+  const props = { ...defaultProps, ...customProps };
+
+  const renderResult = render(
     <ThemeProvider theme={muiTheme}>
       <JamTable
         jamState={jamState}
@@ -21,12 +26,16 @@ function renderJamTable(customJamState = null) {
         linkMode={{ active: false, source: null, selectedEntryIds: [], selectedHoleIds: [] }}
         onOpenCallDrawer={() => {}}
         onCloseDrawer={() => {}}
-        onOpenParticipantDrawer={() => {}}
+        onOpenParticipantDrawer={props.onOpenParticipantDrawer}
+        onOpenParticipantEditDrawer={() => {}}
         onOpenWantsToPlayWithoutDrawer={() => {}}
         onOpenUnavailableReplacementDrawer={() => {}}
         onSetInsertionSelection={() => {}}
         onClearInsertionSelection={() => {}}
         onAddParticipant={() => {}}
+        onUpdateParticipant={() => {}}
+        onAddParticipantEntry={() => {}}
+        onUpdateParticipantEntry={() => {}}
         onAddHole={() => {}}
         onRemoveHole={() => {}}
         onMarkEntryPlayed={() => {}}
@@ -45,7 +54,7 @@ function renderJamTable(customJamState = null) {
     </ThemeProvider>,
   );
 
-  return projection;
+  return { ...projection, projection, ...renderResult };
 }
 
 describe("JamTable", () => {
@@ -63,7 +72,7 @@ describe("JamTable", () => {
   it("marks a played card with a played visual state", () => {
     const { container } = renderJamTable();
 
-    expect(screen.getByText("Paul")).toBeInTheDocument();
+    expect(screen.getAllByText("Paul").length).toBeGreaterThan(0);
     expect(container.querySelector('[data-state="played"]')).toBeInTheDocument();
   });
 
@@ -79,6 +88,16 @@ describe("JamTable", () => {
     expect(screen.getByText("Sans batterie")).toBeInTheDocument();
   });
 
+
+  it("opens the global participant drawer without instrument preselection", () => {
+    const onOpenParticipantDrawer = vi.fn();
+    renderJamTable(null, { onOpenParticipantDrawer });
+
+    fireEvent.click(screen.getByRole("button", { name: "Ajouter un participant" }));
+
+    expect(onOpenParticipantDrawer).toHaveBeenCalledWith(null);
+  });
+
   it("renders two left action buttons per projected row", () => {
     const projection = renderJamTable();
 
@@ -87,6 +106,7 @@ describe("JamTable", () => {
   });
 
   it("shows the empty participant state for a new jam table", () => {
+    const onOpenParticipantDrawer = vi.fn();
     renderJamTable({
       jam: { id: "jam-empty", name: "Jam vide", indicativeDate: null },
       instruments: [{ id: "drums", name: "Batterie", order: 0, isDefault: true }],
@@ -95,10 +115,16 @@ describe("JamTable", () => {
       linkGroups: [],
       holes: [],
       playedPassages: [],
-    });
+    }, { onOpenParticipantDrawer });
 
     expect(screen.getByText("Aucun participant pour l’instant.")).toBeInTheDocument();
-    expect(screen.getByText("Ajoute un participant ou un trou volontaire pour préparer le premier plateau.")).toBeInTheDocument();
+    expect(screen.getByText("Ajoute un participant pour préparer le premier plateau.")).toBeInTheDocument();
+    const addParticipantButton = screen.getByRole("button", { name: "Ajouter un participant" });
+    expect(addParticipantButton).toBeInTheDocument();
+    expect(addParticipantButton).toHaveTextContent("");
+    fireEvent.click(addParticipantButton);
+    expect(onOpenParticipantDrawer).toHaveBeenCalledWith(null);
+
   });
 
   it("uses the expected wording in the card action menu", () => {

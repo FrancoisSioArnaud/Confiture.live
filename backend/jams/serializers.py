@@ -11,7 +11,7 @@ from .models import (
     PlayedPassage,
 )
 
-DEFAULT_INSTRUMENTS = ["Chant", "Guitare", "Basse", "Batterie", "Piano", "Autres"]
+DEFAULT_INSTRUMENTS = ["Chant", "Guitare", "Basse", "Batterie", "Piano", "Autre"]
 
 
 class InstrumentSerializer(serializers.ModelSerializer):

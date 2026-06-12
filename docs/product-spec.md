@@ -500,7 +500,7 @@ Sans batterie
 Pour “autres” :
 
 ```text
-Autres
+Autre
 Léa — saxophone
 ```
 

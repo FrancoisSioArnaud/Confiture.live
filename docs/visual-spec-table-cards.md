@@ -61,7 +61,7 @@ Guitare
 Basse
 Batterie
 Piano
-Autres
+Autre
 ```
 
 Aucune statistique n'est affichée dans le header.
@@ -115,7 +115,7 @@ Nicolas
 
 Dans une colonne instrument standard, on ne répète pas le nom de l'instrument.
 
-Dans la colonne “Autres”, on affiche le détail de l'instrument :
+Dans la colonne “Autre”, on affiche le détail de l'instrument :
 
 ```text
 Léa
@@ -493,10 +493,10 @@ Batterie
 Sans batterie
 ```
 
-Pour “Autres” :
+Pour “Autre” :
 
 ```text
-Autres
+Autre
 Léa — saxophone
 ```
 
@@ -774,7 +774,7 @@ Les drawers V0 utilisent le composant partagé `AppDrawer` pour garder un format
 
 Drawers disponibles en V0 locale :
 
-- `ParticipantFormDrawer` : ajout participant, instruments multiples, détail `Autres`, paires à lier et validation de nom unique ;
+- `ParticipantFormDrawer` : ajout participant, instruments multiples, détail `Autre`, paires à lier et validation de nom unique ;
 - `CallPlateauDrawer` : appel d'une ligne, actions `A joué`, `N'est pas disponible` et action globale `Plateau joué` ;
 - `UnavailableReplacementDrawer` : choix d'un remplaçant dans la même colonne, avec confirmation si une carte liée doit être déliée ;
 - `WantsToPlayWithoutDrawer` : choix d'instruments à remplacer par des trous liés ;
