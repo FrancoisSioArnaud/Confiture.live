@@ -9,8 +9,26 @@ export const syncStatuses = {
   error: "error",
 };
 
-function isOffline() {
-  return typeof navigator !== "undefined" && navigator.onLine === false;
+export function isNetworkFailure(error) {
+  return (
+    error?.isNetworkError === true
+    || (
+      typeof navigator !== "undefined"
+      && navigator.onLine === false
+      && !error?.status
+    )
+  );
+}
+
+function warnSyncFailure(error) {
+  if (import.meta.env?.DEV) {
+    console.warn("[sync] action failed", {
+      status: error?.status,
+      isNetworkError: error?.isNetworkError,
+      message: error?.message,
+      data: error?.data,
+    });
+  }
 }
 
 function createUuidFallback() {
@@ -62,9 +80,11 @@ export async function syncPendingActions({ jamId, postAction = postJamAction, st
       await storage.markPendingActionSynced(action.client_action_id);
       syncedCount += 1;
     } catch (error) {
+      warnSyncFailure(error);
+      const status = isNetworkFailure(error) ? syncStatuses.offline : syncStatuses.error;
       await storage.markPendingActionFailed(action.client_action_id, error);
-      await storage.setSyncState(jamId, isOffline() ? syncStatuses.offline : syncStatuses.error, error);
-      return { ok: false, syncedCount, error, status: isOffline() ? syncStatuses.offline : syncStatuses.error };
+      await storage.setSyncState(jamId, status, error);
+      return { ok: false, syncedCount, error, status };
     }
   }
 
@@ -106,7 +126,7 @@ export async function loadJamLocalFirst({ jamId, fetcher = fetchJam, storage = l
     const jamState = await storage.getLocalJamState(jamId);
     if (!jamState) throw error;
 
-    const status = isOffline() ? syncStatuses.offline : syncStatuses.error;
+    const status = isNetworkFailure(error) ? syncStatuses.offline : syncStatuses.error;
     await storage.setSyncState(jamId, status, error);
 
     return {
@@ -131,8 +151,10 @@ export function startSyncRetry({
       return result;
     })
     .catch((error) => {
-      onStatusChange?.(syncStatuses.error);
-      return { ok: false, error, status: syncStatuses.error };
+      warnSyncFailure(error);
+      const status = isNetworkFailure(error) ? syncStatuses.offline : syncStatuses.error;
+      onStatusChange?.(status);
+      return { ok: false, error, status };
     });
   const intervalId = window.setInterval(retry, intervalMs);
   retry();

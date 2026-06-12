@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { actionTypes } from "../jamTable/engine/actionTypes.js";
 import { createJamTableUiFixture } from "../jamTable/engine/uiFixtures.js";
@@ -53,6 +53,9 @@ function createAction(overrides = {}) {
 }
 
 describe("syncQueue", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("adds user actions to the pending queue before syncing", async () => {
     const storage = createStorage();
     const postAction = vi.fn(async () => { throw new Error("network down"); });
@@ -101,6 +104,45 @@ describe("syncQueue", () => {
     expect(result.ok).toBe(false);
     expect(storage.pendingActions[0].status).toBe(syncStatuses.pending);
     expect(storage.syncStates.get("jam-1").status).toBe(syncStatuses.error);
+  });
+
+
+  it("classifies backend HTTP errors as sync errors, not offline", async () => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    const storage = createStorage();
+    const error = new Error("Participation introuvable pour cette jam.");
+    error.status = 400;
+    error.isNetworkError = false;
+    const postAction = vi.fn(async () => { throw error; });
+
+    const result = await syncAction({
+      jamId: "jam-1",
+      action: createAction(),
+      jamState: createJamTableUiFixture(),
+      postAction,
+      storage,
+    });
+
+    expect(result.status).toBe(syncStatuses.error);
+    expect(storage.syncStates.get("jam-1").status).toBe(syncStatuses.error);
+  });
+
+  it("classifies real network failures as offline", async () => {
+    const storage = createStorage();
+    const error = new TypeError("Failed to fetch");
+    error.isNetworkError = true;
+    const postAction = vi.fn(async () => { throw error; });
+
+    const result = await syncAction({
+      jamId: "jam-1",
+      action: createAction(),
+      jamState: createJamTableUiFixture(),
+      postAction,
+      storage,
+    });
+
+    expect(result.status).toBe(syncStatuses.offline);
+    expect(storage.syncStates.get("jam-1").status).toBe(syncStatuses.offline);
   });
 
   it("keeps an action pending when backend records a failed action", async () => {
