@@ -2,7 +2,7 @@ import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import ArrowDownwardRoundedIcon from "@mui/icons-material/ArrowDownwardRounded";
 import ArrowUpwardRoundedIcon from "@mui/icons-material/ArrowUpwardRounded";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Alert, Button, Card, CardContent, Checkbox, CircularProgress, FormControlLabel, IconButton, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Button, Card, CardContent, Checkbox, CircularProgress, FormControlLabel, IconButton, InputAdornment, Stack, TextField, Typography } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -45,7 +45,7 @@ export default function JamFormPage({ mode = "create" }) {
     queryFn: () => fetchJam(jamId),
     enabled: mode === "edit" && Boolean(jamId),
   });
-  const { control, register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm({
+  const { control, register, handleSubmit, watch, setValue, reset, setError, clearErrors, formState: { errors } } = useForm({
     resolver: zodResolver(jamSchema),
     defaultValues: {
       name: "",
@@ -122,25 +122,43 @@ export default function JamFormPage({ mode = "create" }) {
     });
   };
 
+  const handleAddCustomInstrument = () => {
+    const customInstrumentName = watch("customInstrumentName")?.trim();
+    if (!customInstrumentName) {
+      return;
+    }
+
+    const id = makeInstrumentId(customInstrumentName);
+    const duplicate = sortedInstruments.some((instrument) => (
+      instrument.id === id || instrument.name.trim().toLowerCase() === customInstrumentName.toLowerCase()
+    ));
+
+    if (duplicate) {
+      setError("customInstrumentName", { type: "manual", message: "Cet instrument existe déjà." });
+      return;
+    }
+
+    const nextInstrument = {
+      id,
+      name: customInstrumentName,
+      order: sortedInstruments.length,
+      isDefault: false,
+    };
+
+    if (mode === "create") {
+      setCreateInstruments((currentInstruments) => [...currentInstruments, nextInstrument]);
+    } else {
+      addInstrument({ instrument: nextInstrument });
+    }
+
+    setValue("activeInstrumentIds", [...activeInstrumentIds, id], { shouldDirty: true, shouldValidate: true });
+    setValue("customInstrumentName", "", { shouldDirty: true });
+    clearErrors("customInstrumentName");
+  };
+
   const onSubmit = (values) => {
-    const customInstrumentName = values.customInstrumentName?.trim();
-    const submittedInstruments = [...sortedInstruments];
-
-    if (customInstrumentName) {
-      submittedInstruments.push({
-        id: makeInstrumentId(customInstrumentName),
-        name: customInstrumentName,
-        order: submittedInstruments.length,
-        isDefault: false,
-      });
-    }
-
     const selectedIds = new Set(values.activeInstrumentIds);
-    if (customInstrumentName) {
-      selectedIds.add(makeInstrumentId(customInstrumentName));
-    }
-
-    const instrumentPayloads = submittedInstruments
+    const instrumentPayloads = sortedInstruments
       .filter((instrument) => selectedIds.has(instrument.id))
       .map((instrument, order) => ({
         id: instrument.id,
@@ -156,19 +174,6 @@ export default function JamFormPage({ mode = "create" }) {
     }
 
     updateJamLocal({ updates: payload });
-
-    if (customInstrumentName) {
-      addInstrument({
-        instrument: {
-          id: makeInstrumentId(customInstrumentName),
-          name: customInstrumentName,
-          order: jamState.instruments.length,
-          isDefault: false,
-        },
-      });
-      setValue("customInstrumentName", "");
-    }
-
     updateMutation.mutate(payload);
   };
 
@@ -247,12 +252,33 @@ export default function JamFormPage({ mode = "create" }) {
           </Typography>
         </Stack>
 
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={`${designTokens.spacing.sm}px`}>
-          <TextField label="Instrument custom" {...register("customInstrumentName")} fullWidth />
-          <Button type="submit" variant="contained" startIcon={<AddRoundedIcon />} disabled={createMutation.isPending || updateMutation.isPending}>
-            {mode === "create" ? "Créer la jam" : "Enregistrer"}
-          </Button>
-        </Stack>
+        <TextField
+          label="Instrument custom"
+          placeholder="Ajouter un instrument"
+          {...register("customInstrumentName")}
+          error={Boolean(errors.customInstrumentName)}
+          helperText={errors.customInstrumentName?.message}
+          fullWidth
+          InputProps={{
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  type="button"
+                  aria-label="Ajouter l’instrument"
+                  onClick={handleAddCustomInstrument}
+                  disabled={!watch("customInstrumentName")?.trim()}
+                  edge="end"
+                >
+                  <AddRoundedIcon />
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+        />
+
+        <Button type="submit" variant="contained" disabled={createMutation.isPending || updateMutation.isPending}>
+          {mode === "create" ? "Créer la jam" : "Enregistrer"}
+        </Button>
       </Stack>
     </Stack>
   );

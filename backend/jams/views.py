@@ -46,9 +46,9 @@ class JamListCreateView(generics.ListCreateAPIView):
         return jam_queryset()
 
 
-class JamDetailView(generics.RetrieveUpdateAPIView):
+class JamDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = JamDetailSerializer
-    http_method_names = ["get", "patch", "head", "options"]
+    http_method_names = ["get", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
         return jam_queryset()
