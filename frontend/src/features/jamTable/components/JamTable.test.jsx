@@ -12,7 +12,11 @@ function renderJamTable(customJamState = null, customProps = {}) {
   const projection = projectJamTable(jamState);
 
   const defaultProps = {
+    drawerOpen: null,
+    insertionSelection: null,
+    linkMode: { active: false, source: null, selectedEntryIds: [], selectedHoleIds: [] },
     onOpenParticipantDrawer: () => {},
+    onMoveEntryVertical: () => {},
   };
   const props = { ...defaultProps, ...customProps };
 
@@ -21,9 +25,9 @@ function renderJamTable(customJamState = null, customProps = {}) {
       <JamTable
         jamState={jamState}
         projection={projection}
-        drawerOpen={null}
-        insertionSelection={null}
-        linkMode={{ active: false, source: null, selectedEntryIds: [], selectedHoleIds: [] }}
+        drawerOpen={props.drawerOpen}
+        insertionSelection={props.insertionSelection}
+        linkMode={props.linkMode}
         onOpenCallDrawer={() => {}}
         onCloseDrawer={() => {}}
         onOpenParticipantDrawer={props.onOpenParticipantDrawer}
@@ -44,7 +48,7 @@ function renderJamTable(customJamState = null, customProps = {}) {
         onMarkParticipantLeft={() => {}}
         onWantsToPlayWithout={() => {}}
         onReplaceUnavailable={() => {}}
-        onMoveEntryVertical={() => {}}
+        onMoveEntryVertical={props.onMoveEntryVertical}
         onStartLinkMode={() => {}}
         onToggleLinkSelection={() => {}}
         onCancelLinkMode={() => {}}
@@ -89,13 +93,26 @@ describe("JamTable", () => {
   });
 
 
-  it("opens the global participant drawer without instrument preselection", () => {
+  it("renders a fixed icon-only CTA and opens the global participant drawer without instrument preselection", () => {
     const onOpenParticipantDrawer = vi.fn();
     renderJamTable(null, { onOpenParticipantDrawer });
 
     fireEvent.click(screen.getByRole("button", { name: "Ajouter un participant" }));
 
+    expect(screen.getByRole("button", { name: "Ajouter un participant" })).toHaveTextContent("");
     expect(onOpenParticipantDrawer).toHaveBeenCalledWith(null);
+  });
+
+  it("hides the global participant CTA when a drawer is open", () => {
+    renderJamTable(null, { drawerOpen: { type: "participant", selection: null } });
+
+    expect(screen.queryByRole("button", { name: "Ajouter un participant" })).not.toBeInTheDocument();
+  });
+
+  it("hides the global participant CTA during link mode", () => {
+    renderJamTable(null, { linkMode: { active: true, source: null, selectedEntryIds: [], selectedHoleIds: [] } });
+
+    expect(screen.queryByRole("button", { name: "Ajouter un participant" })).not.toBeInTheDocument();
   });
 
   it("renders two left action buttons per projected row", () => {
@@ -125,6 +142,29 @@ describe("JamTable", () => {
     fireEvent.click(addParticipantButton);
     expect(onOpenParticipantDrawer).toHaveBeenCalledWith(null);
 
+  });
+
+  it("renders one stable cell for each plateau and instrument", () => {
+    const projection = renderJamTable();
+
+    expect(screen.getAllByRole("row")).toHaveLength(projection.rows.length + 1);
+    expect(screen.getAllByRole("cell")).toHaveLength(projection.rows.length * projection.columns.length);
+    expect(screen.getAllByText("Sarah").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Tom").length).toBeGreaterThan(0);
+  });
+
+  it("renders the custom instrument label on a separate card line", () => {
+    renderJamTable();
+
+    expect(screen.getAllByText("Léa").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Saxophone").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Léa — Saxophone")).not.toBeInTheDocument();
+  });
+
+  it("keeps insertion buttons available inside table cells", () => {
+    const projection = renderJamTable();
+
+    expect(screen.getAllByRole("button", { name: /Ajouter ici/ })).toHaveLength(projection.rows.length * projection.columns.length);
   });
 
   it("uses the expected wording in the card action menu", () => {

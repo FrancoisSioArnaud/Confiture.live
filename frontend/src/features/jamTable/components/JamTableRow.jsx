@@ -1,6 +1,7 @@
 import { Box } from "@mui/material";
 
 import { designTokens } from "../../../theme";
+import { getPlateauGridSx } from "./tableLayoutStyles";
 import JamTableActionCell from "./JamTableActionCell";
 import JamTableCell from "./JamTableCell";
 
@@ -9,7 +10,7 @@ export default function JamTableRow({ row, columns, linkLabels, linkMode, dragIt
     <Box
       role="row"
       sx={{
-        display: "flex",
+        ...getPlateauGridSx(columns.length),
         alignItems: "stretch",
         borderBottom: `${designTokens.card.borderWidth}px solid ${designTokens.colors.border}`,
       }}

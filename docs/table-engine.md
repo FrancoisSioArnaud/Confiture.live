@@ -20,10 +20,10 @@ Le moteur manipule les collections suivantes :
 `projectJamTable(jamState)` retourne :
 
 - `columns` : instruments triés ;
-- `rows` : lignes de plateau avec une cellule par instrument ;
+- `rows` : lignes de plateau avec une cellule par instrument ; cette projection reste row-first et doit être rendue comme une grille plateau/instrument, pas comme des listes indépendantes par colonne ;
 - `stats` : statistiques principales de la jam.
 
-Chaque cellule est de type `entry`, `hole` ou `empty`. Les cellules `entry` exposent le participant, l'instrument, l'état joué, le prochain musicien jouable, les infos de boucle et le groupe de link. Les cellules `hole` exposent le trou volontaire, son état joué et son groupe de link.
+Chaque cellule est de type `entry`, `hole` ou `empty`. Les cellules `empty` sont conservées dans la projection pour préserver l'alignement des plateaux et permettre une insertion à une position donnée. Les cellules `entry` exposent le participant, l'instrument, l'état joué, le prochain musicien jouable, les infos de boucle et le groupe de link. Les cellules `hole` exposent le trou volontaire, son état joué et son groupe de link.
 
 ## Règles V0 implémentées
 
@@ -56,3 +56,5 @@ Chaque cellule est de type `entry`, `hole` ou `empty`. Les cellules `entry` expo
 - `REPLACE_UNAVAILABLE`.
 
 `REPLACE_UNAVAILABLE` ne crée pas de statut durable d'indisponibilité : le remplaçant prend la place, le musicien absent est repoussé à la ligne disponible suivante, et les links concernés sont supprimés en supposant que les confirmations UI ont déjà eu lieu.
+
+`MOVE_ENTRY_VERTICAL` reste une action verticale dans une seule colonne instrument. Le payload existant (`entryId`, `toIndex`) est conservé ; l'UI grille ne change donc pas le contrat métier/backend. Pour les groupes liés, le moteur recalcule ensuite une projection row-first qui maintient les éléments liés sur le même plateau quand ils sont projetables ensemble. La V0 ne définit pas encore une action distincte de déplacement groupé explicite.

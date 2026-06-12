@@ -1,13 +1,14 @@
 import { Box, Typography } from "@mui/material";
 
 import { designTokens } from "../../../theme";
+import { actionColumnSx, getPlateauGridSx, instrumentCellSx } from "./tableLayoutStyles";
 
 export default function JamTableHeader({ columns }) {
   return (
     <Box
       role="row"
       sx={{
-        display: "flex",
+        ...getPlateauGridSx(columns.length),
         position: "sticky",
         top: 0,
         zIndex: designTokens.zIndex.stickyHeader,
@@ -16,14 +17,8 @@ export default function JamTableHeader({ columns }) {
     >
       <Box
         sx={{
-          position: "sticky",
-          left: 0,
-          zIndex: designTokens.zIndex.stickyActionColumn,
-          width: designTokens.table.actionColumnWidth,
-          minWidth: designTokens.table.actionColumnWidth,
+          ...actionColumnSx,
           height: designTokens.table.headerHeight,
-          bgcolor: designTokens.app.background,
-          borderRight: `${designTokens.card.borderWidth}px solid ${designTokens.colors.border}`,
         }}
       />
       {columns.map((column) => (
@@ -31,10 +26,7 @@ export default function JamTableHeader({ columns }) {
           key={column.instrumentId}
           role="columnheader"
           sx={{
-            minWidth: {
-              xs: designTokens.table.instrumentColumnMinWidth,
-              sm: designTokens.table.instrumentColumnTabletMinWidth,
-            },
+            ...instrumentCellSx,
             height: designTokens.table.headerHeight,
             display: "flex",
             alignItems: "center",

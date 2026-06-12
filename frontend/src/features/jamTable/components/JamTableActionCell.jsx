@@ -3,18 +3,13 @@ import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import { Box, IconButton, Stack } from "@mui/material";
 
 import { designTokens } from "../../../theme";
+import { actionColumnSx } from "./tableLayoutStyles";
 
 export default function JamTableActionCell({ rowIndex, onCall, onPlateauPlayed }) {
   return (
     <Box
       sx={{
-        position: "sticky",
-        left: 0,
-        zIndex: designTokens.zIndex.stickyActionColumn,
-        width: designTokens.table.actionColumnWidth,
-        minWidth: designTokens.table.actionColumnWidth,
-        bgcolor: designTokens.app.background,
-        borderRight: `${designTokens.card.borderWidth}px solid ${designTokens.colors.border}`,
+        ...actionColumnSx,
       }}
     >
       <Stack spacing={`${designTokens.spacing.xs}px`} alignItems="center" justifyContent="center">

@@ -4,6 +4,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Box, ButtonBase, Typography } from "@mui/material";
 
 import { designTokens } from "../../../theme";
+import { instrumentCellSx } from "./tableLayoutStyles";
 import HoleCard from "./HoleCard";
 import ParticipantCard from "./ParticipantCard";
 
@@ -65,10 +66,7 @@ export default function JamTableCell({ rowIndex, cell, instrumentName, linkLabel
     <Box
       role="cell"
       sx={{
-        minWidth: {
-          xs: designTokens.table.instrumentColumnMinWidth,
-          sm: designTokens.table.instrumentColumnTabletMinWidth,
-        },
+        ...instrumentCellSx,
         p: `${designTokens.spacing.xs}px`,
       }}
     >
@@ -78,6 +76,8 @@ export default function JamTableCell({ rowIndex, cell, instrumentName, linkLabel
           {...attributes}
           {...listeners}
           sx={{
+            width: "100%",
+            minWidth: 0,
             transform: CSS.Translate.toString(verticalTransform),
             opacity: isDragging ? 0.88 : 1,
             touchAction: dragDisabled ? "auto" : "none",
