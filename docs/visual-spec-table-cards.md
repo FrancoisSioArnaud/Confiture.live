@@ -16,13 +16,18 @@ Priorités :
 
 ## 2. Layout général du tableau
 
-Le tableau est une grille avec :
+Le tableau est une grille plateau-first avec :
 
 - une colonne gauche dédiée aux actions de plateau ;
 - une colonne par instrument ;
-- une carte par musicien ou trou volontaire ;
+- une ligne par plateau potentiel ;
+- une cellule rendue pour chaque couple plateau/instrument, même quand elle est vide ;
+- une carte par musicien ou trou volontaire quand la cellule est occupée ;
+- des colonnes de largeur fixe partagée entre header et cellules ;
 - scroll horizontal pour les instruments ;
 - scroll vertical pour les lignes de plateaux.
+
+Cette grille ne doit pas devenir une juxtaposition de listes indépendantes par instrument : l'alignement d'une ligne matérialise le plateau et les cellules vides préservent cette lecture.
 
 ### Sticky
 
@@ -109,9 +114,11 @@ Structure compacte :
 
 ```text
 Nicolas
-[tag éventuel]
 ✓  🔗  ⋯
+[tag éventuel]
 ```
+
+Les actions sont placées sous le nom, et non à droite du nom, afin de garder des colonnes étroites et stables.
 
 Dans une colonne instrument standard, on ne répète pas le nom de l'instrument.
 
@@ -122,6 +129,8 @@ Léa
 saxophone
 ✓  🔗  ⋯
 ```
+
+Le détail d'instrument custom est une ligne séparée : il n'est pas concaténé au nom du participant.
 
 ---
 
@@ -797,3 +806,17 @@ Règles V0 :
 - les cartes jouées ne sont pas sources de drag ;
 - au drop valide, l'UI appelle l'action locale `MOVE_ENTRY_VERTICAL` via le store Zustand ;
 - les groupes linkés restent alignés par la projection du moteur, donc les trous linkés suivent le groupe projeté.
+
+Limite V0 : le geste drag déplace l'entrée source dans l'ordre de sa colonne et réutilise l'action `MOVE_ENTRY_VERTICAL` existante. Il ne crée pas de drag horizontal et ne déclenche pas une action séparée de déplacement groupé ; l'alignement des éléments liés reste assuré au recalcul par la projection row-first du moteur.
+
+---
+
+## CTA global d'ajout participant
+
+Le bouton global `Ajouter un participant` est un FAB fixe en bas à droite avec uniquement l'icône `PersonAddIcon` et l'`aria-label` correspondant. Il ouvre le drawer participant sans préselection d'instrument.
+
+Ce CTA est complémentaire des petits boutons `+` de cellule :
+
+- le CTA sert à ajouter rapidement un participant, y compris quand la jam est vide ;
+- les boutons `+` de cellule restent disponibles pour insérer à une position précise ;
+- le CTA est masqué quand un drawer ou un dialog est ouvert, ou pendant le mode link, pour ne pas gêner les actions sticky.

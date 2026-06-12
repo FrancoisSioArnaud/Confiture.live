@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { DndContext, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
-import { Alert, Box, Button, Card, CardContent, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Menu, MenuItem, Snackbar, Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Dialog, DialogActions, DialogContent, DialogTitle, Fab, Menu, MenuItem, Snackbar, Stack, Typography } from "@mui/material";
 
 import { designTokens } from "../../../theme";
 import ParticipantFormDrawer from "../../participants/components/ParticipantFormDrawer";
@@ -241,12 +241,6 @@ export default function JamTable({
 
   return (
     <>
-      <Stack direction="row" justifyContent="flex-end" sx={{ mb: `${designTokens.spacing.sm}px` }}>
-        <IconButton aria-label="Ajouter un participant" onClick={() => onOpenParticipantDrawer(null)}>
-          <PersonAddIcon />
-        </IconButton>
-      </Stack>
-
       <DndContext
         sensors={sensors}
         modifiers={[restrictDragToVerticalAxis]}
@@ -270,7 +264,14 @@ export default function JamTable({
           <Box sx={{ minWidth: "max-content" }}>
             <JamTableHeader columns={projection.columns} />
             {!hasAnyTableItem ? (
-              <Box role="row" sx={{ display: "flex" }}>
+              <Box
+                role="row"
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: `${designTokens.table.actionColumnWidth}px minmax(0, 1fr)`,
+                  borderBottom: `${designTokens.card.borderWidth}px solid ${designTokens.colors.border}`,
+                }}
+              >
                 <Box
                   sx={{
                     position: "sticky",
@@ -423,6 +424,28 @@ export default function JamTable({
           <Button onClick={onCancelLinkMode}>Annuler</Button>
           <Button variant="contained" onClick={onValidateLinkMode}>Valider</Button>
         </Stack>
+      ) : null}
+
+      {!drawerOpen && !insertionSelection && !confirmState && !linkMode.active ? (
+        <Fab
+          color="primary"
+          aria-label="Ajouter un participant"
+          onClick={() => onOpenParticipantDrawer(null)}
+          sx={{
+            position: "fixed",
+            right: {
+              xs: `${designTokens.spacing.lg}px`,
+              sm: `${designTokens.spacing.xl}px`,
+            },
+            bottom: {
+              xs: `calc(${designTokens.spacing.lg}px + env(safe-area-inset-bottom))`,
+              sm: `${designTokens.spacing.xl}px`,
+            },
+            zIndex: (theme) => theme.zIndex.drawer - 1,
+          }}
+        >
+          <PersonAddIcon />
+        </Fab>
       ) : null}
 
       <Snackbar open={Boolean(message)} autoHideDuration={2500} onClose={() => setMessage(null)}>
