@@ -6,7 +6,7 @@ import { syncStatuses } from "./syncQueue";
 export function syncStatusLabel(status) {
   if (status === syncStatuses.synced) return "Synchronisé";
   if (status === syncStatuses.offline) return "Hors ligne — sauvegarde locale";
-  if (status === syncStatuses.error) return "Erreur de synchronisation";
+  if (status === syncStatuses.error) return "Synchronisation à vérifier";
   return "Synchronisation en attente";
 }
 

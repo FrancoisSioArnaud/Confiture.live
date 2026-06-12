@@ -226,7 +226,7 @@ export default function JamTablePage() {
           </Typography>
         </Stack>
         {isError ? <Alert severity="warning">Chargement API impossible — {error.message}</Alert> : null}
-        {syncStatus === "error" ? <Alert severity="warning">Action gardée localement. Synchronisation à reprendre plus tard.</Alert> : null}
+        {syncStatus === "error" ? <Alert severity="warning">Action gardée localement. Le serveur n’a pas encore validé la synchronisation.</Alert> : null}
       </Stack>
 
       <Box sx={{ mx: { xs: `-${designTokens.spacing.lg}px`, sm: 0 } }}>

@@ -24,6 +24,7 @@ describe("SyncStatusIndicator", () => {
   it("displays pending, offline and error labels", () => {
     expect(syncStatusLabel(syncStatuses.pending)).toBe("Synchronisation en attente");
     expect(syncStatusLabel(syncStatuses.offline)).toBe("Hors ligne — sauvegarde locale");
-    expect(syncStatusLabel(syncStatuses.error)).toBe("Erreur de synchronisation");
+    expect(syncStatusLabel(syncStatuses.error)).toBe("Synchronisation à vérifier");
+    expect(syncStatusLabel(syncStatuses.error)).not.toMatch(/connexion/i);
   });
 });
