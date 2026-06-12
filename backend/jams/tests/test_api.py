@@ -82,7 +82,7 @@ class JamApiTests(APITestCase):
             "client_action_id": "action-1",
             "type": "ADD_PARTICIPANT",
             "payload": {
-                "participant": {"name": "Sarah"},
+                "participant": {"id": "participant-temp-1", "name": "Sarah"},
                 "entries": [{"instrument_id": instrument.id, "base_order": 0}],
             },
         }
@@ -92,10 +92,22 @@ class JamApiTests(APITestCase):
 
         self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(first_response.data["applied"], True)
+        self.assertIn("status", first_response.data)
+        self.assertIn("applied", first_response.data)
+        self.assertIn("duplicate", first_response.data)
+        self.assertIn("action", first_response.data)
+        self.assertIn("jam", first_response.data)
         self.assertEqual(second_response.status_code, status.HTTP_200_OK)
         self.assertEqual(second_response.data["duplicate"], True)
         self.assertEqual(Participant.objects.filter(jam=jam, name="Sarah").count(), 1)
         self.assertEqual(ClientAction.objects.filter(client_action_id="action-1").count(), 1)
+
+        fresh_jam = first_response.data["jam"]
+        for key in ["id", "instruments", "participants", "entries", "holes", "link_groups", "played_passages"]:
+            self.assertIn(key, fresh_jam)
+        created_participant = next(item for item in fresh_jam["participants"] if item["name"] == "Sarah")
+        self.assertIsInstance(created_participant["id"], int)
+        self.assertNotEqual(created_participant["id"], payload["payload"]["participant"]["id"])
 
     def test_mark_entry_played_action(self):
         jam = Jam.objects.create(name="Jam played")

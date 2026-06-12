@@ -19,8 +19,9 @@ Le frontend utilise Dexie / IndexedDB avec les tables suivantes :
 2. Le nouvel état de jam est persisté dans `jamStates`.
 3. L'action est enregistrée dans `pendingActions` avec son `client_action_id`.
 4. Le frontend tente un `POST /api/jams/:id/actions/`.
-5. Si le backend confirme, l'action est marquée `synced`.
-6. Si le backend échoue, l'action reste en attente et sera retentée régulièrement.
+5. Si le backend confirme, la réponse contient aussi la jam fraîche sérialisée par l'API. Le frontend convertit cette jam en `jamState`, la persiste dans `jamStates` et recharge le store Zustand pour remplacer rapidement les IDs temporaires locaux par les IDs backend réels.
+6. L'action confirmée est marquée `synced`.
+7. Si le backend échoue, l'action reste en attente et sera retentée régulièrement sans masquer l'erreur backend.
 
 ## Chargement d'une jam
 
