@@ -65,6 +65,7 @@ async function refreshGlobalSyncState(jamId, storage) {
 export async function syncPendingActions({ jamId, postAction = postJamAction, storage = localStorageApi }) {
   const pendingActions = await storage.getPendingActions(jamId);
   let syncedCount = 0;
+  let authoritativeJamState = null;
 
   for (const action of pendingActions) {
     try {
@@ -76,6 +77,10 @@ export async function syncPendingActions({ jamId, postAction = postJamAction, st
       });
       if (response?.status && response.status !== "synced") {
         throw new Error(response.detail ?? "Action non synchronisée par le backend.");
+      }
+      if (response?.jam) {
+        authoritativeJamState = toJamState(response.jam);
+        await storage.saveJamState(authoritativeJamState);
       }
       await storage.markPendingActionSynced(action.client_action_id);
       syncedCount += 1;
@@ -89,7 +94,7 @@ export async function syncPendingActions({ jamId, postAction = postJamAction, st
   }
 
   const status = await refreshGlobalSyncState(jamId, storage);
-  return { ok: true, syncedCount, status };
+  return { ok: true, syncedCount, status, jamState: authoritativeJamState };
 }
 
 export async function syncAction({ jamId, action, jamState, postAction = postJamAction, storage = localStorageApi }) {
@@ -144,10 +149,14 @@ export function startSyncRetry({
   storage = localStorageApi,
   intervalMs = 15000,
   onStatusChange = null,
+  onJamStateChange = null,
 }) {
   const retry = () => syncPendingActions({ jamId, postAction, storage })
     .then((result) => {
       onStatusChange?.(result.status);
+      if (result.jamState) {
+        onJamStateChange?.(result.jamState);
+      }
       return result;
     })
     .catch((error) => {

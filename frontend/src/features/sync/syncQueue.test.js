@@ -2,17 +2,20 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { actionTypes } from "../jamTable/engine/actionTypes.js";
 import { createJamTableUiFixture } from "../jamTable/engine/uiFixtures.js";
-import { loadJamLocalFirst, syncAction, syncPendingActions, syncStatuses } from "./syncQueue";
+import { loadJamLocalFirst, startSyncRetry, syncAction, syncPendingActions, syncStatuses } from "./syncQueue";
 
 function createStorage(initialState = createJamTableUiFixture()) {
   const pendingActions = [];
   const syncStates = new Map();
+  const saveJamStateCalls = [];
   let localJamState = initialState;
 
   return {
     pendingActions,
     syncStates,
+    saveJamStateCalls,
     async saveJamState(jamState) {
+      saveJamStateCalls.push(jamState);
       localJamState = jamState;
     },
     async getLocalJamState() {
@@ -87,6 +90,38 @@ describe("syncQueue", () => {
     expect(result.ok).toBe(true);
     expect(storage.pendingActions[0].status).toBe(syncStatuses.synced);
     expect(storage.syncStates.get("jam-1").status).toBe(syncStatuses.synced);
+  });
+
+
+  it("saves and returns the authoritative jam after action sync", async () => {
+    const storage = createStorage();
+    const apiJam = {
+      id: 42,
+      name: "Jam backend",
+      indicative_date: "2026-06-12",
+      instruments: [{ id: 7, name: "Guitare", order: 0, is_default: true }],
+      participants: [{ id: 99, name: "Sarah", status: "active" }],
+      entries: [{ id: 123, participant: 99, instrument: 7, custom_instrument_label: null, base_order: 0 }],
+      holes: [],
+      link_groups: [],
+      played_passages: [],
+    };
+    const postAction = vi.fn(async () => ({ status: "synced", applied: true, jam: apiJam }));
+
+    const result = await syncAction({
+      jamId: "jam-1",
+      action: createAction(),
+      jamState: createJamTableUiFixture(),
+      postAction,
+      storage,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.jamState).toBeTruthy();
+    expect(result.jamState.jam.id).toBe("42");
+    expect(result.jamState.participants[0].id).toBe("99");
+    expect(result.jamState.entries[0].id).toBe("123");
+    expect(storage.saveJamStateCalls.at(-1)).toEqual(result.jamState);
   });
 
   it("keeps an action pending after backend failure", async () => {
@@ -172,6 +207,45 @@ describe("syncQueue", () => {
     expect(result.source).toBe("local");
     expect(result.jamState.jam.id).toBe(localJamState.jam.id);
     expect(storage.syncStates.get(localJamState.jam.id).status).toBe(syncStatuses.error);
+  });
+
+
+  it("notifies retry callers when an authoritative jam is received", async () => {
+    const storage = createStorage();
+    storage.pendingActions.push({ ...createAction(), jamId: "jam-1", status: syncStatuses.pending });
+    const apiJam = {
+      id: 42,
+      name: "Jam backend",
+      indicative_date: null,
+      instruments: [],
+      participants: [{ id: 99, name: "Sarah", status: "active" }],
+      entries: [],
+      holes: [],
+      link_groups: [],
+      played_passages: [],
+    };
+    const postAction = vi.fn(async () => ({ status: "synced", applied: true, jam: apiJam }));
+    const onStatusChange = vi.fn();
+    const onJamStateChange = vi.fn();
+
+    const stopRetry = startSyncRetry({
+      jamId: "jam-1",
+      postAction,
+      storage,
+      intervalMs: 60000,
+      onStatusChange,
+      onJamStateChange,
+    });
+
+    await vi.waitFor(() => {
+      expect(onStatusChange).toHaveBeenCalledWith(syncStatuses.synced);
+      expect(onJamStateChange).toHaveBeenCalledWith(expect.objectContaining({
+        jam: expect.objectContaining({ id: "42" }),
+        participants: [expect.objectContaining({ id: "99" })],
+      }));
+    });
+
+    stopRetry();
   });
 
   it("retries pending actions and recalculates the global sync state", async () => {

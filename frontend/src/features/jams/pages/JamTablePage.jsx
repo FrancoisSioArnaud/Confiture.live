@@ -137,8 +137,12 @@ export default function JamTablePage() {
 
   useEffect(() => {
     if (!jamId || editLockStatus !== "locked") return undefined;
-    return startSyncRetry({ jamId, onStatusChange: setSyncStatus });
-  }, [editLockStatus, jamId, setSyncStatus]);
+    return startSyncRetry({
+      jamId,
+      onStatusChange: setSyncStatus,
+      onJamStateChange: loadJamState,
+    });
+  }, [editLockStatus, jamId, loadJamState, setSyncStatus]);
 
   const runAction = (type, localAction, payload, apiPayload = payload) => {
     const previousProjection = useJamTableStore.getState().projectedTable;
@@ -151,6 +155,9 @@ export default function JamTablePage() {
     syncAction({ jamId, action, jamState: nextJamState })
       .then((result) => {
         setSyncStatus(result.status);
+        if (result.jamState) {
+          loadJamState(result.jamState);
+        }
       })
       .catch(() => {
         setSyncStatus("error");

@@ -77,12 +77,14 @@ class JamActionsView(APIView):
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         response_status = status.HTTP_201_CREATED if applied else status.HTTP_200_OK
+        fresh_jam = jam_queryset().get(id=jam.id)
         return Response(
             {
                 "status": client_action.status,
                 "applied": applied,
                 "duplicate": not applied,
                 "action": ClientActionSerializer(client_action).data,
+                "jam": JamDetailSerializer(fresh_jam).data,
             },
             status=response_status,
         )

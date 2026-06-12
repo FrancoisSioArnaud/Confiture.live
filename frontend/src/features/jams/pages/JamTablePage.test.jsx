@@ -99,6 +99,31 @@ describe("JamTablePage", () => {
   });
 
 
+
+  it("reloads the store with the authoritative jam returned after sync", async () => {
+    syncAction.mockResolvedValueOnce({
+      status: "synced",
+      ok: true,
+      jamState: {
+        jam: { id: "1", name: "Jam API", indicativeDate: "2026-06-12" },
+        instruments: [{ id: "2", name: "Guitare", order: 0, isDefault: true }],
+        participants: [],
+        entries: [],
+        holes: [],
+        linkGroups: [],
+        playedPassages: [],
+      },
+    });
+
+    renderPage();
+
+    (await screen.findByRole("button", { name: "mark played" })).click();
+
+    await waitFor(() => {
+      expect(screen.getByText("0 musiciens")).toBeInTheDocument();
+    });
+  });
+
   it("queues plateau actions with the projected row entry ids for the backend", async () => {
     renderPage();
 
