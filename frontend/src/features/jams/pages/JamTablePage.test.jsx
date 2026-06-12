@@ -74,6 +74,14 @@ describe("JamTablePage", () => {
     lockEditing.mockResolvedValue({ status: "locked" });
   });
 
+
+  it("shows the musicians count without the route id", async () => {
+    renderPage();
+
+    expect(await screen.findByText("1 musiciens")).toBeInTheDocument();
+    expect(screen.queryByText(/route 1/)).not.toBeInTheDocument();
+  });
+
   it("queues and syncs table actions after applying them locally", async () => {
     renderPage();
 

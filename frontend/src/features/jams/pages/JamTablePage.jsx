@@ -222,7 +222,7 @@ export default function JamTablePage() {
         <Stack direction="row" spacing={`${designTokens.spacing.sm}px`} alignItems="center" flexWrap="wrap" useFlexGap>
           <SyncStatusIndicator jamId={jamId} />
           <Typography variant="body2" color="text.secondary">
-            {projection.stats.uniqueMusiciansCount} musiciens · route {jamId}
+            {projection.stats.uniqueMusiciansCount} musiciens
           </Typography>
         </Stack>
         {isError ? <Alert severity="warning">Chargement API impossible — {error.message}</Alert> : null}

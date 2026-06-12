@@ -123,6 +123,12 @@ export function updateJam(jamId, payload) {
   });
 }
 
+export function deleteJam(jamId) {
+  return request(`/jams/${jamId}/`, {
+    method: "DELETE",
+  });
+}
+
 export function postJamAction(jamId, action) {
   return request(`/jams/${jamId}/actions/`, {
     method: "POST",

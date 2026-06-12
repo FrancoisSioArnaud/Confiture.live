@@ -53,6 +53,27 @@ class JamApiTests(APITestCase):
         self.assertEqual(len(response.data["participants"]), 1)
         self.assertEqual(len(response.data["entries"]), 1)
 
+
+    def test_delete_jam_removes_it(self):
+        jam = Jam.objects.create(name="Jam à supprimer")
+        instrument = Instrument.objects.create(jam=jam, name="Batterie", order=0)
+        participant = Participant.objects.create(jam=jam, name="Jérémy")
+        entry = ParticipantEntry.objects.create(jam=jam, participant=participant, instrument=instrument, base_order=0)
+        hole = Hole.objects.create(jam=jam, instrument=instrument, position=1)
+        PlayedPassage.objects.create(jam=jam, participant_entry=entry, line_index=0)
+        ClientAction.objects.create(jam=jam, client_action_id="delete-check", type="ADD_HOLE")
+
+        response = self.client.delete(reverse("jams:jam-detail", kwargs={"pk": jam.id}))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Jam.objects.filter(id=jam.id).exists())
+        self.assertFalse(Instrument.objects.filter(id=instrument.id).exists())
+        self.assertFalse(Participant.objects.filter(id=participant.id).exists())
+        self.assertFalse(ParticipantEntry.objects.filter(id=entry.id).exists())
+        self.assertFalse(Hole.objects.filter(id=hole.id).exists())
+        self.assertFalse(PlayedPassage.objects.filter(jam_id=jam.id).exists())
+        self.assertFalse(ClientAction.objects.filter(client_action_id="delete-check").exists())
+
     def test_action_idempotent_and_duplicate_not_reapplied(self):
         jam = Jam.objects.create(name="Jam action")
         instrument = Instrument.objects.create(jam=jam, name="Chant", order=0)

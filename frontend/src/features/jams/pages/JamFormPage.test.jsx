@@ -84,6 +84,33 @@ describe("JamFormPage", () => {
     expect(screen.getByText("6 instruments actifs")).toBeInTheDocument();
   });
 
+
+  it("adds a custom instrument inline before creating the jam", async () => {
+    renderCreatePage();
+
+    fireEvent.change(screen.getByLabelText("Nom de la jam"), { target: { value: "Nouvelle jam" } });
+    fireEvent.change(screen.getByPlaceholderText("Ajouter un instrument"), { target: { value: "Saxophone" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ajouter l’instrument" }));
+
+    expect(createJam).not.toHaveBeenCalled();
+    const saxophoneCheckbox = screen.getByLabelText("Saxophone");
+    expect(saxophoneCheckbox).toBeInTheDocument();
+    expect(saxophoneCheckbox).toBeChecked();
+    expect(screen.getByPlaceholderText("Ajouter un instrument")).toHaveValue("");
+
+    fireEvent.click(screen.getByRole("button", { name: "Créer la jam" }));
+
+    await waitFor(() => {
+      expect(createJam).toHaveBeenCalledWith(expect.objectContaining({
+        instrumentPayloads: expect.arrayContaining([expect.objectContaining({
+          id: "instrument-saxophone",
+          name: "Saxophone",
+          is_default: false,
+        })]),
+      }), expect.anything());
+    });
+  });
+
   it("does not reuse instruments from a previously loaded jam in create mode", () => {
     loadPreviousJamWithCustomInstrument();
 
