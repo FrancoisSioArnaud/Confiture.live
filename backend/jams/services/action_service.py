@@ -2,7 +2,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from jams.models import ClientAction, Hole, Instrument, LinkGroup, Participant, ParticipantEntry, PlayedPassage
+from jams.models import ClientAction, Hole, Instrument, LinkGroup, Participant, ParticipantEntry, PlayedPassage, Plateau, RoundSlot, SlotLinkGroup
 
 
 class ActionApplicationError(ValueError):
@@ -50,6 +50,77 @@ def _get_hole(jam, raw_id):
     except (Hole.DoesNotExist, ValueError, TypeError) as exc:
         raise ActionApplicationError("Trou introuvable pour cette jam.") from exc
 
+
+
+def _get_round_slot(jam, raw_id):
+    try:
+        return RoundSlot.objects.get(jam=jam, id=raw_id)
+    except (RoundSlot.DoesNotExist, ValueError, TypeError) as exc:
+        raise ActionApplicationError("Round slot introuvable pour cette jam.") from exc
+
+
+def _normalize_instrument_round_slot_orders(jam, instrument):
+    slots = list(RoundSlot.objects.filter(jam=jam, instrument=instrument).order_by("display_order", "id"))
+    for index, slot in enumerate(slots):
+        if slot.display_order != index:
+            slot.display_order = index
+            slot.save(update_fields=["display_order", "updated_at"])
+
+
+def _insert_slot_after_last_round_slot(jam, instrument, round_number, slot):
+    slots = list(RoundSlot.objects.filter(jam=jam, instrument=instrument).exclude(id=slot.id).order_by("display_order", "id"))
+    insert_after = -1
+    for index, candidate in enumerate(slots):
+        if candidate.round_number <= round_number:
+            insert_after = index
+    slots.insert(insert_after + 1, slot)
+    for index, candidate in enumerate(slots):
+        if candidate.display_order != index:
+            candidate.display_order = index
+            candidate.save(update_fields=["display_order", "updated_at"])
+
+
+def _create_round_slots_for_entry(entry, visible_round_depth=1):
+    created = []
+    depth = max(1, int(visible_round_depth or 1))
+    for round_number in range(1, depth + 1):
+        slot, was_created = RoundSlot.objects.get_or_create(
+            jam=entry.jam,
+            instrument=entry.instrument,
+            participant_entry=entry,
+            round_number=round_number,
+            defaults={"slot_type": RoundSlot.SLOT_ENTRY, "display_order": 0},
+        )
+        if was_created:
+            _insert_slot_after_last_round_slot(entry.jam, entry.instrument, round_number, slot)
+            created.append(slot)
+    return created
+
+
+def _ensure_round_slots_for_instrument(jam, instrument, round_number):
+    created = []
+    for entry in ParticipantEntry.objects.filter(jam=jam, instrument=instrument, participant__status=Participant.STATUS_ACTIVE).order_by("base_order", "id"):
+        slot, was_created = RoundSlot.objects.get_or_create(
+            jam=jam,
+            instrument=instrument,
+            participant_entry=entry,
+            round_number=round_number,
+            defaults={"slot_type": RoundSlot.SLOT_ENTRY, "display_order": 0},
+        )
+        if was_created:
+            _insert_slot_after_last_round_slot(jam, instrument, round_number, slot)
+            created.append(slot)
+    _normalize_instrument_round_slot_orders(jam, instrument)
+    return created
+
+
+def _remove_slots_from_slot_link_groups(jam, slots):
+    slots = list(slots or [])
+    for group in SlotLinkGroup.objects.filter(jam=jam, status=SlotLinkGroup.STATUS_ACTIVE):
+        if slots:
+            group.slots.remove(*slots)
+        if group.slots.count() < 2:
+            group.delete()
 
 def _payload_entry_id(payload):
     return _get_payload_id(payload, "participant_entry", "participant_entry_id", "participantEntryId", "entry_id", "entryId")
@@ -122,13 +193,14 @@ def apply_add_participant(jam, payload):
     for entry_payload in payload.get("entries", []):
         instrument_id = _get_payload_id(entry_payload, "instrument", "instrument_id", "instrumentId")
         instrument = _get_instrument(jam, instrument_id)
-        ParticipantEntry.objects.create(
+        entry = ParticipantEntry.objects.create(
             jam=jam,
             participant=participant,
             instrument=instrument,
             custom_instrument_label=entry_payload.get("custom_instrument_label") or entry_payload.get("customInstrumentLabel"),
             base_order=entry_payload.get("base_order", entry_payload.get("baseOrder", ParticipantEntry.objects.filter(jam=jam, instrument=instrument).count())),
         )
+        _create_round_slots_for_entry(entry, entry_payload.get("visible_round_depth", entry_payload.get("visibleRoundDepth", 1)))
 
     return participant
 
@@ -156,13 +228,15 @@ def apply_add_participant_entry(jam, payload):
     entry_payload = payload.get("entry", payload)
     participant = _get_participant(jam, _get_payload_id(entry_payload, "participant", "participant_id", "participantId"))
     instrument = _get_instrument(jam, _get_payload_id(entry_payload, "instrument", "instrument_id", "instrumentId"))
-    return ParticipantEntry.objects.create(
+    entry = ParticipantEntry.objects.create(
         jam=jam,
         participant=participant,
         instrument=instrument,
         custom_instrument_label=entry_payload.get("custom_instrument_label") or entry_payload.get("customInstrumentLabel"),
         base_order=entry_payload.get("base_order", entry_payload.get("baseOrder", ParticipantEntry.objects.filter(jam=jam, instrument=instrument).count())),
     )
+    _create_round_slots_for_entry(entry, entry_payload.get("visible_round_depth", entry_payload.get("visibleRoundDepth", 1)))
+    return entry
 
 
 def apply_update_participant_entry(jam, payload):
@@ -323,6 +397,151 @@ def apply_replace_unavailable(jam, payload):
     return replacement
 
 
+def apply_ensure_round_slots(jam, payload):
+    instrument = _get_instrument(jam, _get_payload_id(payload, "instrument", "instrument_id", "instrumentId"))
+    return _ensure_round_slots_for_instrument(jam, instrument, int(payload.get("round_number", payload.get("roundNumber", 1))))
+
+
+def apply_move_round_slot_vertical(jam, payload):
+    slot = _get_round_slot(jam, _get_payload_id(payload, "slot", "slot_id", "slotId"))
+    if slot.status == RoundSlot.STATUS_PLAYED:
+        return slot
+    slots = list(RoundSlot.objects.filter(jam=jam, instrument=slot.instrument).order_by("display_order", "id"))
+    reordered = [candidate for candidate in slots if candidate.id != slot.id]
+    target_index = max(0, min(payload.get("to_index", payload.get("toIndex", 0)), len(reordered)))
+    reordered.insert(target_index, slot)
+    for index, candidate in enumerate(reordered):
+        if candidate.display_order != index:
+            candidate.display_order = index
+            candidate.save(update_fields=["display_order", "updated_at"])
+    return slot
+
+
+def apply_link_round_slots(jam, payload):
+    slots = [_get_round_slot(jam, slot_id) for slot_id in payload.get("slot_ids", payload.get("slotIds", []))]
+    deduped = list({slot.id: slot for slot in slots}.values())
+    _remove_slots_from_slot_link_groups(jam, deduped)
+    if len(deduped) < 2:
+        return None
+    group = SlotLinkGroup.objects.create(jam=jam, reason=payload.get("reason", SlotLinkGroup.REASON_MANUAL))
+    group.slots.set(deduped)
+    return group
+
+
+def apply_unlink_round_slots(jam, payload):
+    group_id = _get_payload_id(payload, "slot_link_group", "slot_link_group_id", "slotLinkGroupId")
+    if group_id:
+        SlotLinkGroup.objects.filter(jam=jam, id=group_id).delete()
+        return None
+    slots = [_get_round_slot(jam, slot_id) for slot_id in payload.get("slot_ids", payload.get("slotIds", []))]
+    _remove_slots_from_slot_link_groups(jam, slots)
+    return None
+
+
+def apply_add_round_hole(jam, payload):
+    instrument = _get_instrument(jam, _get_payload_id(payload, "instrument", "instrument_id", "instrumentId"))
+    slot = RoundSlot.objects.create(
+        jam=jam,
+        instrument=instrument,
+        slot_type=RoundSlot.SLOT_HOLE,
+        participant_entry=None,
+        round_number=int(payload.get("round_number", payload.get("roundNumber", 1))),
+        display_order=payload.get("display_order", payload.get("displayOrder", RoundSlot.objects.filter(jam=jam, instrument=instrument).count())),
+        created_by_action=payload.get("created_by_action", payload.get("createdByAction", "ADD_ROUND_HOLE")),
+    )
+    _normalize_instrument_round_slot_orders(jam, instrument)
+    return slot
+
+
+def apply_remove_round_hole(jam, payload):
+    slot = _get_round_slot(jam, _get_payload_id(payload, "slot", "slot_id", "slotId"))
+    if slot.slot_type != RoundSlot.SLOT_HOLE:
+        raise ActionApplicationError("Seuls les trous de round peuvent être supprimés.")
+    if slot.status == RoundSlot.STATUS_PLAYED:
+        return slot
+    instrument = slot.instrument
+    _remove_slots_from_slot_link_groups(jam, [slot])
+    slot.delete()
+    _normalize_instrument_round_slot_orders(jam, instrument)
+    return None
+
+
+def apply_wants_to_play_without_round(jam, payload):
+    source_slot = _get_round_slot(jam, _get_payload_id(payload, "source_slot", "source_slot_id", "sourceSlotId"))
+    source_group = source_slot.link_groups.filter(jam=jam, status=SlotLinkGroup.STATUS_ACTIVE).first()
+    source_slots = list(source_group.slots.all()) if source_group else [source_slot]
+    holes = []
+    for instrument_id in payload.get("instrument_ids", payload.get("instrumentIds", [])):
+        instrument = _get_instrument(jam, instrument_id)
+        hole = RoundSlot.objects.create(
+            jam=jam, instrument=instrument, slot_type=RoundSlot.SLOT_HOLE, participant_entry=None,
+            round_number=source_slot.round_number, display_order=source_slot.display_order,
+            created_by_action="WANTS_TO_PLAY_WITHOUT_ROUND",
+        )
+        _normalize_instrument_round_slot_orders(jam, instrument)
+        holes.append(hole)
+    if holes:
+        if source_group:
+            source_group.delete()
+        group = SlotLinkGroup.objects.create(jam=jam, reason=SlotLinkGroup.REASON_WITHOUT)
+        group.slots.set(source_slots + holes)
+    return holes
+
+
+def apply_mark_round_slot_played(jam, payload):
+    slot = _get_round_slot(jam, _get_payload_id(payload, "slot", "slot_id", "slotId"))
+    slot.status = RoundSlot.STATUS_PLAYED
+    slot.played_at = _parse_played_at(payload.get("played_at") or payload.get("playedAt"))
+    slot.save(update_fields=["status", "played_at", "updated_at"])
+    return slot
+
+
+def apply_mark_plateau_played_rounds(jam, payload):
+    if "slotIds" not in payload and "slot_ids" not in payload:
+        return apply_mark_plateau_played(jam, payload)
+    slots = [_get_round_slot(jam, slot_id) for slot_id in payload.get("slot_ids", payload.get("slotIds", []))]
+    played_at = _parse_played_at(payload.get("played_at") or payload.get("playedAt"))
+    plateau = Plateau.objects.create(jam=jam, status=Plateau.STATUS_PLAYED, played_at=played_at)
+    plateau.slots.set(slots)
+    for slot in slots:
+        slot.status = RoundSlot.STATUS_PLAYED
+        slot.played_at = played_at
+        slot.save(update_fields=["status", "played_at", "updated_at"])
+    return plateau
+
+
+def apply_undo_round_slot_played(jam, payload):
+    slot = _get_round_slot(jam, _get_payload_id(payload, "slot", "slot_id", "slotId"))
+    slot.status = RoundSlot.STATUS_PLANNED
+    slot.played_at = None
+    slot.save(update_fields=["status", "played_at", "updated_at"])
+    for plateau in list(slot.plateaux.filter(jam=jam, status=Plateau.STATUS_PLAYED)):
+        plateau.slots.remove(slot)
+        if plateau.slots.count() == 0:
+            plateau.status = Plateau.STATUS_CANCELLED
+            plateau.save(update_fields=["status", "updated_at"])
+    return slot
+
+
+def apply_undo_plateau_played_rounds(jam, payload):
+    plateau_id = _get_payload_id(payload, "plateau", "plateau_id", "plateauId")
+    if not plateau_id:
+        return apply_undo_plateau_played(jam, payload)
+    try:
+        plateau = Plateau.objects.get(jam=jam, id=plateau_id)
+    except (Plateau.DoesNotExist, ValueError, TypeError) as exc:
+        raise ActionApplicationError("Plateau introuvable pour cette jam.") from exc
+    slots = list(plateau.slots.all())
+    plateau.status = Plateau.STATUS_CANCELLED
+    plateau.save(update_fields=["status", "updated_at"])
+    for slot in slots:
+        if not slot.plateaux.filter(jam=jam, status=Plateau.STATUS_PLAYED).exclude(id=plateau.id).exists():
+            slot.status = RoundSlot.STATUS_PLANNED
+            slot.played_at = None
+            slot.save(update_fields=["status", "played_at", "updated_at"])
+    return plateau
+
+
 ACTION_HANDLERS = {
     "UPDATE_JAM": apply_update_jam,
     "ADD_INSTRUMENT": apply_add_instrument,
@@ -333,15 +552,24 @@ ACTION_HANDLERS = {
     "ADD_PARTICIPANT_ENTRY": apply_add_participant_entry,
     "UPDATE_PARTICIPANT_ENTRY": apply_update_participant_entry,
     "MOVE_ENTRY_VERTICAL": apply_move_entry_vertical,
+    "ENSURE_ROUND_SLOTS": apply_ensure_round_slots,
+    "MOVE_ROUND_SLOT_VERTICAL": apply_move_round_slot_vertical,
     "LINK_ITEMS": apply_link_items,
     "UNLINK_ITEMS": apply_unlink_items,
+    "LINK_ROUND_SLOTS": apply_link_round_slots,
+    "UNLINK_ROUND_SLOTS": apply_unlink_round_slots,
     "ADD_HOLE": apply_add_hole,
     "REMOVE_HOLE": apply_remove_hole,
     "WANTS_TO_PLAY_WITHOUT": apply_wants_to_play_without,
+    "ADD_ROUND_HOLE": apply_add_round_hole,
+    "REMOVE_ROUND_HOLE": apply_remove_round_hole,
+    "WANTS_TO_PLAY_WITHOUT_ROUND": apply_wants_to_play_without_round,
     "MARK_ENTRY_PLAYED": apply_mark_entry_played,
-    "MARK_PLATEAU_PLAYED": apply_mark_plateau_played,
+    "MARK_ROUND_SLOT_PLAYED": apply_mark_round_slot_played,
+    "UNDO_ROUND_SLOT_PLAYED": apply_undo_round_slot_played,
+    "MARK_PLATEAU_PLAYED": apply_mark_plateau_played_rounds,
     "UNDO_ENTRY_PLAYED": apply_undo_entry_played,
-    "UNDO_PLATEAU_PLAYED": apply_undo_plateau_played,
+    "UNDO_PLATEAU_PLAYED": apply_undo_plateau_played_rounds,
     "REPLACE_UNAVAILABLE": apply_replace_unavailable,
 }
 

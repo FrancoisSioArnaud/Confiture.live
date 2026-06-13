@@ -4,11 +4,12 @@ export function buildDragItems(projection) {
   for (const column of projection.columns) {
     const columnItems = projection.rows
       .map((row) => ({ rowIndex: row.rowIndex, cell: row.cells[column.instrumentId] }))
-      .filter(({ cell }) => cell.type === "entry" && !cell.isLoop && !cell.isPlayed && !cell.isParticipantLeft);
+      .filter(({ cell }) => cell.type === "entry" && !cell.isPlayed && !cell.isParticipantLeft);
 
     columnItems.forEach(({ rowIndex, cell }, toIndex) => {
-      itemsById[cell.entryId] = {
-        id: `entry:${cell.entryId}`,
+      itemsById[cell.slotId ?? cell.entryId] = {
+        id: `slot:${cell.slotId ?? cell.entryId}`,
+        slotId: cell.slotId,
         entryId: cell.entryId,
         instrumentId: cell.instrumentId,
         rowIndex,
@@ -31,12 +32,12 @@ export function getVerticalMovePayload(activeData, overData) {
     return null;
   }
 
-  if (activeData.entryId === overData.entryId || activeData.toIndex === overData.toIndex) {
+  if ((activeData.slotId ?? activeData.entryId) === (overData.slotId ?? overData.entryId) || activeData.toIndex === overData.toIndex) {
     return null;
   }
 
   return {
-    entryId: activeData.entryId,
+    ...(activeData.slotId ? { slotId: activeData.slotId } : { entryId: activeData.entryId }),
     toIndex: overData.toIndex,
   };
 }

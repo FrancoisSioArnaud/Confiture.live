@@ -8,6 +8,7 @@ import { createClientAction, loadJamLocalFirst, startSyncRetry, syncAction } fro
 import SyncStatusIndicator from "../../sync/SyncStatusIndicator";
 import JamTable from "../../jamTable/components/JamTable";
 import { actionTypes } from "../../jamTable/engine/actionTypes.js";
+import { projectJamTable } from "../../jamTable/engine/projectJamTable.js";
 import { useJamTableStore } from "../../jamTable/store/useJamTableStore.js";
 import { designTokens } from "../../../theme";
 
@@ -18,6 +19,9 @@ function buildPlateauPayload(projection, payload) {
   const cells = Object.values(row.cells);
   return {
     ...payload,
+    slotIds: cells
+      .filter((cell) => cell.type !== "empty" && cell.slotId && !cell.isPlayed)
+      .map((cell) => cell.slotId),
     participantEntryIds: cells
       .filter((cell) => cell.type === "entry" && cell.entryId && !cell.isPlayed)
       .map((cell) => cell.entryId),
@@ -50,7 +54,9 @@ export default function JamTablePage() {
   const [editLockStatus, setEditLockStatus] = useState("locking");
   const [editLockMessage, setEditLockMessage] = useState(null);
   const jamState = useJamTableStore((state) => state.jamState);
-  const projection = useJamTableStore((state) => state.projectedTable);
+  const storedProjection = useJamTableStore((state) => state.projectedTable);
+  const [visibleRoundDepthByInstrument, setVisibleRoundDepthByInstrument] = useState({});
+  const projection = useMemo(() => projectJamTable(jamState, { visibleRoundDepthByInstrument }), [jamState, visibleRoundDepthByInstrument]);
   const drawerOpen = useJamTableStore((state) => state.drawerOpen);
   const insertionSelection = useJamTableStore((state) => state.insertionSelection);
   const linkMode = useJamTableStore((state) => state.linkMode);
@@ -78,6 +84,8 @@ export default function JamTablePage() {
   const wantsToPlayWithout = useJamTableStore((state) => state.wantsToPlayWithout);
   const replaceUnavailable = useJamTableStore((state) => state.replaceUnavailable);
   const moveEntryVertical = useJamTableStore((state) => state.moveEntryVertical);
+  const moveRoundSlotVertical = useJamTableStore((state) => state.moveRoundSlotVertical);
+  const ensureRoundSlots = useJamTableStore((state) => state.ensureRoundSlots);
   const startLinkMode = useJamTableStore((state) => state.startLinkMode);
   const toggleLinkSelection = useJamTableStore((state) => state.toggleLinkSelection);
   const cancelLinkMode = useJamTableStore((state) => state.cancelLinkMode);
@@ -89,6 +97,16 @@ export default function JamTablePage() {
     enabled: Boolean(jamId),
     retry: false,
   });
+
+  useEffect(() => {
+    if (jamId) {
+      try {
+        setVisibleRoundDepthByInstrument(JSON.parse(localStorage.getItem(`confiture.visibleRoundDepthByInstrument.${jamId}`) ?? "{}"));
+      } catch {
+        setVisibleRoundDepthByInstrument({});
+      }
+    }
+  }, [jamId]);
 
   useEffect(() => {
     if (loadedJam?.jamState) {
@@ -145,7 +163,7 @@ export default function JamTablePage() {
   }, [editLockStatus, jamId, loadJamState, setSyncStatus]);
 
   const runAction = (type, localAction, payload, apiPayload = payload) => {
-    const previousProjection = useJamTableStore.getState().projectedTable;
+    const previousProjection = projection;
     localAction(payload);
 
     const nextJamState = useJamTableStore.getState().jamState;
@@ -177,8 +195,16 @@ export default function JamTablePage() {
     onMarkParticipantLeft: (participantId) => runAction(actionTypes.MARK_PARTICIPANT_LEFT, markParticipantLeft, participantId, { participantId }),
     onWantsToPlayWithout: (payload) => runAction(actionTypes.WANTS_TO_PLAY_WITHOUT, wantsToPlayWithout, payload),
     onReplaceUnavailable: (payload) => runAction(actionTypes.REPLACE_UNAVAILABLE, replaceUnavailable, payload),
-    onMoveEntryVertical: (payload) => runAction(actionTypes.MOVE_ENTRY_VERTICAL, moveEntryVertical, payload),
+    onMoveEntryVertical: (payload) => runAction(payload.slotId ? actionTypes.MOVE_ROUND_SLOT_VERTICAL : actionTypes.MOVE_ENTRY_VERTICAL, payload.slotId ? moveRoundSlotVertical : moveEntryVertical, payload),
     onLinkItems: (payload) => runAction(actionTypes.LINK_ITEMS, linkItems, payload),
+    onEnsureRoundSlots: ({ instrumentId, roundNumber }) => {
+      setVisibleRoundDepthByInstrument((current) => {
+        const next = { ...current, [instrumentId]: roundNumber };
+        localStorage.setItem(`confiture.visibleRoundDepthByInstrument.${jamId}`, JSON.stringify(next));
+        return next;
+      });
+      runAction(actionTypes.ENSURE_ROUND_SLOTS, ensureRoundSlots, { instrumentId, roundNumber });
+    },
   };
 
   const handleValidateLinkMode = () => {

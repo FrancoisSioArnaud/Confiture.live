@@ -15,7 +15,10 @@ function cloneState(jamState) {
       holeIds: [...group.holeIds],
     })),
     holes: jamState.holes.map((hole) => ({ ...hole })),
-    playedPassages: jamState.playedPassages.map((passage) => ({ ...passage })),
+    playedPassages: (jamState.playedPassages ?? []).map((passage) => ({ ...passage })),
+    roundSlots: (jamState.roundSlots ?? []).map((slot) => ({ ...slot })),
+    slotLinkGroups: (jamState.slotLinkGroups ?? []).map((group) => ({ ...group, slotIds: [...(group.slotIds ?? [])] })),
+    plateaux: (jamState.plateaux ?? []).map((plateau) => ({ ...plateau, slotIds: [...(plateau.slotIds ?? [])] })),
   };
 }
 
@@ -76,6 +79,45 @@ function addPlayedPassage(state, passage) {
       playedAt: passage.playedAt ?? null,
     });
   }
+}
+
+function normalizeSlotOrders(state, instrumentId) {
+  state.roundSlots
+    .filter((slot) => slot.instrumentId === instrumentId)
+    .sort((left, right) => left.displayOrder - right.displayOrder || String(left.id).localeCompare(String(right.id)))
+    .forEach((slot, index) => { slot.displayOrder = index; });
+}
+
+function applyMoveRoundSlotVertical(state, payload) {
+  const movedSlot = state.roundSlots.find((slot) => slot.id === payload.slotId);
+  if (!movedSlot || movedSlot.status === "played") return;
+  const slots = state.roundSlots.filter((slot) => slot.instrumentId === movedSlot.instrumentId).sort((a,b)=>a.displayOrder-b.displayOrder||String(a.id).localeCompare(String(b.id)));
+  const withoutMoved = slots.filter((slot) => slot.id !== movedSlot.id);
+  withoutMoved.splice(Math.max(0, Math.min(payload.toIndex, withoutMoved.length)), 0, movedSlot);
+  withoutMoved.forEach((slot, index) => { slot.displayOrder = index; });
+}
+
+function removeSlotsFromSlotLinkGroups(groups, slotIds) {
+  const slotIdSet = new Set(slotIds);
+  return groups.map((group) => ({ ...group, slotIds: group.slotIds.filter((slotId) => !slotIdSet.has(slotId)) })).filter((group) => group.slotIds.length > 1);
+}
+
+function applyLinkRoundSlots(state, payload) {
+  const slotIds = [...new Set(payload.slotIds ?? [])];
+  state.slotLinkGroups = removeSlotsFromSlotLinkGroups(state.slotLinkGroups, slotIds);
+  if (slotIds.length > 1) state.slotLinkGroups.push({ id: payload.id ?? payload.slotLinkGroupId ?? createId("slot-link", state.slotLinkGroups), slotIds, reason: payload.reason ?? "manual", status: "active" });
+}
+
+function applyEnsureRoundSlots(state, payload) {
+  const roundNumber = payload.roundNumber;
+  const instrumentId = payload.instrumentId;
+  const entries = state.entries.filter((entry) => entry.instrumentId === instrumentId).sort((a,b)=>a.baseOrder-b.baseOrder||String(a.id).localeCompare(String(b.id)));
+  for (const entry of entries) {
+    if (!state.roundSlots.some((slot) => slot.participantEntryId === entry.id && slot.roundNumber === roundNumber)) {
+      state.roundSlots.push({ id: createId("slot", state.roundSlots), jamId: state.jam.id, instrumentId, participantEntryId: entry.id, slotType: "entry", roundNumber, displayOrder: state.roundSlots.filter((slot) => slot.instrumentId === instrumentId).length, status: "planned", playedAt: null, createdByAction: "" });
+    }
+  }
+  normalizeSlotOrders(state, instrumentId);
 }
 
 function applyMoveEntryVertical(state, payload) {
@@ -213,6 +255,7 @@ export function applyJamAction(jamState, actionOrType, payload) {
     case actionTypes.ADD_PARTICIPANT:
       state.participants.push(action.payload.participant);
       state.entries.push(...(action.payload.entries ?? []));
+      state.roundSlots.push(...(action.payload.roundSlots ?? []));
       return state;
 
     case actionTypes.UPDATE_PARTICIPANT:
@@ -233,6 +276,7 @@ export function applyJamAction(jamState, actionOrType, payload) {
 
     case actionTypes.ADD_PARTICIPANT_ENTRY:
       state.entries.push(action.payload.entry);
+      state.roundSlots.push(...(action.payload.roundSlots ?? []));
       return state;
 
     case actionTypes.UPDATE_PARTICIPANT_ENTRY:
@@ -243,8 +287,25 @@ export function applyJamAction(jamState, actionOrType, payload) {
       ));
       return state;
 
+    case actionTypes.ENSURE_ROUND_SLOTS:
+      applyEnsureRoundSlots(state, action.payload);
+      return state;
+
+    case actionTypes.MOVE_ROUND_SLOT_VERTICAL:
+      applyMoveRoundSlotVertical(state, action.payload);
+      return state;
+
     case actionTypes.MOVE_ENTRY_VERTICAL:
       applyMoveEntryVertical(state, action.payload);
+      return state;
+
+    case actionTypes.LINK_ROUND_SLOTS:
+      applyLinkRoundSlots(state, action.payload);
+      return state;
+
+    case actionTypes.UNLINK_ROUND_SLOTS:
+      if (action.payload.slotLinkGroupId) state.slotLinkGroups = state.slotLinkGroups.filter((group) => group.id !== action.payload.slotLinkGroupId);
+      else state.slotLinkGroups = removeSlotsFromSlotLinkGroups(state.slotLinkGroups, action.payload.slotIds ?? []);
       return state;
 
     case actionTypes.LINK_ITEMS:
@@ -253,6 +314,11 @@ export function applyJamAction(jamState, actionOrType, payload) {
 
     case actionTypes.UNLINK_ITEMS:
       applyUnlinkItems(state, action.payload);
+      return state;
+
+    case actionTypes.ADD_ROUND_HOLE:
+      state.roundSlots.push(action.payload.slot);
+      normalizeSlotOrders(state, action.payload.slot.instrumentId);
       return state;
 
     case actionTypes.ADD_HOLE:
@@ -270,6 +336,16 @@ export function applyJamAction(jamState, actionOrType, payload) {
       applyWantsToPlayWithout(state, action.payload);
       return state;
 
+    case actionTypes.MARK_ROUND_SLOT_PLAYED: {
+      state.roundSlots = state.roundSlots.map((slot) => slot.id === action.payload.slotId ? { ...slot, status: "played", playedAt: action.payload.playedAt ?? null } : slot);
+      return state;
+    }
+
+    case actionTypes.UNDO_ROUND_SLOT_PLAYED:
+      state.roundSlots = state.roundSlots.map((slot) => slot.id === action.payload.slotId ? { ...slot, status: "planned", playedAt: null } : slot);
+      state.plateaux = state.plateaux.map((plateau) => ({ ...plateau, slotIds: plateau.slotIds.filter((slotId) => slotId !== action.payload.slotId) })).filter((plateau) => plateau.slotIds.length > 0);
+      return state;
+
     case actionTypes.MARK_ENTRY_PLAYED: {
       const projectedCell = findProjectedCellByEntryId(state, action.payload.entryId);
       addPlayedPassage(state, {
@@ -282,6 +358,12 @@ export function applyJamAction(jamState, actionOrType, payload) {
     }
 
     case actionTypes.MARK_PLATEAU_PLAYED: {
+      if (action.payload.slotIds) {
+        const playedAt = action.payload.playedAt ?? null;
+        state.plateaux.push({ id: action.payload.plateauId ?? createId("plateau", state.plateaux), jamId: state.jam.id, slotIds: action.payload.slotIds, status: "played", playedAt });
+        state.roundSlots = state.roundSlots.map((slot) => action.payload.slotIds.includes(slot.id) ? { ...slot, status: "played", playedAt } : slot);
+        return state;
+      }
       const rowIndex = action.payload.lineIndex;
       findProjectedPlateau(state, rowIndex).forEach((cell) => {
         addPlayedPassage(state, {

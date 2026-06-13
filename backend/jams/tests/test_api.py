@@ -7,7 +7,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from jams.models import ClientAction, Hole, Instrument, Jam, Participant, ParticipantEntry, PlayedPassage
+from jams.models import ClientAction, Hole, Instrument, Jam, Participant, ParticipantEntry, PlayedPassage, Plateau, RoundSlot, SlotLinkGroup
 
 
 class JamApiTests(APITestCase):
@@ -241,3 +241,63 @@ class ModelConstraintTests(TestCase):
 class AdminImportTests(TestCase):
     def test_admin_models_importable(self):
         import jams.admin  # noqa: F401
+
+class RoundSlotApiTests(APITestCase):
+    def setUp(self):
+        self.jam = Jam.objects.create(name="Jam rounds")
+        self.guitar = Instrument.objects.create(jam=self.jam, name="Guitare", order=0)
+        self.vocal = Instrument.objects.create(jam=self.jam, name="Chant", order=1)
+        self.url = reverse("jams:jam-actions", kwargs={"jam_id": self.jam.id})
+
+    def post_action(self, action_type, payload, client_action_id):
+        return self.client.post(self.url, {"client_action_id": client_action_id, "type": action_type, "payload": payload}, format="json")
+
+    def test_add_participant_creates_round_slots_to_visible_depth(self):
+        response = self.post_action(
+            "ADD_PARTICIPANT",
+            {"participant": {"name": "Nicolas"}, "entries": [{"instrumentId": self.guitar.id, "visibleRoundDepth": 2}]},
+            "round-add-1",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        entry = ParticipantEntry.objects.get(jam=self.jam, instrument=self.guitar)
+        self.assertEqual(list(entry.round_slots.order_by("round_number").values_list("round_number", flat=True)), [1, 2])
+
+    def test_ensure_round_slots_is_idempotent(self):
+        participant = Participant.objects.create(jam=self.jam, name="Léa")
+        entry = ParticipantEntry.objects.create(jam=self.jam, participant=participant, instrument=self.vocal, base_order=0)
+
+        first = self.post_action("ENSURE_ROUND_SLOTS", {"instrumentId": self.vocal.id, "roundNumber": 2}, "ensure-1")
+        second = self.post_action("ENSURE_ROUND_SLOTS", {"instrumentId": self.vocal.id, "roundNumber": 2}, "ensure-2")
+
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(entry.round_slots.filter(round_number=2).count(), 1)
+
+    def test_link_round_slots_does_not_link_next_round(self):
+        p1 = Participant.objects.create(jam=self.jam, name="Nicolas")
+        p2 = Participant.objects.create(jam=self.jam, name="Léa")
+        e1 = ParticipantEntry.objects.create(jam=self.jam, participant=p1, instrument=self.guitar, base_order=0)
+        e2 = ParticipantEntry.objects.create(jam=self.jam, participant=p2, instrument=self.vocal, base_order=0)
+        for entry in [e1, e2]:
+            for round_number in [1, 2]:
+                RoundSlot.objects.create(jam=self.jam, instrument=entry.instrument, participant_entry=entry, round_number=round_number, display_order=round_number)
+        slot_ids = list(RoundSlot.objects.filter(round_number=1).values_list("id", flat=True))
+
+        response = self.post_action("LINK_ROUND_SLOTS", {"slotIds": slot_ids, "reason": "manual"}, "link-round-1")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        group = SlotLinkGroup.objects.get(jam=self.jam)
+        self.assertEqual(set(group.slots.values_list("round_number", flat=True)), {1})
+
+    def test_mark_plateau_played_uses_slot_ids(self):
+        participant = Participant.objects.create(jam=self.jam, name="Sam")
+        entry = ParticipantEntry.objects.create(jam=self.jam, participant=participant, instrument=self.guitar, base_order=0)
+        slot = RoundSlot.objects.create(jam=self.jam, instrument=self.guitar, participant_entry=entry, round_number=1, display_order=0)
+
+        response = self.post_action("MARK_PLATEAU_PLAYED", {"slotIds": [slot.id]}, "plateau-round-1")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        slot.refresh_from_db()
+        self.assertEqual(slot.status, RoundSlot.STATUS_PLAYED)
+        self.assertEqual(Plateau.objects.get(jam=self.jam).slots.get(), slot)

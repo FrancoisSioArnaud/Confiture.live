@@ -29,3 +29,16 @@ Dexie contient :
 ## Limite V0
 
 Les identifiants créés localement avant confirmation backend restent optimistes. La V0 s’appuie sur l’idempotence backend et le verrou d’édition; la résolution de conflit multi-appareil et une vraie table de correspondance d’identifiants locaux/distants restent hors périmètre.
+
+## Rounds persistés
+
+La refonte des rounds ajoute une couche persistée entre `ParticipantEntry` et les plateaux.
+
+- `ParticipantEntry` reste l'inscription stable d'un participant à un instrument dans une jam. Elle porte l'ordre de base (`base_order`), mais ne porte plus la notion de lien, de round ou de joué.
+- `RoundSlot` représente une occurrence jouable précise : une `ParticipantEntry` pour un `round_number`, ou un trou volontaire (`slot_type="hole"`). `round_number` est le n-ième round métier de cette participation ; `display_order` est l'ordre réel affiché dans la colonne et peut être déplacé indépendamment du round.
+- `SlotLinkGroup` lie des `RoundSlot` précis. Le lien est donc ponctuel : lier Nicolas/Guitare/round 1 à Léa/Chant/round 1 ne lie pas automatiquement leurs rounds suivants.
+- `Plateau` représente les `RoundSlot` réellement joués ensemble. L'historique ne dépend plus d'un `line_index` stocké.
+
+`Hole`, `LinkGroup` et `PlayedPassage` sont désormais legacy après la migration de données. Ils restent dans le schéma pour compatibilité et migration, mais les nouvelles écritures métier doivent utiliser `RoundSlot`, `SlotLinkGroup` et `Plateau`. Une migration future pourra supprimer ces modèles legacy.
+
+La migration crée un `RoundSlot` round 1 pour chaque ancienne `ParticipantEntry`, convertit les anciens `Hole` en slots de type `hole`, convertit les anciens `LinkGroup` en `SlotLinkGroup`, marque les slots joués à partir des anciens `PlayedPassage`, puis crée les `Plateau` par groupe legacy `jam + line_index`. Pour un plateau migré, `played_at` est l'horodatage le plus ancien du groupe legacy afin d'avoir une règle stable.
