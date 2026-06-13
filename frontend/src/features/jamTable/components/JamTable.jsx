@@ -69,6 +69,7 @@ export default function JamTable({
   onCancelLinkMode,
   onValidateLinkMode,
   onLinkItems,
+  onEnsureRoundSlots = () => {},
 }) {
   const [message, setMessage] = useState(null);
   const [menuState, setMenuState] = useState(null);
@@ -112,7 +113,9 @@ export default function JamTable({
   };
 
   const handlePlateauPlayed = (rowIndex) => {
-    onMarkPlateauPlayed({ lineIndex: rowIndex });
+    const row = projection.rows.find((candidate) => candidate.rowIndex === rowIndex);
+    const slotIds = Object.values(row?.cells ?? {}).filter((cell) => cell.type !== "empty" && cell.slotId && !cell.isPlayed).map((cell) => cell.slotId);
+    onMarkPlateauPlayed(slotIds.length ? { slotIds } : { lineIndex: rowIndex });
     setMessage(`Plateau ${rowIndex + 1} joué`);
   };
 
@@ -263,6 +266,14 @@ export default function JamTable({
         >
           <Box sx={{ minWidth: "max-content" }}>
             <JamTableHeader columns={projection.columns} />
+            <Box sx={{ display: "grid", gridTemplateColumns: `${designTokens.table.actionColumnWidth}px repeat(${projection.columns.length}, minmax(${designTokens.table.instrumentColumnMinWidth}px, 1fr))`, gap: `${designTokens.table.columnGap}px`, p: `${designTokens.spacing.xs}px` }}>
+              <Box />
+              {projection.columns.map((column) => (
+                <Button key={column.instrumentId} size="small" variant="outlined" onClick={() => onEnsureRoundSlots({ instrumentId: column.instrumentId, roundNumber: (column.visibleRoundDepth ?? 1) + 1 })}>
+                  Afficher le round {(column.visibleRoundDepth ?? 1) + 1}
+                </Button>
+              ))}
+            </Box>
             {!hasAnyTableItem ? (
               <Box
                 role="row"
@@ -328,7 +339,7 @@ export default function JamTable({
         row={callRow}
         columns={projection.columns}
         onClose={onCloseDrawer}
-        onMarkEntryPlayed={onMarkEntryPlayed}
+        onMarkEntryPlayed={(payload) => onMarkEntryPlayed(payload.slotId ? payload : payload)}
         onMarkPlateauPlayed={onMarkPlateauPlayed}
         onUnavailable={handleUnavailable}
       />

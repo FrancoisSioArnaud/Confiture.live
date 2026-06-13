@@ -6,6 +6,7 @@ import { Card, Chip, IconButton, Stack, Typography } from "@mui/material";
 import { designTokens } from "../../../theme";
 import LinkTag from "./LinkTag";
 import LoopTag from "./LoopTag";
+import RoundTag from "./RoundTag";
 
 export default function ParticipantCard({ cell, linkLabel, isLinkSelected = false, isLinkDisabled = false, isDragImpacted = false, onCheck, onLink, onMenu, onSelect }) {
   const borderColor = isLinkSelected || isDragImpacted
@@ -71,7 +72,7 @@ export default function ParticipantCard({ cell, linkLabel, isLinkSelected = fals
           </IconButton>
         </Stack>
         <Stack direction="row" spacing={`${designTokens.spacing.xs}px`} flexWrap="wrap" useFlexGap>
-          <LoopTag loopNumber={cell.isLoop ? cell.loopNumber : null} />
+          {cell.isLoop ? <LoopTag loopNumber={cell.loopNumber} /> : <RoundTag roundNumber={cell.roundNumber} />}
           <LinkTag label={linkLabel} />
           {cell.isParticipantLeft ? (
             <Typography variant="caption" color="text.secondary">

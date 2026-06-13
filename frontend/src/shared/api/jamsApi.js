@@ -59,6 +59,32 @@ export function toJamState(apiJam) {
       lineIndex: passage.line_index,
       playedAt: passage.played_at,
     })),
+    roundSlots: (apiJam.round_slots ?? []).map((slot) => ({
+      id: toStringId(slot.id),
+      jamId: toStringId(slot.jam ?? apiJam.id),
+      instrumentId: toStringId(slot.instrument),
+      participantEntryId: toStringId(slot.participant_entry),
+      slotType: slot.slot_type,
+      roundNumber: slot.round_number,
+      displayOrder: slot.display_order,
+      status: slot.status,
+      playedAt: slot.played_at,
+      createdByAction: slot.created_by_action ?? "",
+    })),
+    slotLinkGroups: (apiJam.slot_link_groups ?? []).map((group) => ({
+      id: toStringId(group.id),
+      jamId: toStringId(group.jam ?? apiJam.id),
+      slotIds: (group.slot_ids ?? []).map(toStringId),
+      reason: group.reason,
+      status: group.status,
+    })),
+    plateaux: (apiJam.plateaux ?? []).map((plateau) => ({
+      id: toStringId(plateau.id),
+      jamId: toStringId(plateau.jam ?? apiJam.id),
+      slotIds: (plateau.slot_ids ?? []).map(toStringId),
+      status: plateau.status,
+      playedAt: plateau.played_at,
+    })),
   };
 }
 

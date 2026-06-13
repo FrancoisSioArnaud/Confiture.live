@@ -53,3 +53,17 @@ Réessaie plus tard.
 ```
 
 Le lock est libéré à la fermeture/navigation quand le frontend peut appeler `POST /api/jams/:id/unlock-editing/`. Pour éviter un blocage permanent après crash ou fermeture brutale, le backend autorise la reprise d'un lock expiré après une durée V0 raisonnable.
+
+## Actions sync round-based
+
+Les nouvelles actions local-first synchronisées matérialisent les rounds côté backend :
+
+- `ENSURE_ROUND_SLOTS` crée les `RoundSlot` manquants d'un instrument pour un `roundNumber` donné.
+- `MOVE_ROUND_SLOT_VERTICAL` réordonne `display_order` dans une seule colonne et ne modifie pas `round_number`.
+- `LINK_ROUND_SLOTS` / `UNLINK_ROUND_SLOTS` manipulent des liens ponctuels entre slots.
+- `ADD_ROUND_HOLE` / `REMOVE_ROUND_HOLE` manipulent des trous de round.
+- `WANTS_TO_PLAY_WITHOUT_ROUND` crée des trous liés uniquement au round source.
+- `MARK_ROUND_SLOT_PLAYED` et `UNDO_ROUND_SLOT_PLAYED` changent le statut d'un slot précis.
+- `MARK_PLATEAU_PLAYED` envoie désormais `slotIds`; le backend crée un `Plateau` et marque les slots joués.
+
+Après une synchronisation réussie, le front continue à réconcilier l'état local avec la jam authoritative renvoyée par le backend. La visibilité UI des rounds par colonne est stockée en `localStorage` avec la clé `confiture.visibleRoundDepthByInstrument.${jamId}` et n'est pas persistée en base.

@@ -126,6 +126,114 @@ class ParticipantEntry(TimeStampedModel):
             raise ValidationError("Instrument must belong to the same jam.")
 
 
+class RoundSlot(TimeStampedModel):
+    SLOT_ENTRY = "entry"
+    SLOT_HOLE = "hole"
+    SLOT_TYPE_CHOICES = [(SLOT_ENTRY, "Entry"), (SLOT_HOLE, "Hole")]
+
+    STATUS_PLANNED = "planned"
+    STATUS_PLAYED = "played"
+    STATUS_SKIPPED = "skipped"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_CHOICES = [
+        (STATUS_PLANNED, "Planned"),
+        (STATUS_PLAYED, "Played"),
+        (STATUS_SKIPPED, "Skipped"),
+        (STATUS_CANCELLED, "Cancelled"),
+    ]
+
+    jam = models.ForeignKey(Jam, related_name="round_slots", on_delete=models.CASCADE)
+    instrument = models.ForeignKey(Instrument, related_name="round_slots", on_delete=models.CASCADE)
+    participant_entry = models.ForeignKey(
+        ParticipantEntry,
+        related_name="round_slots",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+    )
+    slot_type = models.CharField(max_length=16, choices=SLOT_TYPE_CHOICES, default=SLOT_ENTRY)
+    round_number = models.PositiveIntegerField(default=1)
+    display_order = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PLANNED)
+    played_at = models.DateTimeField(null=True, blank=True)
+    created_by_action = models.CharField(max_length=64, blank=True)
+
+    class Meta:
+        ordering = ["instrument__order", "display_order", "round_number", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["participant_entry", "round_number"],
+                condition=models.Q(participant_entry__isnull=False),
+                name="unique_round_slot_per_entry_round",
+            ),
+            models.CheckConstraint(
+                check=(
+                    models.Q(slot_type="entry", participant_entry__isnull=False)
+                    | models.Q(slot_type="hole", participant_entry__isnull=True)
+                ),
+                name="round_slot_type_matches_entry_presence",
+            ),
+        ]
+
+    def __str__(self):
+        label = self.participant_entry or f"Sans {self.instrument.name}"
+        return f"{label} — round {self.round_number}"
+
+    def clean(self):
+        if self.instrument_id and self.jam_id and self.instrument.jam_id != self.jam_id:
+            raise ValidationError("Instrument must belong to the same jam.")
+        if self.participant_entry_id:
+            if self.participant_entry.jam_id != self.jam_id:
+                raise ValidationError("Participant entry must belong to the same jam.")
+            if self.participant_entry.instrument_id != self.instrument_id:
+                raise ValidationError("Participant entry must use the same instrument.")
+        if self.slot_type == self.SLOT_ENTRY and not self.participant_entry_id:
+            raise ValidationError("Entry round slots must reference a participant entry.")
+        if self.slot_type == self.SLOT_HOLE and self.participant_entry_id:
+            raise ValidationError("Hole round slots cannot reference a participant entry.")
+
+
+class SlotLinkGroup(TimeStampedModel):
+    REASON_MANUAL = "manual"
+    REASON_TOGETHER = "wants_to_play_together"
+    REASON_WITHOUT = "wants_to_play_without"
+    REASON_CHOICES = [
+        (REASON_MANUAL, "Manual"),
+        (REASON_TOGETHER, "Wants to play together"),
+        (REASON_WITHOUT, "Wants to play without"),
+    ]
+
+    STATUS_ACTIVE = "active"
+    STATUS_CANCELLED = "cancelled"
+
+    jam = models.ForeignKey(Jam, related_name="slot_link_groups", on_delete=models.CASCADE)
+    slots = models.ManyToManyField(RoundSlot, related_name="link_groups", blank=True)
+    reason = models.CharField(max_length=40, choices=REASON_CHOICES, default=REASON_MANUAL)
+    status = models.CharField(max_length=16, default=STATUS_ACTIVE)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"Slot link group {self.id} — {self.jam}"
+
+
+class Plateau(TimeStampedModel):
+    STATUS_PLAYED = "played"
+    STATUS_CANCELLED = "cancelled"
+
+    jam = models.ForeignKey(Jam, related_name="plateaux", on_delete=models.CASCADE)
+    slots = models.ManyToManyField(RoundSlot, related_name="plateaux", blank=True)
+    status = models.CharField(max_length=16, default=STATUS_PLAYED)
+    played_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-played_at", "id"]
+
+    def __str__(self):
+        return f"Plateau {self.id} — {self.jam}"
+
+
 class Hole(TimeStampedModel):
     jam = models.ForeignKey(Jam, related_name="holes", on_delete=models.CASCADE)
     instrument = models.ForeignKey(Instrument, related_name="holes", on_delete=models.CASCADE)

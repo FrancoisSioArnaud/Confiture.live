@@ -58,3 +58,17 @@ Chaque cellule est de type `entry`, `hole` ou `empty`. Les cellules `empty` sont
 `REPLACE_UNAVAILABLE` ne crée pas de statut durable d'indisponibilité : le remplaçant prend la place, le musicien absent est repoussé à la ligne disponible suivante, et les links concernés sont supprimés en supposant que les confirmations UI ont déjà eu lieu.
 
 `MOVE_ENTRY_VERTICAL` reste une action verticale dans une seule colonne instrument. Le payload existant (`entryId`, `toIndex`) est conservé ; l'UI grille ne change donc pas le contrat métier/backend. Pour les groupes liés, le moteur recalcule ensuite une projection row-first qui maintient les éléments liés sur le même plateau quand ils sont projetables ensemble. La V0 ne définit pas encore une action distincte de déplacement groupé explicite.
+
+## Projection depuis les RoundSlot
+
+Le moteur cible projette la table depuis `roundSlots`, `slotLinkGroups` et `plateaux`.
+
+- Les colonnes prennent leurs `RoundSlot` visibles par instrument.
+- Par défaut, chaque colonne affiche `roundNumber <= 1`.
+- Un état local `visibleRoundDepthByInstrument` permet d'afficher le round suivant pour une seule colonne, sans impacter les autres instruments.
+- Les slots `cancelled` sont exclus ; les slots `played` restent visibles comme historique grisé.
+- Le tri principal est `displayOrder`, puis `id`, et non `roundNumber`, afin de permettre un drag d'un round 2 avant un round 1 sans changer la signification métier du round.
+- Les `SlotLinkGroup` alignent seulement les slots explicitement liés. Les liens et trous ne sont pas copiés automatiquement aux rounds suivants.
+- Le prochain jouable d'une colonne est le premier slot visible `planned` dans l'ordre affiché.
+
+L'ancien preview de boucle reste uniquement comme compatibilité de tests et d'état legacy quand aucun `roundSlots` authoritative n'est présent. Le wording cible de l'UI est `Round 2`, `Round 3`, etc.

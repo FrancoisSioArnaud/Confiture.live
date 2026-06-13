@@ -9,6 +9,9 @@ from .models import (
     Participant,
     ParticipantEntry,
     PlayedPassage,
+    Plateau,
+    RoundSlot,
+    SlotLinkGroup,
 )
 
 
@@ -48,6 +51,32 @@ class ParticipantEntryAdmin(admin.ModelAdmin):
     search_fields = ("participant__name", "instrument__name", "jam__name")
     list_filter = ("instrument", "created_at")
     ordering = ("jam", "instrument__order", "base_order")
+
+
+@admin.register(RoundSlot)
+class RoundSlotAdmin(admin.ModelAdmin):
+    list_display = ("id", "jam", "instrument", "participant_entry", "slot_type", "round_number", "display_order", "status", "played_at")
+    search_fields = ("jam__name", "instrument__name", "participant_entry__participant__name")
+    list_filter = ("slot_type", "status", "round_number", "created_at")
+    ordering = ("jam", "instrument__order", "display_order", "round_number", "id")
+
+
+@admin.register(SlotLinkGroup)
+class SlotLinkGroupAdmin(admin.ModelAdmin):
+    list_display = ("id", "jam", "reason", "status", "created_at", "updated_at")
+    search_fields = ("jam__name",)
+    list_filter = ("reason", "status", "created_at")
+    filter_horizontal = ("slots",)
+    ordering = ("jam", "id")
+
+
+@admin.register(Plateau)
+class PlateauAdmin(admin.ModelAdmin):
+    list_display = ("id", "jam", "status", "played_at", "created_at")
+    search_fields = ("jam__name",)
+    list_filter = ("status", "played_at", "created_at")
+    filter_horizontal = ("slots",)
+    ordering = ("jam", "-played_at")
 
 
 @admin.register(LinkGroup)

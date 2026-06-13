@@ -721,3 +721,7 @@ Comportement attendu :
 - si une session disparaît sans libérer le verrou, le backend peut l'expirer automatiquement après un délai V0 raisonnable.
 
 Cette V0 n'ajoute pas de temps réel et ne résout pas les conflits multi-appareils.
+
+## Rounds de participation
+
+Un round est le n-ième passage d'une participation précise, pas un tour global de jam. Exemple : Nicolas/Guitare/round 1 et Nicolas/Guitare/round 2 sont deux occurrences distinctes. Les liens, trous volontaires et statuts joués s'appliquent à l'occurrence (`RoundSlot`) et ne se propagent pas automatiquement aux rounds suivants.

@@ -98,8 +98,12 @@ export const useJamTableStore = create((set, get) => ({
   addParticipantEntry: (payload) => applyAction(set, actionTypes.ADD_PARTICIPANT_ENTRY, payload),
   updateParticipantEntry: (payload) => applyAction(set, actionTypes.UPDATE_PARTICIPANT_ENTRY, payload),
   moveEntryVertical: (payload) => applyAction(set, actionTypes.MOVE_ENTRY_VERTICAL, payload),
+  ensureRoundSlots: (payload) => applyAction(set, actionTypes.ENSURE_ROUND_SLOTS, payload),
+  moveRoundSlotVertical: (payload) => applyAction(set, actionTypes.MOVE_ROUND_SLOT_VERTICAL, payload),
   linkItems: (payload) => applyAction(set, actionTypes.LINK_ITEMS, payload),
   unlinkItems: (payload) => applyAction(set, actionTypes.UNLINK_ITEMS, payload),
+  linkRoundSlots: (payload) => applyAction(set, actionTypes.LINK_ROUND_SLOTS, payload),
+  unlinkRoundSlots: (payload) => applyAction(set, actionTypes.UNLINK_ROUND_SLOTS, payload),
   addHole: (payload) => {
     applyAction(set, actionTypes.ADD_HOLE, createHolePayload(get(), payload));
   },

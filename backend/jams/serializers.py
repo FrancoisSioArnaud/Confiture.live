@@ -9,6 +9,9 @@ from .models import (
     Participant,
     ParticipantEntry,
     PlayedPassage,
+    Plateau,
+    RoundSlot,
+    SlotLinkGroup,
 )
 
 DEFAULT_INSTRUMENTS = ["Chant", "Guitare", "Basse", "Batterie", "Piano", "Autre"]
@@ -90,6 +93,34 @@ class PlayedPassageSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "jam", "created_at"]
+
+
+class RoundSlotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RoundSlot
+        fields = [
+            "id", "jam", "instrument", "participant_entry", "slot_type", "round_number",
+            "display_order", "status", "played_at", "created_by_action", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "jam", "created_at", "updated_at"]
+
+
+class SlotLinkGroupSerializer(serializers.ModelSerializer):
+    slot_ids = serializers.PrimaryKeyRelatedField(source="slots", many=True, read_only=True)
+
+    class Meta:
+        model = SlotLinkGroup
+        fields = ["id", "jam", "slot_ids", "reason", "status", "created_at", "updated_at"]
+        read_only_fields = ["id", "jam", "created_at", "updated_at"]
+
+
+class PlateauSerializer(serializers.ModelSerializer):
+    slot_ids = serializers.PrimaryKeyRelatedField(source="slots", many=True, read_only=True)
+
+    class Meta:
+        model = Plateau
+        fields = ["id", "jam", "slot_ids", "status", "played_at", "created_at", "updated_at"]
+        read_only_fields = ["id", "jam", "created_at", "updated_at"]
 
 
 class ClientActionSerializer(serializers.ModelSerializer):
@@ -199,6 +230,9 @@ class JamDetailSerializer(JamListSerializer):
     holes = HoleSerializer(many=True, read_only=True)
     link_groups = LinkGroupSerializer(many=True, read_only=True)
     played_passages = PlayedPassageSerializer(many=True, read_only=True)
+    round_slots = RoundSlotSerializer(many=True, read_only=True)
+    slot_link_groups = SlotLinkGroupSerializer(many=True, read_only=True)
+    plateaux = PlateauSerializer(many=True, read_only=True)
     client_actions = ClientActionSerializer(many=True, read_only=True)
 
     class Meta(JamListSerializer.Meta):
@@ -209,5 +243,8 @@ class JamDetailSerializer(JamListSerializer):
             "holes",
             "link_groups",
             "played_passages",
+            "round_slots",
+            "slot_link_groups",
+            "plateaux",
             "client_actions",
         ]
