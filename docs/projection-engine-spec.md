@@ -1,0 +1,896 @@
+# Projection Engine Spec — Confiture.live
+
+## 1. Objectif
+
+Le moteur de projection est le cœur de Confiture.live.
+
+Il doit reconstruire de manière déterministe l’état complet d’une jam à partir de :
+
+1. un `eventLog` ordonné ;
+2. éventuellement un `snapshot` valide ;
+3. les transactions non annulées ;
+4. la configuration courante de la jam.
+
+Principe non négociable :
+
+```txt
+snapshot + events actifs → projection déterministe → tableau affiché
+```
+
+La projection est une donnée calculée. Elle ne doit jamais devenir la source de vérité principale. La source de vérité reste l’historique des transactions et des events.
+
+---
+
+## 2. Fichiers de référence
+
+Ce fichier doit être lu avec :
+
+- `product-spec.updated.md` ;
+- `technical-stack.updated.md` ;
+- `confiture_event_actions_spec.md` ;
+- `sync_strategy.md` ;
+- `data_model.md` ;
+- `visual_spec_table.md` ;
+- `visual_spec_table_cards.md` ;
+- `event-payloads-reference.md`.
+
+En cas de conflit, l’ordre de priorité est :
+
+1. `event-payloads-reference.md` pour les payloads ;
+2. ce fichier pour les règles de projection ;
+3. `confiture_event_actions_spec.md` pour les règles produit d’action ;
+4. les fichiers visuels pour le rendu UI.
+
+---
+
+## 3. Règles générales
+
+### 3.1 Le moteur doit être pur
+
+Le moteur ne doit pas dépendre de React, Zustand, Dexie, MUI, du backend ou du DOM.
+
+Il doit être implémenté comme un module pur :
+
+```js
+projectJamState({ snapshot, transactions, events }) => projection
+```
+
+Entrée identique = sortie identique.
+
+Aucun `Date.now()`, `Math.random()`, appel réseau ou lecture de stockage local ne doit exister dans le moteur.
+
+---
+
+### 3.2 Les events sont appliqués dans l’ordre strict
+
+Ordre d’application :
+
+```txt
+serverSequenceNumber croissant si disponible
+sinon clientSequenceNumber croissant
+sinon createdAt + eventId uniquement pour fallback debug, jamais pour la logique normale
+```
+
+En usage normal, chaque event doit avoir :
+
+```txt
+transactionId
+clientSequenceNumber
+serverSequenceNumber après sync
+```
+
+---
+
+### 3.3 Undo linéaire uniquement
+
+L’undo est représenté par un event `transaction_reverted`.
+
+Règle V0 : undo linéaire strict.
+
+Pour annuler la transaction 4, les transactions 5, 6 et 7 doivent déjà avoir été annulées.
+
+La projection ignore les events des transactions annulées.
+
+Il ne doit pas y avoir d’undo arbitraire d’une transaction ancienne si des transactions ultérieures sont encore actives.
+
+---
+
+### 3.4 La projection peut produire des warnings internes
+
+Le moteur doit retourner une liste `projectionWarnings` pour les cas incohérents mais non bloquants.
+
+Exemples :
+
+- event ciblant une entity inexistante ;
+- link avec target manquante ;
+- conflict devenu inutile après suppression ;
+- appearance supprimée puis déplacée par un event ultérieur ignoré.
+
+Ces warnings sont destinés au debug/admin, pas à l’UI organisateur sauf cas explicitement prévu.
+
+---
+
+## 4. Entités projetées
+
+### 4.1 `Participant`
+
+Personne réelle.
+
+```js
+{
+  participantId: "participant_...",
+  name: "Nicolas",
+  status: "active" | "left" | "removed",
+  createdAtEventId,
+  removedAtEventId: null
+}
+```
+
+Règles :
+
+- `active` par défaut ;
+- `left` retire les appearances futures mais garde l’historique joué ;
+- `removed` n’est autorisé que si le participant n’a jamais joué.
+
+---
+
+### 4.2 `Participation`
+
+Inscription d’un participant à un instrument.
+
+```js
+{
+  participationId: "participation_...",
+  participantId: "participant_...",
+  instrumentId: "instrument_...",
+  customInstrumentLabel: null,
+  baseOrderKey: "...",
+  status: "active" | "removed",
+  startAppearanceIndex: 1
+}
+```
+
+Règles :
+
+- une participation ne représente pas un passage ;
+- une participation peut générer plusieurs appearances ;
+- le changement d’instrument direct est interdit ;
+- changer d’instrument = `participation_removed` + `participation_added`.
+
+---
+
+### 4.3 `Appearance`
+
+Occurrence concrète d’une participation dans un round.
+
+```js
+{
+  appearanceId: "appearance_...",
+  participationId: "participation_...",
+  participantId: "participant_...",
+  instrumentId: "instrument_...",
+  appearanceIndex: 1,
+  status: "active" | "removed",
+  played: false,
+  locked: false,
+  materialized: true | false,
+  positionKey: "..."
+}
+```
+
+Règles :
+
+- `appearanceIndex` commence à 1 ;
+- round front = appearanceIndex ;
+- les appearances sont calculées par défaut ;
+- elles sont matérialisées dès qu’une action les cible ;
+- ne jamais renuméroter les `appearanceIndex` matérialisés ;
+- une appearance supprimée crée un trou logique dans la séquence, mais ne renumérote rien.
+
+---
+
+### 4.4 `Hole`
+
+Occurrence de tableau sans musicien.
+
+```js
+{
+  holeId: "hole_...",
+  instrumentId: "instrument_...",
+  appearanceIndex: 1,
+  played: false,
+  locked: false,
+  status: "active" | "removed",
+  positionKey: "...",
+  reason: "manual" | "play_without" | "call_drawer_without_musician"
+}
+```
+
+Règles :
+
+- un hole est équivalent à une appearance sans musicien ;
+- un hole peut être locké ;
+- un hole joué ne peut plus bouger ;
+- un hole ne génère jamais de loop future ;
+- un hole peut être linké ;
+- supprimer un hole ne supprime jamais l’appearance musicien linkée ;
+- supprimer un hole supprime ou rend inactifs les links qui ciblent ce hole.
+
+---
+
+### 4.5 `Link`
+
+Contrainte d’alignement entre targets.
+
+```js
+{
+  linkId: "link_...",
+  targets: [
+    { type: "appearance", id: "appearance_..." },
+    { type: "hole", id: "hole_..." }
+  ],
+  anchorTarget: { type: "appearance", id: "appearance_..." }
+}
+```
+
+Règles :
+
+- un link force les targets à être sur le même plateau ;
+- une target maximum par instrument ;
+- les links peuvent cibler une appearance ou un hole ;
+- aucun drawer de link en V0 ;
+- le link est créé/modifié via le mode link du tableau ;
+- si un link contredit un conflict, le conflict gagne et le link est refusé.
+
+---
+
+### 4.6 `Conflict`
+
+Contrainte d’incompatibilité.
+
+```js
+{
+  conflictId: "conflict_...",
+  scope: "participation" | "appearance",
+  targetIds: ["participation_...", "participation_..."],
+  reason: "instrument_constraint" | "manual"
+}
+```
+
+Règles :
+
+- `scope: participation` = contrainte générale ;
+- `scope: appearance` = contrainte ponctuelle ;
+- les conflicts V0 ne ciblent pas les holes ;
+- `instrument_constraint` est généré automatiquement ;
+- `manual` vient du mode conflict du tableau ;
+- pas de `conflict_updated` en V0 : retirer puis recréer.
+
+---
+
+### 4.7 `Plateau`
+
+Un plateau est une ligne déduite du tableau.
+
+```js
+{
+  plateauIndex: 0,
+  cells: [
+    { instrumentId, targetType: "appearance", targetId: "appearance_..." },
+    { instrumentId, targetType: "hole", targetId: "hole_..." }
+  ],
+  played: false
+}
+```
+
+Le plateau n’est pas la source de vérité. Il est déduit de l’alignement des colonnes.
+
+---
+
+## 5. Structure de projection attendue
+
+```js
+{
+  jam: {
+    jamId,
+    name,
+    indicativeDate,
+    linkReorderStrategy,
+    latestAppliedSequenceNumber
+  },
+  instruments: {
+    byId: {},
+    orderedIds: []
+  },
+  participants: {
+    byId: {},
+    orderedIds: []
+  },
+  participations: {
+    byId: {},
+    byInstrumentId: {}
+  },
+  appearances: {
+    byId: {},
+    byParticipationId: {}
+  },
+  holes: {
+    byId: {},
+    byInstrumentId: {}
+  },
+  links: {
+    byId: {},
+    byTargetKey: {}
+  },
+  conflicts: {
+    byId: {}
+  },
+  table: {
+    columns: [
+      {
+        instrumentId,
+        visibleRoundCount,
+        targets: [
+          { type: "appearance", id: "appearance_..." },
+          { type: "hole", id: "hole_..." }
+        ]
+      }
+    ],
+    plateaus: []
+  },
+  syncMeta: {},
+  projectionWarnings: []
+}
+```
+
+---
+
+## 6. Génération des rounds et appearances
+
+### 6.1 Rounds visibles
+
+Chaque instrument possède un `visibleRoundCount`.
+
+Par défaut :
+
+```txt
+visibleRoundCount = 1
+```
+
+Quand l’organisateur clique sur “Afficher le round suivant” dans une colonne :
+
+```txt
+visibleRoundCount += 1
+```
+
+Masquer un round n’est pas prévu en V0.
+
+---
+
+### 6.2 Appearance calculée par défaut
+
+Pour chaque participation active d’un instrument visible, la projection peut générer une appearance calculée pour chaque round visible.
+
+Exemple :
+
+```txt
+Participation Nicolas / Guitare
+visibleRoundCount guitare = 2
+→ appearance Nicolas guitare round 1
+→ appearance Nicolas guitare round 2
+```
+
+Ces appearances peuvent être virtuelles tant qu’aucune action ne les cible.
+
+---
+
+### 6.3 Appearance matérialisée
+
+Une appearance devient matérialisée si elle est ciblée par :
+
+- `appearance_materialized` ;
+- `appearance_moved_between` ;
+- `appearance_locked` ;
+- `appearance_unlocked` ;
+- `appearance_skipped` ;
+- `appearance_removed` ;
+- `link_created` ;
+- `conflict_created` scope appearance ;
+- `plateau_played` ;
+- `plateau_unplayed`.
+
+Une appearance matérialisée doit conserver son `appearanceId` et son `appearanceIndex`.
+
+---
+
+### 6.4 Ajout standard d’une participation après reveal de plusieurs rounds
+
+Si `participation_added` est standard, sans insertion entre deux cards :
+
+```txt
+La participation démarre au round 1.
+Pour chaque round déjà visible, créer/positionner une appearance à la fin de ce round.
+Les rounds non visibles restent calculés plus tard.
+```
+
+Exemple :
+
+```txt
+Round 1 et round 2 sont visibles en guitare.
+Julie est ajoutée à la guitare.
+→ Julie guitare round 1 est ajoutée en fin de round 1.
+→ Julie guitare round 2 est ajoutée en fin de round 2.
+→ Julie guitare round 3 sera générée plus tard si round 3 est affiché.
+```
+
+---
+
+### 6.5 Ajout entre deux cards dans un round ciblé
+
+Si l’organisateur clique entre deux cards d’un round précis :
+
+```txt
+La participation démarre à partir de ce round.
+Aucune appearance rétroactive n’est créée dans les rounds précédents.
+```
+
+Exemple :
+
+```txt
+L’organisateur ajoute Julie entre deux cards du round 2 guitare.
+→ Julie guitare round 2 est insérée à l’endroit choisi.
+→ Julie guitare round 1 n’existe pas.
+→ Julie guitare round 3 sera ajoutée plus tard si round 3 est affiché.
+```
+
+---
+
+## 7. Construction des colonnes
+
+Pour chaque instrument visible :
+
+1. récupérer les participations actives ;
+2. exclure les participants `left` pour les futures appearances non jouées ;
+3. générer les appearances visibles nécessaires ;
+4. appliquer les suppressions d’appearances ;
+5. insérer les holes actifs ;
+6. appliquer les mouvements manuels ;
+7. appliquer les links ;
+8. appliquer les conflicts ;
+9. respecter les locks et played ;
+10. produire la liste finale de targets de la colonne.
+
+---
+
+## 8. Ordre et positionnement
+
+### 8.1 Pas d’index comme vérité durable
+
+Ne jamais utiliser un index brut comme vérité principale pour les déplacements.
+
+Préférer :
+
+```js
+previousTarget
+nextTarget
+positionKey
+```
+
+L’index est un résultat de projection, pas une donnée durable fiable.
+
+---
+
+### 8.2 Played et locked
+
+Priorités :
+
+```txt
+played > locked > link > conflict > manual reorder > base order
+```
+
+Sens :
+
+- `played` est toujours figé ;
+- `locked` est figé tant qu’il n’est pas unlock ;
+- un link ne peut pas déplacer du played ou du locked ;
+- un conflict ne peut pas forcer le déplacement du played ou du locked ;
+- si une action demande un déplacement impossible, elle doit être refusée avant création de l’event, ou ignorée par projection avec warning si l’event existe déjà.
+
+---
+
+### 8.3 Effet de `left`
+
+Quand un participant devient `left` :
+
+- ses appearances déjà played restent visibles ;
+- ses appearances futures sont retirées de la projection active ;
+- aucune nouvelle appearance future n’est générée pour ses participations ;
+- si des appearances futures étaient lockées, l’UI doit demander confirmation avant l’action ;
+- une fois confirmé, `left` gagne sur le lock pour les futures appearances non jouées.
+
+---
+
+## 9. Links
+
+### 9.1 Création
+
+Un link est créé via mode link du tableau.
+
+Input logique :
+
+```js
+link_created {
+  linkId,
+  targets,
+  anchorTarget,
+  reorderStrategy
+}
+```
+
+La stratégie `reorderStrategy` est copiée depuis la config de jam au moment de l’action.
+
+---
+
+### 9.2 Stratégies de réorganisation
+
+La jam possède une setting :
+
+```txt
+linkReorderStrategy:
+- move_to_first
+- move_to_last
+- average_position
+```
+
+Défaut :
+
+```txt
+move_to_first
+```
+
+#### `move_to_first`
+
+Toutes les targets non figées sont alignées sur la ligne la plus haute des targets du link.
+
+#### `move_to_last`
+
+Toutes les targets non figées sont alignées sur la ligne la plus basse des targets du link.
+
+#### `average_position`
+
+Calcul :
+
+```txt
+position cible = moyenne des positions actuelles des targets, arrondie vers la position la plus haute en cas d’égalité
+```
+
+Exemple :
+
+```txt
+positions 2 et 5 → moyenne 3.5 → cible 3
+positions 2, 5, 6 → moyenne 4.33 → cible 4
+```
+
+Raison : privilégier légèrement la stabilité vers le haut et éviter de trop retarder les musiciens.
+
+---
+
+### 9.3 Contraintes de link
+
+Un link est refusé si :
+
+- deux targets sont dans le même instrument ;
+- une target est played et devrait bouger ;
+- une target est locked et devrait bouger ;
+- un conflict existe entre deux targets ;
+- l’alignement créerait un conflict ;
+- l’alignement nécessiterait de déplacer une autre card played/locked ;
+- une target n’existe plus.
+
+En cas de refus par conflict, l’UI doit afficher une snackbar explicative.
+
+---
+
+### 9.4 Déplacement manuel d’une target linkée
+
+Si une card linkée est déplacée manuellement :
+
+- le groupe linké doit se déplacer ensemble ;
+- si le déplacement du groupe est impossible, l’action est refusée ;
+- aucun déplacement partiel du groupe linké n’est autorisé via drag.
+
+Exception : `appearance_skipped` depuis le drawer d’appel délinke puis déplace seulement l’appearance indisponible.
+
+---
+
+### 9.5 Suppression de link
+
+`link_removed` ne réorganise pas immédiatement la liste.
+
+Les cards restent là où elles sont.
+
+Une future action pourra les réorganiser.
+
+---
+
+## 10. Conflicts
+
+### 10.1 Scope participation
+
+Un conflict scope `participation` signifie que les appearances issues de deux participations ne doivent pas se retrouver sur le même plateau.
+
+Usage typique :
+
+```txt
+Nicolas guitare / Nicolas basse
+```
+
+Raison :
+
+```txt
+instrument_constraint
+```
+
+---
+
+### 10.2 Scope appearance
+
+Un conflict scope `appearance` concerne uniquement des passages précis.
+
+Usage :
+
+```txt
+Nicolas guitare round 2 ne doit pas jouer avec Sarah chant round 1.
+```
+
+Raison :
+
+```txt
+manual
+```
+
+---
+
+### 10.3 Création de conflict depuis le mode conflict
+
+À la validation, l’UI demande :
+
+```txt
+Ce conflit concerne :
+- seulement ce passage
+- toute la soirée
+```
+
+Projection :
+
+- seulement ce passage → `scope: appearance` ;
+- toute la soirée → `scope: participation`.
+
+---
+
+### 10.4 Résolution d’un conflict nouvellement créé
+
+Si les targets en conflict sont déjà sur le même plateau :
+
+1. ne jamais bouger `played` ;
+2. ne jamais bouger `locked` ;
+3. garder l’anchor si possible ;
+4. déplacer l’autre target au premier slot suivant valide dans sa colonne ;
+5. si impossible, refuser l’action.
+
+---
+
+### 10.5 Suppression de conflict
+
+`conflict_removed` ne réorganise pas immédiatement la liste.
+
+Aucun `conflict_updated` en V0.
+
+Modifier un conflict = supprimer puis recréer.
+
+---
+
+## 11. Appearance skipped
+
+`appearance_skipped` remplace la logique “temporarily away”.
+
+Ce n’est pas un état durable.
+
+Déclencheur unique : drawer d’appel, quand le musicien appelé est introuvable.
+
+Effet :
+
+1. si l’appearance est linkée, supprimer/désactiver le link concerné ;
+2. repousser uniquement l’appearance skippée au prochain slot valide de sa colonne ;
+3. ne pas modifier le participant durablement ;
+4. ne pas marquer le participant comme `left` ;
+5. ne pas créer d’état `temporarily_away` persistant.
+
+Si un remplaçant est choisi :
+
+- le remplaçant prend le slot de l’appearance skippée ;
+- l’appearance skippée est repoussée ;
+- si le remplaçant était linké, l’UI doit confirmer le délink avant validation.
+
+Si “faire sans musicien” est choisi :
+
+- un hole est créé à la place ;
+- l’appearance skippée est repoussée ;
+- le hole peut être played avec le plateau.
+
+---
+
+## 12. Suppressions
+
+### 12.1 `participant_removed`
+
+Autorisé uniquement si le participant n’a jamais joué.
+
+Si le participant a déjà joué, l’UI doit refuser et suggérer :
+
+```txt
+Marquer comme parti
+```
+
+Effet autorisé :
+
+- retire le participant de la projection active ;
+- retire ses participations non jouées ;
+- retire ses appearances futures ;
+- les links/conflicts associés sont ignorés ou retirés de la projection.
+
+---
+
+### 12.2 `appearance_removed`
+
+Toujours demander confirmation avant suppression.
+
+Si l’appearance a un link, le dialog doit le préciser.
+
+Effet :
+
+- supprime uniquement cette occurrence ;
+- ne supprime pas la participation ;
+- ne supprime pas le participant ;
+- ne renumérote jamais les appearances matérialisées suivantes ;
+- supprime/ignore les links qui ciblaient cette appearance.
+
+---
+
+### 12.3 `hole_removed`
+
+Toujours demander confirmation.
+
+Si le hole a un link, le dialog doit le préciser.
+
+Effet :
+
+- supprime uniquement le hole ;
+- ne supprime aucune appearance musicien ;
+- supprime/ignore les links qui ciblaient ce hole.
+
+---
+
+### 12.4 `instrument_visibility_changed`
+
+Masquer un instrument ne supprime pas les events historiques.
+
+Effet :
+
+- la colonne n’est plus affichée dans le tableau ;
+- l’instrument n’apparaît plus dans le drawer d’appel ;
+- l’instrument reste dans l’historique ;
+- ses participations/appearances ne sont pas physiquement supprimées ;
+- les events restent rejouables ;
+- l’UI doit afficher un warning si l’instrument a des links actifs, mais l’action reste autorisée après confirmation.
+
+---
+
+## 13. Holes et jouer sans
+
+### 13.1 Hole manuel
+
+Un hole manuel est ajouté entre deux cards ou via une action de tableau.
+
+Il occupe une position réelle.
+
+Il ne se répète pas dans les rounds futurs.
+
+---
+
+### 13.2 Jouer sans
+
+Il n’y a pas d’event `play_without_created` ni `play_without_removed` en V0.
+
+Jouer sans = transaction composée de :
+
+```txt
+hole_added
+link_created
+```
+
+Exemple :
+
+```txt
+Nicolas guitare veut jouer sans batterie
+→ hole ajouté dans batterie
+→ link entre Nicolas guitare et le hole batterie
+```
+
+---
+
+## 14. Plateau played / unplayed
+
+### 14.1 `plateau_played`
+
+Effet :
+
+- toutes les targets du plateau deviennent played ;
+- appearances et holes joués deviennent figés ;
+- aucune target jouée ne peut être déplacée ;
+- les cards restent visibles et grisées ;
+- la liste ne remonte pas automatiquement.
+
+`played` vaut lock fonctionnel.
+
+---
+
+### 14.2 `plateau_unplayed`
+
+Reco V0 : autorisé seulement sur le dernier plateau joué.
+
+Effet :
+
+- retire `played` des targets du plateau ;
+- ne change pas leur position ;
+- les cards redeviennent déplaçables si non lockées.
+
+---
+
+## 15. Validation de projection minimale
+
+Le moteur doit pouvoir exposer des helpers purs :
+
+```js
+canCreateLink(projection, targets)
+canCreateConflict(projection, targets, scope)
+canMoveTarget(projection, target, destination)
+canRemoveAppearance(projection, appearanceId)
+canMarkParticipantLeft(projection, participantId)
+canHideInstrument(projection, instrumentId)
+```
+
+Ces helpers doivent être utilisés par l’UI avant de créer les events.
+
+---
+
+## 16. Sortie UI attendue
+
+La projection finale doit permettre au front d’afficher directement :
+
+- les colonnes par instrument ;
+- les cards visibles ;
+- les rounds visibles ;
+- les plateaux déduits ;
+- les targets played ;
+- les targets locked ;
+- les states linkés ;
+- les conflicts visibles en mode conflict ;
+- les actions autorisées/interdites par card ;
+- les remplaçants proposés dans le drawer d’appel.
+
+---
+
+## 17. Non objectifs V0
+
+Ne pas implémenter dans le moteur V0 :
+
+- multi-client merge ;
+- temps réel collaboratif ;
+- notes ;
+- drawer de link ;
+- drawer de conflict ;
+- `plateau_composition_forced` ;
+- suppression physique d’historique ;
+- renumérotation des appearances ;
+- édition arbitraire d’un event ancien.
