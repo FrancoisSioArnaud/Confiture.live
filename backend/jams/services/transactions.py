@@ -29,10 +29,13 @@ def push_transaction(jam, client_id, payload, require_lease=True):
             jam=jam, transaction=tx, event_id=event['eventId'], type=event['type'], payload=event.get('payload', {}),
             schema_version=payload['schemaVersion'], server_sequence_number=sequence,
         )
-        if event['type'] == 'jam_created':
+        if event['type'] in {'jam_created', 'jam_updated'}:
             p = event.get('payload', {})
             jam.name = p.get('name', jam.name)
             jam.indicative_date = p.get('indicativeDate') or jam.indicative_date
+            jam.link_reorder_strategy = p.get('linkReorderStrategy', jam.link_reorder_strategy)
+        elif event['type'] == 'jam_link_reorder_strategy_changed':
+            p = event.get('payload', {})
             jam.link_reorder_strategy = p.get('linkReorderStrategy', jam.link_reorder_strategy)
         sequence += 1
     jam.latest_server_sequence_number = end
