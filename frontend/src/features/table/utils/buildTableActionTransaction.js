@@ -1,8 +1,6 @@
 import {
   holeAdded,
   instrumentRoundVisibilityChanged,
-  participantCreated,
-  participationAdded,
   plateauPlayed,
   plateauUnplayed,
 } from '../../transactions/eventFactories';
@@ -43,30 +41,6 @@ export function buildAddHoleTransaction({ jamId, clientId, clientSequenceNumber,
   });
 }
 
-export function buildAddParticipantTransaction({ jamId, clientId, clientSequenceNumber, instrumentId, appearanceIndex, afterCard = null, beforeCard = null }) {
-  const participantId = createId('participant');
-  const participationId = createId('participation');
-  return createTransaction({
-    jamId,
-    clientId,
-    clientSequenceNumber,
-    label: 'Ajouter un participant',
-    events: [
-      participantCreated({ participantId, name: 'Nouveau participant' }),
-      participationAdded({
-        participationId,
-        participantId,
-        instrumentId,
-        customInstrumentLabel: null,
-        insertionMode: afterCard || beforeCard ? 'between_targets' : 'end_of_visible_rounds',
-        startAppearanceIndex: appearanceIndex,
-        afterTarget: toTarget(afterCard),
-        beforeTarget: toTarget(beforeCard),
-        baseOrderKey: `position_${participationId}`,
-      }),
-    ],
-  });
-}
 
 export function buildTogglePlateauPlayedTransaction({ jamId, clientId, clientSequenceNumber, plateauIndex, targets, played }) {
   const event = played
