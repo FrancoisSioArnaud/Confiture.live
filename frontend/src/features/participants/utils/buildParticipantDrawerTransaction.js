@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import {
+  appearanceMaterialized,
   conflictCreated,
+  conflictRemoved,
+  linkCreated,
+  linkRemoved,
   participantCreated,
   participantUpdated,
   participationAdded,
@@ -11,7 +15,8 @@ import { createId } from '../../../shared/utils/createId';
 
 const participantDraftSchema = z.object({
   name: z.string().trim().min(1, 'Nom requis'),
-  selectedInstrumentIds: z.array(z.string().min(1)).min(1, 'Sélectionne au moins un instrument'),
+  selectedInstrumentIds: z.array(z.string().min(1)).min(1, 'Au moins un instrument doit être sélectionné.'),
+  initialLinkedInstrumentPairs: z.array(z.string()).default([]),
   customInstrumentLabels: z.record(z.string()).default({}),
 }).strict();
 
@@ -34,16 +39,68 @@ function baseParticipationPayload({ participationId, participantId, instrumentId
   };
 }
 
-function addInstrumentConstraintConflicts(events, participationIds) {
-  participationIds.forEach((leftId, leftIndex) => {
-    participationIds.slice(leftIndex + 1).forEach((rightId) => {
-      events.push(conflictCreated({
-        conflictId: createId('conflict'),
-        scope: 'participation',
-        targetIds: [leftId, rightId],
-        reason: 'instrument_constraint',
-        anchorTargetId: leftId,
-      }));
+function pairKey(leftInstrumentId, rightInstrumentId) {
+  return [leftInstrumentId, rightInstrumentId].sort().join('__');
+}
+
+function appearanceIdFor(participationId, appearanceIndex) {
+  return `appearance_${participationId}_${appearanceIndex}`;
+}
+
+function addAppearanceMaterialized(events, participation, appearanceIndex = 1) {
+  events.push(appearanceMaterialized({
+    appearanceId: appearanceIdFor(participation.participationId, appearanceIndex),
+    participationId: participation.participationId,
+    instrumentId: participation.instrumentId,
+    appearanceIndex,
+    positionKey: `${participation.baseOrderKey}:${appearanceIndex}`,
+  }));
+}
+
+function findActiveInstrumentConstraintConflict(projection, leftId, rightId) {
+  return Object.values(projection.conflicts ?? {}).find((conflict) => conflict.status === 'active' && conflict.reason === 'instrument_constraint' && conflict.scope === 'participation' && conflict.targetIds?.includes(leftId) && conflict.targetIds?.includes(rightId));
+}
+
+function hasActiveConflict(projection, leftId, rightId) {
+  return Boolean(findActiveInstrumentConstraintConflict(projection, leftId, rightId));
+}
+
+function findActiveFirstAppearanceLink(projection, leftAppearanceId, rightAppearanceId) {
+  return Object.values(projection.links ?? {}).find((link) => link.status === 'active' && link.targets?.some((target) => target.type === 'appearance' && target.id === leftAppearanceId) && link.targets?.some((target) => target.type === 'appearance' && target.id === rightAppearanceId));
+}
+
+function addInitialPairEvents(events, { projection, participations, linkedPairKeys, linkReorderStrategy }) {
+  participations.forEach((left, leftIndex) => {
+    participations.slice(leftIndex + 1).forEach((right) => {
+      const isLinked = linkedPairKeys.has(pairKey(left.instrumentId, right.instrumentId));
+      const leftAppearanceId = appearanceIdFor(left.participationId, left.startAppearanceIndex ?? 1);
+      const rightAppearanceId = appearanceIdFor(right.participationId, right.startAppearanceIndex ?? 1);
+      const existingLink = findActiveFirstAppearanceLink(projection, leftAppearanceId, rightAppearanceId);
+      if (isLinked) {
+        const existingConflict = findActiveInstrumentConstraintConflict(projection, left.participationId, right.participationId);
+        if (existingConflict) events.push(conflictRemoved({ conflictId: existingConflict.conflictId }));
+        if (!projection.appearances?.[leftAppearanceId]) addAppearanceMaterialized(events, left, left.startAppearanceIndex ?? 1);
+        if (!projection.appearances?.[rightAppearanceId]) addAppearanceMaterialized(events, right, right.startAppearanceIndex ?? 1);
+        if (!existingLink) {
+          events.push(linkCreated({
+            linkId: createId('link'),
+            targets: [{ type: 'appearance', id: leftAppearanceId }, { type: 'appearance', id: rightAppearanceId }],
+            anchorTarget: { type: 'appearance', id: leftAppearanceId },
+            reorderStrategy: linkReorderStrategy,
+          }));
+        }
+      } else {
+        if (existingLink) events.push(linkRemoved({ linkId: existingLink.linkId }));
+        if (!hasActiveConflict(projection, left.participationId, right.participationId)) {
+          events.push(conflictCreated({
+            conflictId: createId('conflict'),
+            scope: 'participation',
+            targetIds: [left.participationId, right.participationId],
+            reason: 'instrument_constraint',
+            anchorTargetId: left.participationId,
+          }));
+        }
+      }
     });
   });
 }
@@ -56,7 +113,7 @@ export function validateParticipantDraft({ draft, projection, participantId = nu
   if (duplicate) return { ok: false, error: 'Un musicien porte déjà ce nom dans cette jam.' };
   const selectedOtherInstrument = instruments.find((instrument) => parsed.data.selectedInstrumentIds.includes(instrument.instrumentId) && instrument.label.trim().toLowerCase() === 'autre');
   if (selectedOtherInstrument && !parsed.data.customInstrumentLabels[selectedOtherInstrument.instrumentId]?.trim()) return { ok: false, error: 'Précise l’instrument “Autre”.' };
-  return { ok: true, draft: { ...parsed.data, name } };
+  return { ok: true, draft: { ...parsed.data, name, initialLinkedInstrumentPairs: parsed.data.initialLinkedInstrumentPairs ?? [] } };
 }
 
 export function buildCreateParticipantTransaction({ jamId, clientId, clientSequenceNumber, projection, draft, instruments, insertionContext = null }) {
@@ -64,18 +121,19 @@ export function buildCreateParticipantTransaction({ jamId, clientId, clientSeque
   if (!validation.ok) return validation;
   const participantId = createId('participant');
   const events = [participantCreated({ participantId, name: validation.draft.name })];
-  const participationIds = validation.draft.selectedInstrumentIds.map((instrumentId) => {
+  const participations = validation.draft.selectedInstrumentIds.map((instrumentId) => {
     const participationId = createId('participation');
-    events.push(participationAdded(baseParticipationPayload({
+    const payload = baseParticipationPayload({
       participationId,
       participantId,
       instrumentId,
       customInstrumentLabel: validation.draft.customInstrumentLabels[instrumentId]?.trim() || null,
       insertionContext,
-    })));
-    return participationId;
+    });
+    events.push(participationAdded(payload));
+    return payload;
   });
-  addInstrumentConstraintConflicts(events, participationIds);
+  addInitialPairEvents(events, { projection, participations, linkedPairKeys: new Set(validation.draft.initialLinkedInstrumentPairs), linkReorderStrategy: projection.jam?.linkReorderStrategy ?? 'move_to_last' });
   return { ok: true, transaction: createTransaction({ jamId, clientId, clientSequenceNumber, label: 'Créer participant', events }) };
 }
 
@@ -89,18 +147,17 @@ export function buildEditParticipantTransaction({ jamId, clientId, clientSequenc
   const events = [];
   if (participant?.name !== validation.draft.name) events.push(participantUpdated({ participantId, name: validation.draft.name }));
 
-  const addedParticipationIds = [];
   validation.draft.selectedInstrumentIds.forEach((instrumentId) => {
     if (!activeByInstrument.has(instrumentId)) {
       const participationId = createId('participation');
-      addedParticipationIds.push(participationId);
-      events.push(participationAdded(baseParticipationPayload({
+      const payload = baseParticipationPayload({
         participationId,
         participantId,
         instrumentId,
         customInstrumentLabel: validation.draft.customInstrumentLabels[instrumentId]?.trim() || null,
         insertionContext,
-      })));
+      });
+      events.push(participationAdded(payload));
     }
   });
 
@@ -108,18 +165,15 @@ export function buildEditParticipantTransaction({ jamId, clientId, clientSequenc
     events.push(participationRemoved({ participationId: participation.participationId, confirmedDespiteLinksOrLocks: confirmedRemovedParticipationIds.includes(participation.participationId) }));
   });
 
-  const keptParticipationIds = activeParticipations.filter((participation) => selected.has(participation.instrumentId)).map((participation) => participation.participationId);
-  addedParticipationIds.forEach((addedId, index) => {
-    [...keptParticipationIds, ...addedParticipationIds.slice(index + 1)].forEach((otherId) => {
-      events.push(conflictCreated({
-        conflictId: createId('conflict'),
-        scope: 'participation',
-        targetIds: [addedId, otherId],
-        reason: 'instrument_constraint',
-        anchorTargetId: addedId,
-      }));
-    });
-  });
+  const selectedParticipations = validation.draft.selectedInstrumentIds.map((instrumentId) => {
+    const existing = activeByInstrument.get(instrumentId);
+    if (existing) return existing;
+    const addedEvent = events.find((event) => event.type === 'participation_added' && event.payload.instrumentId === instrumentId);
+    return addedEvent?.payload;
+  }).filter(Boolean);
+  const conflictsToRemove = Object.values(projection.conflicts ?? {}).filter((conflict) => conflict.status === 'active' && conflict.reason === 'instrument_constraint' && conflict.scope === 'participation' && conflict.targetIds?.some((id) => !selectedParticipations.some((participation) => participation.participationId === id)));
+  conflictsToRemove.forEach((conflict) => events.push(conflictRemoved({ conflictId: conflict.conflictId })));
+  addInitialPairEvents(events, { projection, participations: selectedParticipations, linkedPairKeys: new Set(validation.draft.initialLinkedInstrumentPairs), linkReorderStrategy: projection.jam?.linkReorderStrategy ?? 'move_to_last' });
   if (events.length === 0) return { ok: true, transaction: null };
   return { ok: true, transaction: createTransaction({ jamId, clientId, clientSequenceNumber, label: 'Modifier participant', events }) };
 }
