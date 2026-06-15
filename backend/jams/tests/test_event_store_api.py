@@ -215,3 +215,38 @@ def test_list_empty_jams_returns_json_results(client):
     assert response["Content-Type"].startswith("application/json")
     assert response.json() == {"results": []}
 
+
+def test_list_jams_returns_json_results_with_existing_jam(client):
+    create_jam(client)
+
+    response = client.get("/api/jams/")
+
+    assert response.status_code == 200
+    assert response["Content-Type"].startswith("application/json")
+    payload = response.json()
+    assert "results" in payload
+    assert payload["results"][0]["jamId"] == "jam_test"
+
+
+def test_retrieve_jam_with_snapshot_includes_transactions_and_events(client):
+    create_jam(client)
+    lease = acquire(client)
+    transaction_response = client.post("/api/jams/jam_test/transactions/", {
+        "clientId": "client_1",
+        "leaseToken": lease["leaseToken"],
+        "baseServerSequenceNumber": 1,
+        "transaction": transaction_payload(),
+    }, content_type="application/json")
+    assert transaction_response.status_code == 201
+
+    response = client.get("/api/jams/jam_test/?includeSnapshot=true")
+
+    assert response.status_code == 200
+    assert response["Content-Type"].startswith("application/json")
+    payload = response.json()
+    assert payload["jam"]["jamId"] == "jam_test"
+    assert "snapshot" in payload
+    assert len(payload["transactions"]) == 2
+    assert len(payload["events"]) == 2
+    assert payload["transactions"][1]["payload"]["transactionId"] == "transaction_2"
+    assert payload["events"][1]["type"] == "jam_updated"
