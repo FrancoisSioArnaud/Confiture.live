@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+(
+  cd backend
+  source venv/bin/activate
+  python manage.py migrate --noinput
+)
+
+curl -f https://confiture.live/api/health/
+if ! curl -f https://confiture.live/api/jams/; then
+  echo "Backend vivant mais endpoint jams KO : vérifier schéma DB/migrations." >&2
+  exit 1
+fi
