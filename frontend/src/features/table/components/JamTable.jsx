@@ -160,6 +160,7 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
   const theme = useTheme();
   const isTabletUp = useMediaQuery(theme.breakpoints.up('sm'));
   const [missingCard, setMissingCard] = useState(null);
+  const [pendingDelinkAction, setPendingDelinkAction] = useState(null);
   const columns = projection?.columns ?? [];
   const rowCards = columns.map((column) => ({ column, card: column.cards[plateauIndex] ?? null }));
   const targets = rowCards.map(({ card }) => targetFor(card)).filter(Boolean);
@@ -169,6 +170,7 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
 
   function close() {
     setMissingCard(null);
+    setPendingDelinkAction(null);
     onClose?.();
   }
 
@@ -177,19 +179,40 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
     close();
   }
 
-  function chooseReplacement(replacementCard) {
-    const replacementLinked = cardLinks(replacementCard, projection.links).length > 0;
-    if ((missingCardLinked || replacementLinked) && !window.confirm('Ce remplacement supprimera un link existant. Continuer ?')) return;
-    onTransaction?.(buildSkipWithReplacementTransaction({ jamId, clientId, clientSequenceNumber, projection, sourceCard: missingCard, replacementCard, plateauIndex, confirmedDelink: missingCardLinked || replacementLinked }));
+  function runReplacement(replacementCard, confirmedDelink) {
+    onTransaction?.(buildSkipWithReplacementTransaction({ jamId, clientId, clientSequenceNumber, projection, sourceCard: missingCard, replacementCard, plateauIndex, confirmedDelink }));
     onFeedback?.('Passage repoussé et remplaçant appelé');
     setMissingCard(null);
+    setPendingDelinkAction(null);
+  }
+
+  function chooseReplacement(replacementCard) {
+    const replacementLinked = cardLinks(replacementCard, projection.links).length > 0;
+    if (missingCardLinked || replacementLinked) {
+      setPendingDelinkAction({ kind: 'replacement', replacementCard });
+      return;
+    }
+    runReplacement(replacementCard, false);
+  }
+
+  function runWithoutMusician(confirmedDelink) {
+    onTransaction?.(buildSkipWithoutMusicianTransaction({ jamId, clientId, clientSequenceNumber, projection, sourceCard: missingCard, plateauIndex, confirmedDelink }));
+    onFeedback?.('Le plateau jouera sans musicien sur cet instrument');
+    setMissingCard(null);
+    setPendingDelinkAction(null);
   }
 
   function chooseWithoutMusician() {
-    if (missingCardLinked && !window.confirm('Faire sans musicien supprimera le link existant. Continuer ?')) return;
-    onTransaction?.(buildSkipWithoutMusicianTransaction({ jamId, clientId, clientSequenceNumber, projection, sourceCard: missingCard, plateauIndex, confirmedDelink: missingCardLinked }));
-    onFeedback?.('Le plateau jouera sans musicien sur cet instrument');
-    setMissingCard(null);
+    if (missingCardLinked) {
+      setPendingDelinkAction({ kind: 'without' });
+      return;
+    }
+    runWithoutMusician(false);
+  }
+
+  function confirmPendingDelinkAction() {
+    if (pendingDelinkAction?.kind === 'replacement') runReplacement(pendingDelinkAction.replacementCard, true);
+    if (pendingDelinkAction?.kind === 'without') runWithoutMusician(true);
   }
 
   return (
@@ -241,6 +264,14 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
           <Button fullWidth variant="contained" startIcon={<CheckCircle />} disabled={targets.length === 0 || alreadyPlayed} onClick={markPlayed}>Plateau joué</Button>
         </Stack>
       </Paper>
+      <ConfirmDialog
+        open={Boolean(pendingDelinkAction)}
+        title="Supprimer le link existant ?"
+        description="Cette action supprimera le link associé uniquement pour ce remplacement. Les autres passages restent conservés."
+        confirmLabel="Continuer"
+        onCancel={() => setPendingDelinkAction(null)}
+        onConfirm={confirmPendingDelinkAction}
+      />
     </Drawer>
   );
 }

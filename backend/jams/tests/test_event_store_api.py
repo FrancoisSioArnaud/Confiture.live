@@ -183,3 +183,26 @@ def test_expired_session_allows_another_client(client):
     response = client.post("/api/jams/jam_test/client-session/acquire/", {"clientId": "client_2"}, content_type="application/json")
     assert response.status_code == 200
     assert response.json()["clientId"] == "client_2"
+
+def test_rejects_event_payload_missing_required_fields(client):
+    jam = create_jam(client)
+    lease = acquire(client, jam["jamId"], "client_payload")
+    response = client.post(f"/api/jams/{jam['jamId']}/transactions/", {
+        "clientId": "client_payload",
+        "leaseToken": lease["leaseToken"],
+        "transaction": {
+            "transactionId": "tx_bad_payload",
+            "jamId": jam["jamId"],
+            "clientSequenceNumber": 1,
+            "schemaVersion": 1,
+            "events": [{
+                "eventId": "event_bad_payload",
+                "jamId": jam["jamId"],
+                "type": "participant_created",
+                "payload": {"participantId": "participant_missing_name"},
+                "schemaVersion": 1,
+            }],
+        },
+    }, content_type="application/json")
+
+    assert response.status_code == 400

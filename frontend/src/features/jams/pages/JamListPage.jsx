@@ -7,6 +7,7 @@ import { archiveJam, listJams } from '../../../shared/api/jamsApi';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { useFeedback } from '../../../shared/feedback/FeedbackProvider';
 import { isDemoToolsEnabled } from '../../demo/demoSeeds';
+import { importDemoSeedLocally } from '../../demo/importDemoSeed';
 
 export function JamListPage() {
   const navigate = useNavigate();
@@ -31,7 +32,7 @@ export function JamListPage() {
         <Button component={RouterLink} to="/jams/new" variant="contained" startIcon={<Add />}>Créer une jam</Button>
       </Stack>
 
-      {isDemoToolsEnabled() ? <Alert severity="info">Outils démo actifs : lance <strong>python manage.py seed_demo_jams</strong> côté backend pour charger les jams de démonstration.</Alert> : null}
+      {isDemoToolsEnabled() ? <Alert severity="info" action={<Button color="inherit" size="small" onClick={async () => { const { jam } = await importDemoSeedLocally('complex'); enqueueFeedback('Seed démo importé localement'); navigate(`/jams/${jam.jamId}`); }}>Importer local</Button>}>Outils démo actifs : lance <strong>python manage.py seed_demo_jams</strong> côté backend ou importe le seed complexe dans IndexedDB.</Alert> : null}
 
       {isLoading ? <Stack alignItems="center" py={6}><CircularProgress /><Typography mt={2}>Chargement des jams…</Typography></Stack> : null}
       {isError ? <Alert severity="warning">Impossible de charger les jams. {error?.message}</Alert> : null}

@@ -31,7 +31,7 @@ Date d’audit : 2026-06-15
 ## Partiellement conforme
 
 - **Projection engine** : couvre les règles majeures mais reste simplifié pour l’algorithme d’ordre (`orderScore` numérique), le ranking des remplaçants, le déplacement automatique conflict/link et certains warnings de cibles manquantes.
-- **Drawer d’appel** : fonctionne pour appeler, marquer joué, introuvable, remplaçant et faire sans musicien. Le choix de confirmation de delink utilise encore `window.confirm`, pas le dialog central MUI.
+- **Drawer d’appel** : fonctionne pour appeler, marquer joué, introuvable, remplaçant et faire sans musicien. Le choix de confirmation de delink utilise maintenant le dialog central MUI ; les règles de remplacement restent simplifiées.
 - **Drawer participant** : création/édition et validation de base existent, mais l’impact détaillé retrait instrument / links / locks / played demande davantage de cas de tests et de confirmations fines.
 - **Drag vertical** : dnd-kit est intégré et refuse played/locked/conflict, mais le déplacement de groupe linké et le feedback impossible restent simplifiés.
 - **Sync local-first** : queue et retry existent, mais les scénarios offline réels, conflits serveur, reprise de lease et réhydratation avancée restent peu testés.
@@ -41,7 +41,6 @@ Date d’audit : 2026-06-15
 
 ## Non conforme
 
-- **Confirmation delink dans drawer d’appel** : l’usage de `window.confirm` n’est pas conforme au système de dialogs centralisés attendu.
 - **Projection de remplacement avancée** : les règles “remplaçant linké”, “déplacer target non-anchor”, “respect maximal conflicts/links” sont approximées, pas garanties dans tous les cas.
 - **Validation backend payload complète** : le backend accepte tout payload objet pour un type autorisé ; la validation stricte de chaque payload V0 est absente.
 - **Environnement de validation local** : les dépendances Python/Node ne sont pas installées dans l’environnement d’audit, empêchant `pytest`, `npm test` et `npm run build`.
@@ -71,14 +70,17 @@ Date d’audit : 2026-06-15
 - `npm install` : échec environnement, registry `403 Forbidden` sur `@dnd-kit/core`.
 - `node --check frontend/src/features/demo/demoSeeds.js` : passé.
 - `node --check frontend/src/features/demo/demoSeeds.test.js` : passé.
+- `node --check frontend/src/features/demo/importDemoSeed.js` : passé.
+- `node --check frontend/src/features/projection/benchmarkProjection.js` : passé.
 - `python -m py_compile backend/jams/demo_seeds.py backend/jams/management/commands/seed_demo_jams.py backend/jams/tests/test_seed_demo_jams.py` : passé.
+- `python -m py_compile backend/jams/services/validation.py backend/jams/tests/test_event_store_api.py` : passé.
 - `git diff --check` : passé.
 
 ## Recommandations
 
 1. Installer les dépendances dans un environnement réseau fonctionnel et exécuter `pytest`, `npm test`, `npm run build` avant toute release V0.
-2. Remplacer les deux `window.confirm` du drawer d’appel par le dialog central `ConfirmDialog`.
-3. Ajouter une validation backend payload par type d’event, idéalement générée/partagée depuis une source commune.
+2. Compléter la validation backend payload par types primitifs/listes imbriquées, idéalement depuis une source commune.
+3. Renforcer les règles de remplacement du drawer d’appel dans des helpers purs et testés.
 4. Renforcer les tests projection sur remplacement, conflicts/link edge cases et offline sync.
 5. Factoriser les seeds demo pour éviter la duplication Python/JS.
 6. Ajouter un run e2e mobile/tablette minimal dès que le build frontend est exécutable.
