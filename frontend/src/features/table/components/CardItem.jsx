@@ -1,6 +1,22 @@
-import { Box, Button, Stack, Typography } from '@mui/material';
+import { Box, IconButton, Menu, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
+import { memo, useState } from 'react';
 
-export function CardItem({ item, projectedState, disabled = false, onLockToggle, onRemove, onEditParticipant, onMove, linkMode, onLinkClick, onLinkTargetClick, conflictMode, onConflictClick, onConflictTargetClick, onPlayWithout }) {
+function cardColors({ item, isAnchor, isSelected, isConflictAnchor, isConflictSelected, canSelect, canSelectConflict }) {
+  if (isConflictAnchor) return { borderColor: 'error.main', bgcolor: 'action.hover' };
+  if (isConflictSelected) return { borderColor: 'warning.main', bgcolor: 'action.hover' };
+  if (isAnchor) return { borderColor: 'primary.main', bgcolor: 'action.selected' };
+  if (isSelected) return { borderColor: 'secondary.main', bgcolor: 'action.selected' };
+  if (item.isPlayed) return { borderColor: 'divider', bgcolor: 'action.disabledBackground' };
+  if (item.type === 'hole') return { borderColor: 'warning.main', bgcolor: 'action.hover' };
+  if (item.isLocked) return { borderColor: 'primary.main', bgcolor: 'background.paper' };
+  if (item.isLinked) return { borderColor: 'secondary.main', bgcolor: 'background.paper' };
+  if (item.hasConflict) return { borderColor: 'error.light', bgcolor: 'background.paper' };
+  if (canSelect || canSelectConflict) return { borderColor: 'primary.light', bgcolor: 'action.hover' };
+  return { borderColor: 'divider', bgcolor: 'background.paper' };
+}
+
+export const CardItem = memo(function CardItem({ item, projectedState, disabled = false, onLockToggle, onRemove, onEditParticipant, onMove, linkMode, onLinkClick, onLinkTargetClick, conflictMode, onConflictClick, onConflictTargetClick, onRemoveConflicts, onPlayWithout }) {
+  const [menuAnchor, setMenuAnchor] = useState(null);
   const label = item.type === 'hole' ? 'Trou' : projectedState.participants[item.participantId]?.name;
   const itemId = item.appearanceId ?? item.holeId;
   const isAnchor = linkMode?.anchor?.id === itemId;
@@ -9,5 +25,74 @@ export function CardItem({ item, projectedState, disabled = false, onLockToggle,
   const isConflictAnchor = conflictMode?.anchor?.id === itemId;
   const isConflictSelected = conflictMode?.selectedTargets?.some((target) => target.id === itemId);
   const canSelectConflict = conflictMode && item.type !== 'hole' && !isConflictAnchor;
-  return <Box role="group" tabIndex={0} aria-label={`${label} ${item.isPlayed ? 'joué' : 'à jouer'}`} onClick={() => { if (canSelect) onLinkTargetClick(item); if (canSelectConflict) onConflictTargetClick(item); }} sx={{ border: '1px solid', borderColor: isConflictAnchor ? 'error.main' : isConflictSelected ? 'warning.main' : isAnchor ? 'primary.main' : isSelected ? 'secondary.main' : item.isLocked ? 'primary.main' : 'divider', borderRadius: 1.5, p: 1, minHeight: 96, outline: 'none', transition: 'background-color 180ms ease, border-color 180ms ease', '&:focus-visible': { boxShadow: 3, borderColor: 'primary.main' }, bgcolor: item.isPlayed ? 'action.disabledBackground' : canSelect || canSelectConflict ? 'action.hover' : 'background.paper' }}><Stack spacing={0.5}><Typography>{label}</Typography><Typography variant="caption" color="text.secondary">{item.isLinked ? 'lié · ' : ''}{item.isLocked ? 'verrouillé · ' : ''}{item.isPlayed ? 'joué · ' : ''}Round {item.appearanceIndex}</Typography><Stack direction="row" spacing={1} useFlexGap flexWrap="wrap"><Button size="small" aria-label={`Link ${label}`} sx={{ minHeight: 36 }} variant={isAnchor || item.isLinked ? 'contained' : 'outlined'} disabled={disabled} onClick={(event) => { event.stopPropagation(); onLinkClick(item); }}>{isAnchor ? 'Annuler link' : item.isLinked ? 'Unlink' : 'Link'}</Button><Button size="small" aria-label={`${item.isLocked ? 'Déverrouiller' : 'Verrouiller'} ${label}`} sx={{ minHeight: 36 }} disabled={disabled} onClick={() => onLockToggle(item)}>{item.isLocked ? 'Unlock' : 'Lock'}</Button>{item.type !== 'hole' ? <Button size="small" aria-label={`Modifier ${label}`} sx={{ minHeight: 36 }} disabled={disabled} onClick={() => onEditParticipant(item.participantId)}>Modifier</Button> : null}{item.type !== 'hole' ? <Button size="small" aria-label={`Conflit ${label}`} sx={{ minHeight: 36 }} color={isConflictAnchor || isConflictSelected ? 'error' : 'inherit'} disabled={disabled} onClick={(event) => { event.stopPropagation(); onConflictClick(item); }}>{isConflictAnchor ? 'Annuler conflit' : 'Conflit'}</Button> : null}{item.type !== 'hole' ? <Button size="small" aria-label={`Jouer sans ${label}`} sx={{ minHeight: 36 }} disabled={disabled} onClick={() => onPlayWithout(item)}>Jouer sans…</Button> : null}<Button size="small" aria-label={`Monter ${label}`} sx={{ minHeight: 36, minWidth: 44 }} disabled={disabled || item.isLocked || item.isPlayed} onClick={() => onMove(item, -1)}>↑</Button><Button size="small" aria-label={`Descendre ${label}`} sx={{ minHeight: 36, minWidth: 44 }} disabled={disabled || item.isLocked || item.isPlayed} onClick={() => onMove(item, 1)}>↓</Button><Button size="small" aria-label={`Supprimer ${label}`} sx={{ minHeight: 36 }} color="error" disabled={disabled} onClick={() => onRemove(item)}>Supprimer</Button></Stack></Stack></Box>;
-}
+  const menuOpen = Boolean(menuAnchor);
+  const movementDisabled = disabled || item.isLocked || item.isPlayed;
+  const colors = cardColors({ item, isAnchor, isSelected, isConflictAnchor, isConflictSelected, canSelect, canSelectConflict });
+
+  function closeMenu() {
+    setMenuAnchor(null);
+  }
+
+  function menuAction(callback) {
+    closeMenu();
+    callback?.();
+  }
+
+  return <Box
+    role="group"
+    tabIndex={0}
+    aria-label={`${label} ${item.type === 'hole' ? 'trou' : 'passage'} ${item.isPlayed ? 'joué' : 'à jouer'}${item.isLocked ? ', verrouillé' : ''}${item.isLinked ? ', lié' : ''}${item.hasConflict ? ', conflict' : ''}`}
+    onClick={() => { if (canSelect) onLinkTargetClick(item); if (canSelectConflict) onConflictTargetClick(item); }}
+    sx={{
+      border: '1px solid',
+      borderColor: colors.borderColor,
+      borderRadius: 1.5,
+      p: 1,
+      minHeight: 112,
+      outline: 'none',
+      transition: 'background-color 850ms ease, border-color 850ms ease, transform 850ms ease, box-shadow 850ms ease',
+      '&:focus-visible': { boxShadow: 4, borderColor: 'primary.main', transform: 'translateY(-1px)' },
+      bgcolor: colors.bgcolor,
+      opacity: item.isPlayed ? 0.78 : 1,
+    }}>
+    <Stack spacing={0.75}>
+      <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography sx={{ fontWeight: item.type === 'hole' ? 600 : 500 }}>{label}</Typography>
+          <Typography variant="caption" color="text.secondary">{item.isLinked ? 'lié · ' : ''}{item.hasConflict ? 'conflict · ' : ''}{item.isLocked ? 'verrouillé · ' : ''}{item.isPlayed ? 'joué · ' : ''}{item.type === 'hole' ? 'trou · ' : ''}Round {item.appearanceIndex}</Typography>
+        </Box>
+        <Stack direction="row" spacing={0.5}>
+          <Tooltip title={isAnchor ? 'Annuler le mode link' : item.isLinked ? 'Supprimer le link' : 'Créer un link'}>
+            <span><IconButton size="small" color={isAnchor || item.isLinked ? 'primary' : 'default'} aria-label={`${isAnchor ? 'Annuler link' : item.isLinked ? 'Supprimer link' : 'Créer link'} ${label}`} disabled={disabled} onClick={(event) => { event.stopPropagation(); onLinkClick(item); }}>🔗</IconButton></span>
+          </Tooltip>
+          <Tooltip title={item.isLocked ? 'Déverrouiller' : 'Verrouiller'}>
+            <span><IconButton size="small" color={item.isLocked ? 'primary' : 'default'} aria-label={`${item.isLocked ? 'Déverrouiller' : 'Verrouiller'} ${label}`} disabled={disabled} onClick={(event) => { event.stopPropagation(); onLockToggle(item); }}>{item.isLocked ? '🔒' : '🔓'}</IconButton></span>
+          </Tooltip>
+          <Tooltip title="Actions">
+            <span><IconButton size="small" aria-label={`Actions ${label}`} aria-controls={menuOpen ? `menu_${itemId}` : undefined} aria-haspopup="menu" aria-expanded={menuOpen ? 'true' : undefined} disabled={disabled} onClick={(event) => { event.stopPropagation(); setMenuAnchor(event.currentTarget); }}>⋯</IconButton></span>
+          </Tooltip>
+        </Stack>
+      </Stack>
+
+      <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+        <Stack direction="row" spacing={0.5} aria-label={`Déplacement vertical ${label}`}>
+          <Tooltip title="Monter dans cette colonne">
+            <span><IconButton size="small" aria-label={`Monter ${label}`} disabled={movementDisabled} onClick={(event) => { event.stopPropagation(); onMove(item, -1); }}>↑</IconButton></span>
+          </Tooltip>
+          <Tooltip title="Descendre dans cette colonne">
+            <span><IconButton size="small" aria-label={`Descendre ${label}`} disabled={movementDisabled} onClick={(event) => { event.stopPropagation(); onMove(item, 1); }}>↓</IconButton></span>
+          </Tooltip>
+        </Stack>
+        <Typography variant="caption" color="text.secondary">↕︎ vertical</Typography>
+      </Stack>
+    </Stack>
+
+    <Menu id={`menu_${itemId}`} anchorEl={menuAnchor} open={menuOpen} onClose={closeMenu} onClick={(event) => event.stopPropagation()}>
+      {item.type !== 'hole' ? <MenuItem onClick={() => menuAction(() => onEditParticipant(item.participantId))}>Modifier le musicien</MenuItem> : null}
+      {item.type !== 'hole' ? <MenuItem onClick={() => menuAction(() => onConflictClick(item))}>{isConflictAnchor ? 'Annuler le mode conflict' : 'Créer un conflict'}</MenuItem> : null}
+      {item.activeConflicts?.length ? <MenuItem onClick={() => menuAction(() => onRemoveConflicts(item))}>Supprimer conflict{item.activeConflicts.length > 1 ? 's' : ''}</MenuItem> : null}
+      {item.type !== 'hole' ? <MenuItem onClick={() => menuAction(() => onPlayWithout(item))}>Jouer sans…</MenuItem> : null}
+      <MenuItem sx={{ color: 'error.main' }} onClick={() => menuAction(() => onRemove(item))}>{item.type === 'hole' ? 'Supprimer le trou' : 'Supprimer le passage'}</MenuItem>
+    </Menu>
+  </Box>;
+});

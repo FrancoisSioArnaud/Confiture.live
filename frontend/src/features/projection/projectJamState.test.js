@@ -124,4 +124,25 @@ describe('projectJamState', () => {
     expect(state.links.link_1.removed).toBe(true);
     expect(state.columns.guitar.some((item) => item.appearanceId === 'app_1')).toBe(false);
   });
+
+
+  it('renames, reorders, and hides instruments without deleting projected history', () => {
+    const state = projectJamState({ events: [
+      event('jam_created', { jamId: 'jam_1', name: 'Jam' }, 1),
+      event('instrument_added', { instrumentId: 'guitar', name: 'Guitare', order: 0 }, 2),
+      event('instrument_added', { instrumentId: 'bass', label: 'Basse', order: 1 }, 3),
+      event('instrument_updated', { instrumentId: 'bass', label: 'Contrebasse' }, 4),
+      event('instruments_reordered', { orderedInstrumentIds: ['bass', 'guitar'] }, 5),
+      event('participant_created', { participantId: 'lea', name: 'Léa' }, 6),
+      event('participation_added', { participationId: 'lea_bass', participantId: 'lea', instrumentId: 'bass', baseOrderKey: '1000' }, 7),
+      event('appearance_materialized', { appearanceId: 'app_lea_bass', participationId: 'lea_bass', participantId: 'lea', instrumentId: 'bass', appearanceIndex: 1, positionKey: '1000' }, 8),
+      event('instrument_visibility_changed', { instrumentId: 'bass', visible: false, confirmedDespiteActiveLinks: true }, 9),
+    ] });
+
+    expect(state.instruments.bass.name).toBe('Contrebasse');
+    expect(state.instrumentOrder).toEqual(['bass', 'guitar']);
+    expect(state.instruments.bass.order).toBe(0);
+    expect(state.columns.bass).toBeUndefined();
+    expect(state.appearances.app_lea_bass).toBeDefined();
+  });
 });

@@ -51,6 +51,10 @@ function normalizeServerTransactions(serverLog) {
   }).filter((transaction) => transaction.transactionId);
 }
 
+function jamIdOf(record) {
+  return record?.jamId ?? record?.jam_id;
+}
+
 function snapshotStateFromRecord(record) {
   return record?.state ?? record?.projectedState ?? null;
 }
@@ -79,7 +83,7 @@ export async function persistLocalAction({ jamId, events, label, jamPatch = null
   const clientSequenceNumber = existingTransactions.length + 1;
   const transaction = createTransaction({ jamId, clientId, clientSequenceNumber, events, label });
   await db.localTransactions.put({ ...transaction, syncStatus: SYNC_STATUS.PENDING });
-  await db.pendingTransactions.put({ transactionId: transaction.transactionId, jamId, clientId, clientSequenceNumber, nextAttemptAt: new Date().toISOString(), attempts: 0 });
+  await db.pendingTransactions.put({ transactionId: transaction.transactionId, jamId, clientId, clientSequenceNumber, nextAttemptAt: new Date().toISOString(), attempts: 0, status: SYNC_STATUS.PENDING });
   const projection = await projectionForJam(jamId);
   const currentJam = await db.localJams.get(jamId);
   await db.localJams.put({ ...(currentJam ?? { jamId }), ...(jamPatch ?? {}), updatedAt: new Date().toISOString(), syncStatus: SYNC_STATUS.PENDING });
@@ -93,14 +97,23 @@ export async function recoverJamProjection(jamId) {
   const localSnapshot = await db.snapshots.where('jamId').equals(jamId).last();
   let serverSnapshot = null;
   let serverTransactions = [];
+  let serverJam = null;
   try {
     const latest = await jamsApi.latestSnapshot(jamId);
     serverSnapshot = latest?.snapshot ?? null;
     const fromSeq = Math.max(localSnapshot?.lastServerSequenceNumber ?? 0, serverSnapshot?.lastServerSequenceNumber ?? 0, serverSnapshot?.last_server_sequence_number ?? 0);
     const serverLog = await jamsApi.transactions(jamId, fromSeq);
     serverTransactions = normalizeServerTransactions(serverLog);
+    serverJam = serverLog?.jam ?? null;
   } catch {
-    await mergeSyncState(jamId, { status: SYNC_STATUS.OFFLINE, updatedAt: new Date().toISOString() });
+    try {
+      const fullState = await jamsApi.get(jamId);
+      serverSnapshot = fullState?.snapshot ?? null;
+      serverTransactions = normalizeServerTransactions(fullState);
+      serverJam = fullState?.jam ?? null;
+    } catch {
+      await mergeSyncState(jamId, { status: SYNC_STATUS.OFFLINE, syncMessage: 'Connexion instable, sauvegarde locale active.', updatedAt: new Date().toISOString() });
+    }
   }
 
   for (const transaction of serverTransactions) {
@@ -109,12 +122,41 @@ export async function recoverJamProjection(jamId) {
     await db.pendingTransactions.delete(transaction.transactionId);
   }
 
+  if (serverJam) {
+    await db.localJams.put({
+      jamId,
+      name: serverJam.name ?? serverJam.title ?? 'Jam',
+      indicativeDate: serverJam.indicativeDate ?? serverJam.indicative_date ?? null,
+      updatedAt: serverJam.updatedAt ?? serverJam.updated_at ?? new Date().toISOString(),
+      syncStatus: SYNC_STATUS.SYNCED,
+    });
+  }
+
   const snapshot = snapshotStateFromRecord(serverSnapshot) ?? snapshotStateFromRecord(localSnapshot);
   const transactions = (await db.localTransactions.where('jamId').equals(jamId).toArray()).sort((a, b) => serverSequenceOf(a) - serverSequenceOf(b) || (a.clientSequenceNumber ?? 0) - (b.clientSequenceNumber ?? 0));
   const projectedState = projectJamState({ snapshot, transactions });
   const pendingCount = await db.pendingTransactions.where('jamId').equals(jamId).count();
-  const recoveryWarning = serverTransactions.length > 0 && pendingCount > 0 ? 'Des changements serveur ont été récupérés pendant que des actions locales restent à synchroniser.' : null;
+  const recoveryWarning = serverTransactions.length > 0 && pendingCount > 0 ? 'Divergence possible : des changements serveur ont été récupérés pendant que des actions locales restent à synchroniser.' : null;
   await mergeSyncState(jamId, { status: pendingCount ? SYNC_STATUS.PENDING : SYNC_STATUS.SYNCED, updatedAt: new Date().toISOString(), projectedState, recoveryWarning, recoveredServerTransactionCount: serverTransactions.length, pendingLocalTransactionCount: pendingCount });
   void flushPendingTransactions();
   return { projectedState, serverTransactionCount: serverTransactions.length, pendingCount, recoveryWarning };
+}
+
+export async function hydrateBackendJamsToLocal() {
+  const payload = await jamsApi.list();
+  const serverJams = payload?.results ?? [];
+  for (const jam of serverJams) {
+    const jamId = jamIdOf(jam);
+    if (!jamId) continue;
+    await db.localJams.put({
+      jamId,
+      name: jam.name ?? 'Jam',
+      indicativeDate: jam.indicativeDate ?? jam.indicative_date ?? null,
+      updatedAt: jam.updatedAt ?? jam.updated_at ?? new Date().toISOString(),
+      syncStatus: SYNC_STATUS.SYNCED,
+      latestServerSequenceNumber: jam.latestServerSequenceNumber ?? jam.latest_server_sequence_number ?? 0,
+    });
+    await recoverJamProjection(jamId);
+  }
+  return serverJams.length;
 }
