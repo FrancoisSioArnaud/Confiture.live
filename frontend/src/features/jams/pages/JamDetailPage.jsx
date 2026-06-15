@@ -1,0 +1,107 @@
+import { ArrowBack, PersonAdd, Settings, Undo } from '@mui/icons-material';
+import { Alert, Box, Button, CircularProgress, Fab, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { Link as RouterLink, useParams } from 'react-router-dom';
+import { getJam } from '../../../shared/api/jamsApi';
+import { SyncStatusIndicator } from '../../../shared/components/SyncStatusIndicator';
+import { useFeedback } from '../../../shared/feedback/FeedbackProvider';
+import { createId } from '../../../shared/utils/createId';
+import { jamStore } from '../../jam/jamStore';
+import { buildLinearUndoTransaction, getLatestUndoableTransaction } from '../../transactions/buildUndoTransaction';
+import { getSyncStatus } from '../../sync/syncStatus';
+import { ParticipantDrawer } from '../../participants/components/ParticipantDrawer';
+import { JamTable } from '../../table/components/JamTable';
+import { JamConfigDialog } from '../components/JamConfigDialog';
+import { useJamStoreState } from '../hooks/useJamStoreState';
+
+export function JamDetailPage() {
+  const { jamId } = useParams();
+  const clientId = useMemo(() => createId('client'), []);
+  const [configOpen, setConfigOpen] = useState(false);
+  const { enqueueFeedback } = useFeedback();
+  const [participantDrawer, setParticipantDrawer] = useState({ open: false, mode: 'create', participantId: null, insertionContext: null });
+  const projection = useJamStoreState((state) => state.projection);
+  const transactions = useJamStoreState((state) => state.transactions);
+  const syncStatus = getSyncStatus(jamId);
+  const nextClientSequenceNumber = (transactions.at(-1)?.clientSequenceNumber ?? 0) + 1;
+  const undoTarget = getLatestUndoableTransaction(transactions);
+  const { data, isLoading, isError, error } = useQuery({ queryKey: ['jam', jamId], queryFn: () => getJam(jamId, { includeSnapshot: 'true' }) });
+
+  useEffect(() => {
+    if (data) jamStore.getState().hydrateFromPayload(jamId, data);
+  }, [data, jamId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    jamStore.getState().acquireSession({ jamId, clientId, deviceLabel: 'Navigateur' }).catch(() => null);
+    return () => {
+      if (!cancelled) jamStore.getState().releaseSession({ jamId }).catch(() => null);
+      cancelled = true;
+    };
+  }, [clientId, jamId]);
+
+  if (isLoading) {
+    return <Stack alignItems="center" py={6}><CircularProgress /><Typography mt={2}>Chargement de la jam…</Typography></Stack>;
+  }
+  if (isError) {
+    return <Alert severity="warning">Impossible de charger cette jam. {error?.message}</Alert>;
+  }
+
+  const jam = projection?.jam ?? data?.jam;
+
+  return (
+    <Stack spacing={2}>
+      <Paper sx={{ p: { xs: 1.5, sm: 2 }, position: 'sticky', top: 72, zIndex: 2 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <IconButton component={RouterLink} to="/" aria-label="Retour liste jams"><ArrowBack /></IconButton>
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Typography variant="h5" fontWeight={900} noWrap>{jam?.name ?? 'Jam'}</Typography>
+            <Typography variant="body2" color="text.secondary">{jam?.indicativeDate ?? 'Date à préciser'}</Typography>
+          </Box>
+          <SyncStatusIndicator status={syncStatus.status} />
+          <Tooltip title={undoTarget ? 'Annuler la dernière action' : 'Aucune action à annuler'}><span><IconButton aria-label="Undo" disabled={!undoTarget} onClick={() => { const transaction = buildLinearUndoTransaction({ jamId, clientId, clientSequenceNumber: nextClientSequenceNumber, transactions }); if (!transaction) { enqueueFeedback('Undo impossible : aucune action à annuler', 'warning'); return; } jamStore.getState().applyLocalTransaction(transaction); enqueueFeedback('Action annulée'); }}><Undo /></IconButton></span></Tooltip>
+          <Tooltip title="Configuration"><IconButton aria-label="Configuration" onClick={() => setConfigOpen(true)}><Settings /></IconButton></Tooltip>
+        </Stack>
+      </Paper>
+
+      <Paper sx={{ p: { xs: 1.5, sm: 2 } }}>
+        <JamTable
+          projection={projection}
+          clientId={clientId}
+          clientSequenceNumber={nextClientSequenceNumber}
+          onTransaction={(transaction) => jamStore.getState().applyLocalTransaction(transaction)}
+          onOpenCallDrawer={(plateauIndex) => enqueueFeedback(`Appel du plateau ${plateauIndex + 1}`, 'info')}
+          onFeedback={(message) => enqueueFeedback(message)}
+          onCreateParticipant={(insertionContext) => setParticipantDrawer({ open: true, mode: 'create', participantId: null, insertionContext })}
+          onEditParticipant={(participantId) => setParticipantDrawer({ open: true, mode: 'edit', participantId, insertionContext: null })}
+        />
+      </Paper>
+
+      <Button component={RouterLink} to="/" variant="text">Retour aux jams</Button>
+
+      <JamConfigDialog
+        open={configOpen}
+        projection={projection}
+        clientId={clientId}
+        clientSequenceNumber={nextClientSequenceNumber}
+        onClose={() => setConfigOpen(false)}
+        onTransaction={(transaction) => jamStore.getState().applyLocalTransaction(transaction)}
+        onFeedback={(message) => enqueueFeedback(message)}
+      />
+      <ParticipantDrawer
+        open={participantDrawer.open}
+        mode={participantDrawer.mode}
+        projection={projection}
+        participantId={participantDrawer.participantId}
+        insertionContext={participantDrawer.insertionContext}
+        clientId={clientId}
+        clientSequenceNumber={nextClientSequenceNumber}
+        onClose={() => setParticipantDrawer({ open: false, mode: 'create', participantId: null, insertionContext: null })}
+        onTransaction={(transaction) => jamStore.getState().applyLocalTransaction(transaction)}
+        onFeedback={(message) => enqueueFeedback(message)}
+      />
+      <Fab color="primary" aria-label="Ajouter un musicien" onClick={() => setParticipantDrawer({ open: true, mode: 'create', participantId: null, insertionContext: null })} sx={{ position: 'fixed', right: 24, bottom: 24 }}><PersonAdd /></Fab>
+    </Stack>
+  );
+}
