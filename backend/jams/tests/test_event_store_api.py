@@ -206,3 +206,12 @@ def test_rejects_event_payload_missing_required_fields(client):
     }, content_type="application/json")
 
     assert response.status_code == 400
+
+
+def test_list_empty_jams_returns_json_results(client):
+    response = client.get("/api/jams/")
+
+    assert response.status_code == 200
+    assert response["Content-Type"].startswith("application/json")
+    assert response.json() == {"results": []}
+
