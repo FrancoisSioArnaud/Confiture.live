@@ -1,4 +1,4 @@
-import { removeLinksTargeting } from './links.js';
+import { removeLinksTargeting, validateLink } from './links.js';
 import { targetTransactionIdFromRevert } from './undo.js';
 
 function target(type, id) {
@@ -40,9 +40,10 @@ function canMoveTarget(state, targetType, targetId, event) {
   return true;
 }
 
-function applyPositionPayload(entity, payload) {
+function applyPositionPayload(entity, payload, event) {
   entity.positionKey = payload.positionKey ?? payload.orderKey ?? payload.toOrderKey ?? entity.positionKey;
   entity.orderKey = payload.positionKey ?? payload.orderKey ?? payload.toOrderKey ?? entity.orderKey;
+  entity.lastMovedSequenceNumber = event.serverSequenceNumber ?? event.clientSequenceNumber ?? event.localSequenceNumber ?? 0;
   entity.afterTarget = payload.afterTarget ?? entity.afterTarget;
   entity.beforeTarget = payload.beforeTarget ?? entity.beforeTarget;
 }
@@ -60,11 +61,11 @@ export function applyEvent(state, event) {
       state.jam = { ...state.jam, linkReorderStrategy: p.nextStrategy ?? p.linkReorderStrategy ?? state.jam?.linkReorderStrategy };
       break;
     case 'instrument_added':
-      state.instruments[p.instrumentId] = { instrumentId: p.instrumentId, name: p.name, isVisible: p.visible ?? p.isVisible ?? true, visibleRoundCount: p.visibleRoundCount ?? 1, order: p.order ?? state.instrumentOrder.length };
+      state.instruments[p.instrumentId] = { instrumentId: p.instrumentId, name: p.name ?? p.label, isVisible: p.visible ?? p.isVisible ?? true, visibleRoundCount: p.visibleRoundCount ?? 1, order: p.order ?? state.instrumentOrder.length };
       if (!state.instrumentOrder.includes(p.instrumentId)) state.instrumentOrder.push(p.instrumentId);
       break;
     case 'instrument_updated':
-      state.instruments[p.instrumentId] = { ...state.instruments[p.instrumentId], ...p };
+      state.instruments[p.instrumentId] = { ...state.instruments[p.instrumentId], ...p, name: p.name ?? p.label ?? state.instruments[p.instrumentId]?.name };
       break;
     case 'instruments_reordered': {
       const orderedInstrumentIds = p.orderedInstrumentIds ?? p.instrumentIds ?? p.instrumentOrder ?? [];
@@ -102,7 +103,7 @@ export function applyEvent(state, event) {
       state.appearances[p.appearanceId] = { appearanceId: p.appearanceId, participationId: p.participationId, participantId: p.participantId, instrumentId: p.instrumentId, appearanceIndex: p.appearanceIndex, positionKey: p.positionKey ?? p.orderKey ?? `${p.appearanceIndex}:${p.appearanceId}`, orderKey: p.positionKey ?? p.orderKey ?? `${p.appearanceIndex}:${p.appearanceId}`, removed: false, skipped: false };
       break;
     case 'appearance_moved_between':
-      if (state.appearances[p.appearanceId] && canMoveTarget(state, 'appearance', p.appearanceId, event)) applyPositionPayload(state.appearances[p.appearanceId], p);
+      if (state.appearances[p.appearanceId] && canMoveTarget(state, 'appearance', p.appearanceId, event)) applyPositionPayload(state.appearances[p.appearanceId], p, event);
       break;
     case 'appearance_removed':
       if (state.appearances[p.appearanceId]) state.appearances[p.appearanceId].removed = true;
@@ -132,7 +133,7 @@ export function applyEvent(state, event) {
       removeLinksTargeting(state, target('hole', p.holeId));
       break;
     case 'hole_moved_between':
-      if (state.holes[p.holeId] && canMoveTarget(state, 'hole', p.holeId, event)) applyPositionPayload(state.holes[p.holeId], p);
+      if (state.holes[p.holeId] && canMoveTarget(state, 'hole', p.holeId, event)) applyPositionPayload(state.holes[p.holeId], p, event);
       break;
     case 'hole_locked':
       setLock(state, p.lockId ?? `hole:${p.holeId}`, 'hole', p.holeId, true);
@@ -140,9 +141,13 @@ export function applyEvent(state, event) {
     case 'hole_unlocked':
       setLock(state, p.lockId ?? `hole:${p.holeId}`, 'hole', p.holeId, false);
       break;
-    case 'link_created':
-      state.links[p.linkId] = { linkId: p.linkId, targets: p.targets ?? [], anchorTarget: p.anchorTarget ?? null, reorderStrategy: p.reorderStrategy ?? state.jam?.linkReorderStrategy ?? 'move_to_first', removed: false };
+    case 'link_created': {
+      const link = { linkId: p.linkId, targets: p.targets ?? [], anchorTarget: p.anchorTarget ?? null, reorderStrategy: p.reorderStrategy ?? state.jam?.linkReorderStrategy ?? 'move_to_first', removed: false };
+      const warnings = validateLink(state, link);
+      state.links[p.linkId] = { ...link, removed: warnings.length > 0 };
+      state.projectionWarnings.push(...warnings.map((warning) => ({ ...warning, eventId: event.eventId })));
       break;
+    }
     case 'link_removed':
       if (state.links[p.linkId]) state.links[p.linkId].removed = true;
       break;

@@ -1,3 +1,4 @@
+import { conflictsForTarget } from './conflicts.js';
 import { activeLinksForTarget, isLinked } from './links.js';
 
 export function getParticipant(state, participantId) {
@@ -28,11 +29,17 @@ export function decorateCardState(state, item) {
   const target = item.type === 'hole'
     ? { type: 'hole', id: item.holeId }
     : { type: 'appearance', id: item.appearanceId };
+  const activeConflicts = item.type === 'hole' ? [] : [
+    ...conflictsForTarget(state, { scope: 'appearance', id: item.appearanceId }),
+    ...conflictsForTarget(state, { scope: 'participation', id: item.participationId }),
+  ].map((conflict) => conflict.conflictId);
   return {
     ...item,
     isLocked: isTargetLocked(state, target),
     isPlayed: isTargetPlayed(state, target),
     isLinked: isLinked(state, target),
     activeLinks: activeLinksForTarget(state, target).map((link) => link.linkId),
+    hasConflict: activeConflicts.length > 0,
+    activeConflicts,
   };
 }
