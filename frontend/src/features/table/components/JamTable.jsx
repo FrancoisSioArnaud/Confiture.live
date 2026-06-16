@@ -20,7 +20,7 @@ import { canDragCard, cardConflicts, cardLinks, participantHasPlayed } from '../
 import { buildLinkModeTransaction, hasContradictoryConflict, linkModeInitialSelection, selectedCardsWillMove } from '../utils/buildLinkModeTransaction';
 import { activeConflictsBetween, buildConflictModeTransaction } from '../utils/buildConflictModeTransaction';
 import { buildPlayWithoutTransaction } from '../utils/buildPlayWithoutTransaction';
-import { buildSkipWithReplacementTransaction, buildSkipWithoutMusicianTransaction, replacementCandidatesForCallDrawer } from '../utils/buildCallDrawerTransaction';
+import { buildSkipWithReplacementTransaction, buildSkipWithoutMusicianTransaction, replacementCandidatePresentation, replacementCandidatesForCallDrawer } from '../utils/buildCallDrawerTransaction';
 
 function transformToCss(transform) {
   if (!transform) return undefined;
@@ -142,7 +142,11 @@ function PlateauRail({ rows, projection, onOpenCallDrawer, onTogglePlateauPlayed
             <Paper key={row.plateauIndex} variant="outlined" sx={{ p: 1, minHeight: 132, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
               <Typography variant="subtitle2" fontWeight={900}>Plateau {row.plateauIndex + 1}</Typography>
               <Stack spacing={0.75}>
-                <Button size="small" variant="outlined" startIcon={<Call />} onClick={() => onOpenCallDrawer?.(row.plateauIndex)}>Appeler</Button>
+                <Tooltip title={played ? 'Ce plateau est déjà joué.' : 'Appeler ce plateau'}>
+                  <span>
+                    <Button size="small" variant="outlined" startIcon={<Call />} onClick={() => onOpenCallDrawer?.(row.plateauIndex)} disabled={played}>Appeler</Button>
+                  </span>
+                </Tooltip>
                 <Button size="small" color={played ? 'success' : 'primary'} variant={played ? 'contained' : 'outlined'} startIcon={played ? <CheckCircle /> : <RadioButtonUnchecked />} onClick={() => onTogglePlateauPlayed(row.plateauIndex, row.targets, played)} disabled={row.targets.length === 0}>
                   {played ? 'Joué' : 'Marquer joué'}
                 </Button>
@@ -169,6 +173,13 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
   const missingCardLinked = missingCard ? cardLinks(missingCard, projection.links).length > 0 : false;
   const missingInstrument = missingCard ? columns.find((column) => column.instrument.instrumentId === missingCard.instrumentId)?.instrument : null;
   const withoutMusicianLabel = `Plateau sans ${missingInstrument?.label ?? 'instrument'}`;
+  const readOnlyBecausePlayed = alreadyPlayed;
+  const pendingReplacementLinked = pendingDelinkAction?.kind === 'replacement' && cardLinks(pendingDelinkAction.replacementCard, projection.links).length > 0;
+  const delinkTitle = pendingReplacementLinked ? 'Délier le remplaçant ?' : 'Délier ce passage ?';
+  const delinkDescription = pendingReplacementLinked
+    ? 'Ce musicien est lié à un autre passage. Pour le mettre ici, le link sera supprimé.'
+    : 'Ce musicien est lié à un autre passage. Pour le repousser ou le remplacer, le link sera supprimé.';
+  const delinkConfirmLabel = pendingReplacementLinked ? 'Délier et remplacer' : 'Délier et continuer';
 
   function close() {
     setMissingCard(null);
@@ -182,8 +193,12 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
   }
 
   function runReplacement(replacementCard, confirmedDelink) {
+    if (readOnlyBecausePlayed || missingCard?.locked || missingCard?.played || replacementCard?.locked || replacementCard?.played) {
+      onFeedback?.('Impossible de modifier ce passage.');
+      return;
+    }
     onTransaction?.(buildSkipWithReplacementTransaction({ jamId, clientId, clientSequenceNumber, projection, sourceCard: missingCard, replacementCard, plateauIndex, confirmedDelink }));
-    onFeedback?.('Passage repoussé et remplaçant appelé');
+    onFeedback?.('Passage repoussé et remplaçant sélectionné');
     setMissingCard(null);
     setPendingDelinkAction(null);
   }
@@ -198,6 +213,10 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
   }
 
   function runWithoutMusician(confirmedDelink) {
+    if (readOnlyBecausePlayed || missingCard?.locked || missingCard?.played) {
+      onFeedback?.('Impossible de modifier ce passage.');
+      return;
+    }
     onTransaction?.(buildSkipWithoutMusicianTransaction({ jamId, clientId, clientSequenceNumber, projection, sourceCard: missingCard, plateauIndex, confirmedDelink, instrumentLabel: missingInstrument?.label }));
     onFeedback?.(`${withoutMusicianLabel} préparé`);
     setMissingCard(null);
@@ -236,7 +255,13 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
                   {linked ? <Chip size="small" label="Lié" color="primary" variant="outlined" /> : null}
                   {card?.locked ? <Chip size="small" label="Verrouillé" color="warning" /> : null}
                   {card?.played ? <Chip size="small" label="Joué" color="success" /> : null}
-                  {card?.type === 'appearance' && !card.played ? <Button size="small" variant="outlined" onClick={() => setMissingCard(card)}>Introuvable</Button> : null}
+                  {card?.type === 'appearance' && !card.played ? (
+                    <Tooltip title={card.locked ? 'Ce passage est verrouillé.' : readOnlyBecausePlayed ? 'Ce plateau est déjà joué.' : 'Musicien introuvable'}>
+                      <span>
+                        <Button size="small" variant="outlined" onClick={() => setMissingCard(card)} disabled={card.locked || readOnlyBecausePlayed}>Introuvable</Button>
+                      </span>
+                    </Tooltip>
+                  ) : null}
                 </Stack>
               </ListItem>
             );
@@ -250,8 +275,15 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
             <Stack spacing={1}>
               {replacementCandidates.map((candidate) => {
                 const participant = projection.participants[candidate.participantId];
-                const linked = cardLinks(candidate, projection.links).length > 0;
-                return <Button key={candidate.id} variant="outlined" onClick={() => chooseReplacement(candidate)}>{participant?.name ?? 'Musicien'} · prochain passage{linked ? ' · lié' : ''}</Button>;
+                const presentation = replacementCandidatePresentation({ projection, candidate, sourceCard: missingCard });
+                return (
+                  <Button key={candidate.id} variant="outlined" onClick={() => chooseReplacement(candidate)}>
+                    {participant?.name ?? 'Musicien'} · {presentation.instrumentLabel} · prochain passage · {presentation.roundLabel}
+                    {presentation.linked ? ' · lié' : ''}
+                    {presentation.alreadyPlayed ? ' · rejoue' : ''}
+                    {presentation.willMove ? ' · déplacera ce passage' : ''}
+                  </Button>
+                );
               })}
               {replacementCandidates.length === 0 ? <Typography variant="caption" color="text.secondary">Aucun remplaçant disponible dans cette colonne.</Typography> : null}
               <Button color="warning" variant="contained" onClick={chooseWithoutMusician}>{withoutMusicianLabel}</Button>
@@ -268,9 +300,9 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
       </Paper>
       <ConfirmDialog
         open={Boolean(pendingDelinkAction)}
-        title="Délier ce passage ?"
-        description="Ce musicien est lié à un autre passage. Pour le repousser ou le remplacer, le link sera supprimé."
-        confirmLabel="Délier et continuer"
+        title={delinkTitle}
+        description={delinkDescription}
+        confirmLabel={delinkConfirmLabel}
         onCancel={() => setPendingDelinkAction(null)}
         onConfirm={confirmPendingDelinkAction}
       />

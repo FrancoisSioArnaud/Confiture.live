@@ -40,6 +40,24 @@ function candidateConflictsWithPlateau(projection, candidate, sourceCard, platea
   return otherCards.some((otherCard) => Object.values(projection.conflicts ?? {}).some((conflict) => conflictAppliesToCards(conflict, candidate, otherCard)));
 }
 
+function participantAlreadyPlayed(projection, candidate) {
+  return Object.values(projection.appearances ?? {}).some((appearance) => (
+    appearance.id !== candidate.id
+    && appearance.participantId === candidate.participantId
+    && appearance.played
+  ));
+}
+
+function compareReplacementCandidates(projection) {
+  return (left, right) => {
+    const leftAlreadyPlayed = participantAlreadyPlayed(projection, left);
+    const rightAlreadyPlayed = participantAlreadyPlayed(projection, right);
+    if (leftAlreadyPlayed !== rightAlreadyPlayed) return leftAlreadyPlayed ? 1 : -1;
+    if (left.appearanceIndex !== right.appearanceIndex) return left.appearanceIndex - right.appearanceIndex;
+    return String(left.id).localeCompare(String(right.id));
+  };
+}
+
 export function replacementCandidatesForCallDrawer({ projection, sourceCard, plateauIndex }) {
   const column = columnForCard(projection, sourceCard);
   if (!column) return [];
@@ -54,7 +72,21 @@ export function replacementCandidatesForCallDrawer({ projection, sourceCard, pla
       && projection.participants[card.participantId]?.status !== 'removed'
       && !candidateConflictsWithPlateau(projection, card, sourceCard, plateauIndex)
     ))
+    .sort(compareReplacementCandidates(projection))
     .slice(0, 3);
+}
+
+export function replacementCandidatePresentation({ projection, candidate, sourceCard }) {
+  const linked = cardLinks(candidate, projection.links).length > 0;
+  const instrument = projection.instruments?.[candidate.instrumentId]
+    ?? projection.columns?.find((column) => column.instrument.instrumentId === candidate.instrumentId)?.instrument;
+  return {
+    linked,
+    instrumentLabel: instrument?.label ?? 'Instrument',
+    alreadyPlayed: participantAlreadyPlayed(projection, candidate),
+    willMove: candidate.id !== sourceCard?.id,
+    roundLabel: `round ${candidate.appearanceIndex}`,
+  };
 }
 
 export function buildSkipWithReplacementTransaction({ jamId, clientId, clientSequenceNumber, projection, sourceCard, replacementCard, plateauIndex, confirmedDelink = false }) {
