@@ -7,33 +7,12 @@ from rest_framework.permissions import AllowAny
 
 from .models import Jam, JamTransaction
 from .serializers import JamSerializer
-from .services.sessions import (
-    HEARTBEAT_INTERVAL_SECONDS,
-    assert_active_lease,
-    create_or_renew_session,
-    release_session,
-    renew_session,
-)
 from .services.snapshots import create_snapshot, serialize_snapshot
 from .services.transactions import accept_transaction, serialize_event, serialize_transaction
 
 
 def _client_id(request):
     return request.data.get("clientId")
-
-
-def _lease_token(request):
-    return request.data.get("leaseToken")
-
-
-def _session_response(session):
-    return {
-        "status": "acquired",
-        "clientId": session.client_id,
-        "leaseToken": session.lease_token,
-        "leaseExpiresAt": session.lease_expires_at.isoformat().replace("+00:00", "Z"),
-        "heartbeatIntervalSeconds": HEARTBEAT_INTERVAL_SECONDS,
-    }
 
 
 @api_view(["GET"])
@@ -81,7 +60,7 @@ class JamViewSet(viewsets.ModelViewSet):
                 link_reorder_strategy=payload.get("linkReorderStrategy", "move_to_first"),
             )
             transaction_payload = {**transaction_payload, "jamId": jam.jam_id}
-            transaction, _created = accept_transaction(jam, client_id, transaction_payload, require_lease=False)
+            transaction, _created = accept_transaction(jam, client_id, transaction_payload)
 
         return Response({
             "jamId": jam.jam_id,
@@ -144,15 +123,7 @@ class JamViewSet(viewsets.ModelViewSet):
                 "serverSequenceNumberEnd": existing.server_sequence_number_end,
                 "latestServerSequenceNumber": jam.latest_server_sequence_number,
             })
-        base_sequence = request.data.get("baseServerSequenceNumber")
-        if base_sequence is not None and base_sequence != jam.latest_server_sequence_number:
-            return Response({
-                "error": "sequence_conflict",
-                "message": "Le serveur possède déjà des events inconnus du client.",
-                "latestServerSequenceNumber": jam.latest_server_sequence_number,
-                "clientBaseServerSequenceNumber": base_sequence,
-            }, status=status.HTTP_409_CONFLICT)
-        transaction, created = accept_transaction(jam, _client_id(request), transaction_payload, _lease_token(request))
+        transaction, created = accept_transaction(jam, _client_id(request), transaction_payload)
         return Response({
             "status": "accepted" if created else "already_accepted",
             "transactionId": transaction.transaction_id,
@@ -172,40 +143,9 @@ class JamViewSet(viewsets.ModelViewSet):
         client_id = _client_id(request)
         if not client_id:
             raise ValidationError({"clientId": "This field is required."})
-        assert_active_lease(jam, client_id, _lease_token(request))
         snapshot = create_snapshot(jam, client_id, request.data.get("snapshot"))
         return Response({
             "status": "accepted",
             "snapshotId": snapshot.snapshot_id,
             "lastServerSequenceNumber": snapshot.last_server_sequence_number,
         }, status=status.HTTP_201_CREATED)
-
-    @action(detail=True, methods=["post"], url_path="client-session/acquire")
-    def acquire_client_session(self, request, jam_id=None):
-        client_id = _client_id(request)
-        if not client_id:
-            raise ValidationError({"clientId": "This field is required."})
-        session, locked = create_or_renew_session(self.get_object(), client_id, request.data.get("deviceLabel", ""), force=request.data.get("force", False))
-        if locked:
-            return locked
-        return Response(_session_response(session))
-
-    @action(detail=True, methods=["post"], url_path="client-session/heartbeat")
-    def heartbeat_client_session(self, request, jam_id=None):
-        session = renew_session(self.get_object(), _client_id(request), _lease_token(request))
-        return Response({"status": "renewed", "leaseExpiresAt": session.lease_expires_at.isoformat().replace("+00:00", "Z")})
-
-    @action(detail=True, methods=["post"], url_path="client-session/release")
-    def release_client_session(self, request, jam_id=None):
-        release_session(self.get_object(), _client_id(request), _lease_token(request))
-        return Response({"status": "released"})
-
-    @action(detail=True, methods=["post"], url_path="client-session/takeover")
-    def takeover_client_session(self, request, jam_id=None):
-        if request.data.get("confirm") is not True:
-            raise ValidationError({"confirm": "Must be true."})
-        client_id = _client_id(request)
-        if not client_id:
-            raise ValidationError({"clientId": "This field is required."})
-        session, _locked = create_or_renew_session(self.get_object(), client_id, request.data.get("deviceLabel", ""), force=True)
-        return Response(_session_response(session))

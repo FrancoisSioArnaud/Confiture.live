@@ -3,7 +3,7 @@ import json
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import Jam, JamClientSession, JamEvent, JamSnapshot, JamTransaction
+from .models import Jam, JamEvent, JamSnapshot, JamTransaction
 
 
 def pretty_json(value):
@@ -157,41 +157,3 @@ class JamSnapshotAdmin(EventSourcingReadOnlyAdmin):
     @admin.display(description="Payload")
     def pretty_payload(self, obj):
         return pretty_json(obj.payload)
-
-
-@admin.register(JamClientSession)
-class JamClientSessionAdmin(admin.ModelAdmin):
-    list_display = (
-        "id",
-        "session_id",
-        "jam",
-        "client_id",
-        "status",
-        "lease_token_short",
-        "acquired_at",
-        "last_heartbeat_at",
-        "lease_expires_at",
-    )
-    search_fields = ("session_id", "client_id", "jam__jam_id", "jam__name")
-    list_filter = ("status", "acquired_at", "lease_expires_at")
-    readonly_fields = (
-        "session_id",
-        "lease_token",
-        "jam",
-        "client_id",
-        "acquired_at",
-        "last_heartbeat_at",
-        "lease_expires_at",
-        "metadata",
-        "pretty_metadata",
-    )
-
-    @admin.display(description="Lease token")
-    def lease_token_short(self, obj):
-        if not obj.lease_token:
-            return ""
-        return f"{obj.lease_token[:12]}…"
-
-    @admin.display(description="Metadata")
-    def pretty_metadata(self, obj):
-        return pretty_json(obj.metadata)

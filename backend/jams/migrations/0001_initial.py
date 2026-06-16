@@ -43,7 +43,7 @@ class Migration(migrations.Migration):
             name='JamSnapshot',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('snapshot_id', models.CharField(default=jams.models.generate_session_id, max_length=96, unique=True)),
+                ('snapshot_id', models.CharField(default=jams.models.generate_snapshot_id, max_length=96, unique=True)),
                 ('client_id', models.CharField(max_length=96)),
                 ('last_server_sequence_number', models.PositiveIntegerField()),
                 ('payload', models.JSONField(blank=True, default=dict)),

@@ -1,7 +1,7 @@
 import { ArrowBack, PersonAdd, Settings, Undo } from '@mui/icons-material';
 import { Alert, Box, Button, CircularProgress, Fab, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
 import { getJam } from '../../../shared/api/jamsApi';
 import { SyncStatusIndicator } from '../../../shared/components/SyncStatusIndicator';
@@ -11,7 +11,6 @@ import { buildLinearUndoTransaction, getLatestUndoableTransaction } from '../../
 import { getNextClientSequenceNumber, getLatestClientSequenceNumber } from '../../sync/clientSequence';
 import { getSyncStatus } from '../../sync/syncStatus';
 import { getOrCreateClientId } from '../../sync/clientIdentity';
-import { startHeartbeat, stopHeartbeat } from '../../sync/clientSession';
 import { ParticipantDrawer } from '../../participants/components/ParticipantDrawer';
 import { JamTable } from '../../table/components/JamTable';
 import { JamConfigDialog } from '../components/JamConfigDialog';
@@ -23,7 +22,6 @@ export function JamDetailPage() {
   const [configOpen, setConfigOpen] = useState(false);
   const { enqueueFeedback } = useFeedback();
   const [participantDrawer, setParticipantDrawer] = useState({ open: false, mode: 'create', participantId: null });
-  const [sessionState, setSessionState] = useState({ status: 'idle', message: null, canTakeover: false, activeClientId: null });
   const clientSequenceRef = useRef(0);
   const projection = useJamStoreState((state) => state.projection);
   const transactions = useJamStoreState((state) => state.transactions);
@@ -31,15 +29,7 @@ export function JamDetailPage() {
   const nextClientSequenceNumber = getNextClientSequenceNumber(transactions, clientId);
   const undoTarget = getLatestUndoableTransaction(transactions);
   const { data, isLoading, isError, error } = useQuery({ queryKey: ['jam', jamId], queryFn: () => getJam(jamId, { includeSnapshot: 'true' }) });
-  const handleLeaseLost = useCallback((error) => {
-    setSessionState({
-      status: 'read_only',
-      message: `Session d’édition perdue : ${error?.message ?? 'reprenez le contrôle pour continuer.'}`,
-      canTakeover: true,
-      activeClientId: null,
-    });
-    enqueueFeedback('Session d’édition perdue. Reprends le contrôle pour continuer.', 'warning');
-  }, [enqueueFeedback]);
+
 
   useEffect(() => {
     if (data) jamStore.getState().hydrateFromPayload(jamId, data).catch((error) => enqueueFeedback(`Hydratation locale impossible : ${error?.message ?? 'erreur inconnue'}`, 'warning'));
@@ -49,35 +39,6 @@ export function JamDetailPage() {
     clientSequenceRef.current = Math.max(clientSequenceRef.current, getLatestClientSequenceNumber(transactions, clientId));
   }, [clientId, transactions]);
 
-  useEffect(() => {
-    if (!data?.jam) return undefined;
-
-    let cancelled = false;
-    setSessionState({ status: 'acquiring', message: null, canTakeover: false, activeClientId: null });
-    jamStore.getState().acquireSession({ jamId, clientId, deviceLabel: 'Navigateur' })
-      .then((session) => {
-        if (cancelled) return;
-        setSessionState({ status: 'active', message: null, canTakeover: false, activeClientId: null });
-        const intervalMs = Math.max(1000, (session?.heartbeatIntervalSeconds ?? 10) * 1000);
-        startHeartbeat({ jamId, intervalMs, onLeaseLost: handleLeaseLost });
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        const body = error?.payload?.body ?? error?.data ?? {};
-        const locked = error?.status === 423 || error?.response?.status === 423 || body?.error === 'jam_locked_by_other_client';
-        setSessionState({
-          status: locked ? 'read_only' : 'unavailable',
-          message: locked ? 'Cette jam est ouverte ailleurs : lecture seule pour éviter un conflit.' : `Session d’édition indisponible : ${error?.message ?? 'erreur inconnue'}`,
-          canTakeover: Boolean(locked && body?.canForceTakeover),
-          activeClientId: body?.activeClientId ?? null,
-        });
-      });
-    return () => {
-      cancelled = true;
-      stopHeartbeat(jamId);
-      jamStore.getState().releaseSession({ jamId }).catch(() => null);
-    };
-  }, [clientId, data?.jam, handleLeaseLost, jamId]);
 
   if (isLoading) {
     return <Stack alignItems="center" py={6}><CircularProgress /><Typography mt={2}>Chargement de la jam…</Typography></Stack>;
@@ -87,25 +48,8 @@ export function JamDetailPage() {
   }
 
   const jam = projection?.jam ?? data?.jam;
-  const canEdit = sessionState.status === 'active';
+  const canEdit = Boolean(projection) && !isLoading && !isError;
 
-  async function takeoverEditingSession() {
-    setSessionState((current) => ({ ...current, status: 'taking_over', message: 'Reprise du contrôle en cours…' }));
-    try {
-      const session = await jamStore.getState().takeoverSession({ jamId, clientId, previousClientId: sessionState.activeClientId, deviceLabel: 'Navigateur' });
-      setSessionState({ status: 'active', message: null, canTakeover: false, activeClientId: null });
-      const intervalMs = Math.max(1000, (session?.heartbeatIntervalSeconds ?? 10) * 1000);
-      startHeartbeat({ jamId, intervalMs, onLeaseLost: handleLeaseLost });
-      enqueueFeedback('Contrôle de la jam repris');
-    } catch (error) {
-      setSessionState({
-        status: 'read_only',
-        message: `Reprise impossible : ${error?.message ?? 'erreur inconnue'}`,
-        canTakeover: true,
-        activeClientId: sessionState.activeClientId,
-      });
-    }
-  }
 
   function withReservedClientSequence(transaction) {
     const nextSequence = Math.max(clientSequenceRef.current + 1, transaction.clientSequenceNumber ?? 1);
@@ -120,7 +64,7 @@ export function JamDetailPage() {
   function applyOrganizerTransaction(transaction) {
     if (!transaction) return null;
     if (!canEdit) {
-      enqueueFeedback('Action impossible : cette jam est en lecture seule', 'warning');
+      enqueueFeedback('Action impossible : la jam n’est pas disponible pour l’édition', 'warning');
       return null;
     }
     return jamStore.getState().applyLocalTransaction(withReservedClientSequence(transaction));
@@ -137,18 +81,9 @@ export function JamDetailPage() {
           </Box>
           <SyncStatusIndicator status={syncStatus.status} />
           <Tooltip title={undoTarget && canEdit ? 'Annuler la dernière action' : 'Aucune action à annuler'}><span><IconButton aria-label="Undo" disabled={!undoTarget || !canEdit} onClick={() => { const transaction = buildLinearUndoTransaction({ jamId, clientId, clientSequenceNumber: nextClientSequenceNumber, transactions }); if (!transaction) { enqueueFeedback('Undo impossible : aucune action à annuler', 'warning'); return; } applyOrganizerTransaction(transaction); enqueueFeedback('Action annulée'); }}><Undo /></IconButton></span></Tooltip>
-          <Tooltip title={canEdit ? 'Configuration' : 'Configuration indisponible en lecture seule'}><span><IconButton aria-label="Configuration" disabled={!canEdit} onClick={() => setConfigOpen(true)}><Settings /></IconButton></span></Tooltip>
+          <Tooltip title={canEdit ? 'Configuration' : 'Configuration indisponible'}><span><IconButton aria-label="Configuration" disabled={!canEdit} onClick={() => setConfigOpen(true)}><Settings /></IconButton></span></Tooltip>
         </Stack>
       </Paper>
-
-      {sessionState.message ? (
-        <Alert
-          severity={sessionState.status === 'read_only' || sessionState.status === 'taking_over' ? 'warning' : 'error'}
-          action={sessionState.canTakeover ? <Button color="inherit" size="small" onClick={takeoverEditingSession}>Reprendre le contrôle</Button> : null}
-        >
-          {sessionState.message}
-        </Alert>
-      ) : null}
 
       <Paper sx={{ p: { xs: 1.5, sm: 2 } }}>
         <JamTable

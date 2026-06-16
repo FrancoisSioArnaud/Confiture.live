@@ -1,19 +1,7 @@
 from django.db import transaction as db_transaction
-from rest_framework.exceptions import APIException, ValidationError
+from rest_framework.exceptions import ValidationError
 from jams.models import JamEvent, JamTransaction
 from .validation import validate_transaction_payload
-from .sessions import assert_active_lease
-
-
-class ClientSequenceConflict(APIException):
-    status_code = 409
-    default_code = "client_sequence_conflict"
-
-    def __init__(self, detail=None, code=None):
-        # Keep numeric values as JSON numbers. APIException.__init__ wraps
-        # nested values as ErrorDetail strings, which breaks sequence clients.
-        self.detail = detail or {"error": self.default_code}
-
 
 
 def serialize_event(event):
@@ -47,12 +35,7 @@ def serialize_transaction(transaction, include_events=True):
     return data
 
 
-def expected_client_sequence(jam, client_id):
-    last = JamTransaction.objects.filter(jam=jam, client_id=client_id).order_by("-client_sequence_number").first()
-    return 1 if last is None else last.client_sequence_number + 1
-
-
-def accept_transaction(jam, client_id, transaction_payload, lease_token=None, require_lease=True):
+def accept_transaction(jam, client_id, transaction_payload):
     validated = validate_transaction_payload(jam.jam_id, client_id, transaction_payload)
     existing = JamTransaction.objects.filter(transaction_id=validated["transaction_id"]).prefetch_related("events").first()
     if existing:
@@ -60,16 +43,6 @@ def accept_transaction(jam, client_id, transaction_payload, lease_token=None, re
             raise ValidationError({"transaction.transactionId": "Already used for another jam."})
         return existing, False
 
-    if require_lease:
-        assert_active_lease(jam, client_id, lease_token)
-
-    expected_sequence = expected_client_sequence(jam, client_id)
-    if validated["client_sequence_number"] != expected_sequence:
-        raise ClientSequenceConflict({
-            "error": "client_sequence_conflict",
-            "expectedClientSequenceNumber": expected_sequence,
-            "receivedClientSequenceNumber": validated["client_sequence_number"],
-        })
 
     events = validated["events"]
     event_ids = [event["eventId"] for event in events]

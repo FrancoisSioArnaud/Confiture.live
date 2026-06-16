@@ -8,7 +8,15 @@ localDb.version(1).stores({
   pendingTransactions: 'transactionId, jamId, status, retryAt, attemptCount, createdAt',
   snapshots: 'snapshotId, jamId, lastServerSequenceNumber, createdAt',
   syncState: 'jamId, lastServerSequenceNumber, status, updatedAt',
-  clientSessions: 'jamId, clientId, leaseToken, leaseExpiresAt, status',
+});
+
+localDb.version(2).stores({
+  localJams: 'jamId, updatedAt',
+  localTransactions: 'transactionId, jamId, clientSequenceNumber, serverSequenceNumberStart, syncedAt',
+  pendingTransactions: 'transactionId, jamId, status, retryAt, attemptCount, createdAt',
+  snapshots: 'snapshotId, jamId, lastServerSequenceNumber, createdAt',
+  syncState: 'jamId, lastServerSequenceNumber, status, updatedAt',
+  clientSessions: null,
 });
 
 const memory = {
@@ -17,7 +25,6 @@ const memory = {
   pendingTransactions: new Map(),
   snapshots: new Map(),
   syncState: new Map(),
-  clientSessions: new Map(),
 };
 
 function useMemory() {
@@ -116,17 +123,6 @@ export async function getSyncState(jamId) {
   return (await get('syncState', jamId)) ?? { jamId, lastServerSequenceNumber: 0, status: 'local_only' };
 }
 
-export async function saveClientSession(jamId, session) {
-  return put('clientSessions', jamId, { jamId, ...session, status: session.status ?? 'active' });
-}
-
-export async function getClientSession(jamId) {
-  return get('clientSessions', jamId);
-}
-
-export async function clearClientSession(jamId) {
-  return remove('clientSessions', jamId);
-}
 
 export async function resetLocalDbForTests() {
   Object.values(memory).forEach((map) => map.clear());

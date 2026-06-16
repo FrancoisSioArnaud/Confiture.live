@@ -1,7 +1,6 @@
 import pytest
 from django.contrib.auth import get_user_model
-from django.utils import timezone
-from jams.models import Jam, JamClientSession, JamEvent, JamTransaction
+from jams.models import Jam, JamEvent, JamTransaction
 
 pytestmark = pytest.mark.django_db
 
@@ -80,11 +79,6 @@ def create_jam_with_instruments(client, jam_id="jam_with_instruments", client_id
     assert response.status_code == 201
     return response.json()
 
-
-def acquire(client, jam_id="jam_test", client_id="client_1"):
-    response = client.post(f"/api/jams/{jam_id}/client-session/acquire/", {"clientId": client_id}, content_type="application/json")
-    assert response.status_code == 200
-    return response.json()
 
 
 def transaction_payload(jam_id="jam_test", tx_id="transaction_2", event_id="event_2", sequence=2):
@@ -192,21 +186,6 @@ def test_api_post_create_jam_ignores_admin_session_csrf(client):
     assert Jam.objects.filter(jam_id="jam_admin_session").exists()
 
 
-def test_api_post_acquire_session_ignores_admin_session_csrf(client):
-    create_jam(client, jam_id="jam_admin_session_acquire", client_id="client_admin_session")
-    User = get_user_model()
-    user = User.objects.create_superuser(username="admin", email="admin@example.com", password="password")
-    client.enforce_csrf_checks = True
-    client.force_login(user)
-
-    response = client.post("/api/jams/jam_admin_session_acquire/client-session/acquire/", {
-        "clientId": "client_admin_session",
-        "deviceLabel": "Navigateur",
-    }, content_type="application/json")
-
-    assert response.status_code == 200
-    assert response.json()["status"] == "acquired"
-
 def test_patch_and_archive_jam(client):
     create_jam(client)
     patch_response = client.patch("/api/jams/jam_test/", {"name": "Jam patchée"}, content_type="application/json")
@@ -221,11 +200,9 @@ def test_patch_and_archive_jam(client):
 
 def test_post_valid_transaction_and_get_transactions(client):
     create_jam(client)
-    lease = acquire(client)
 
     response = client.post("/api/jams/jam_test/transactions/", {
         "clientId": "client_1",
-        "leaseToken": lease["leaseToken"],
         "baseServerSequenceNumber": 1,
         "transaction": transaction_payload(),
     }, content_type="application/json")
@@ -243,11 +220,9 @@ def test_post_valid_transaction_and_get_transactions(client):
 
 def test_post_participant_transaction_persists_expected_events(client):
     create_jam_with_instruments(client, jam_id="jam_participant")
-    lease = acquire(client, jam_id="jam_participant")
 
     response = client.post("/api/jams/jam_participant/transactions/", {
         "clientId": "client_1",
-        "leaseToken": lease["leaseToken"],
         "baseServerSequenceNumber": 3,
         "transaction": {
             "transactionId": "transaction_add_participant",
@@ -294,42 +269,33 @@ def test_post_participant_transaction_persists_expected_events(client):
     assert events[4].payload["instrumentId"] == "instrument_guitar"
 
 
-def test_rejects_transaction_without_lease_token(client):
+def test_accepts_transaction_without_lease_token(client):
     create_jam(client)
-    acquire(client)
-
     response = client.post("/api/jams/jam_test/transactions/", {
         "clientId": "client_1",
         "baseServerSequenceNumber": 1,
         "transaction": transaction_payload(),
     }, content_type="application/json")
 
-    assert response.status_code == 403
+    assert response.status_code == 201
 
 
-def test_rejects_stale_base_server_sequence(client):
+def test_accepts_stale_base_server_sequence(client):
     create_jam(client)
-    lease = acquire(client)
 
     response = client.post("/api/jams/jam_test/transactions/", {
         "clientId": "client_1",
-        "leaseToken": lease["leaseToken"],
         "baseServerSequenceNumber": 0,
         "transaction": transaction_payload(),
     }, content_type="application/json")
 
-    assert response.status_code == 409
-    assert response.json()["error"] == "sequence_conflict"
-    assert response.json()["latestServerSequenceNumber"] == 1
-    assert response.json()["clientBaseServerSequenceNumber"] == 0
+    assert response.status_code == 201
 
 
 def test_transaction_idempotence_does_not_duplicate(client):
     create_jam(client)
-    lease = acquire(client)
     body = {
         "clientId": "client_1",
-        "leaseToken": lease["leaseToken"],
         "baseServerSequenceNumber": 1,
         "transaction": transaction_payload(),
     }
@@ -343,25 +309,21 @@ def test_transaction_idempotence_does_not_duplicate(client):
     assert [tx["transactionId"] for tx in all_transactions].count("transaction_2") == 1
 
 
-def test_rejects_client_sequence_gap(client):
+def test_accepts_client_sequence_gap_as_metadata(client):
     create_jam(client)
-    lease = acquire(client)
     response = client.post("/api/jams/jam_test/transactions/", {
         "clientId": "client_1",
-        "leaseToken": lease["leaseToken"],
         "baseServerSequenceNumber": 1,
         "transaction": transaction_payload(sequence=3),
     }, content_type="application/json")
-    assert response.status_code == 409
-    assert response.json()["expectedClientSequenceNumber"] == 2
+    assert response.status_code == 201
+    assert JamTransaction.objects.get(transaction_id="transaction_2").client_sequence_number == 3
 
 
 def test_snapshot_latest(client):
     create_jam(client)
-    lease = acquire(client)
     post_response = client.post("/api/jams/jam_test/snapshots/", {
         "clientId": "client_1",
-        "leaseToken": lease["leaseToken"],
         "snapshot": {
             "snapshotId": "snapshot_1",
             "lastServerSequenceNumber": 1,
@@ -377,10 +339,8 @@ def test_snapshot_latest(client):
     assert latest_response.json()["snapshot"]["snapshotId"] == "snapshot_1"
 
 
-def test_rejects_snapshot_without_lease_token(client):
+def test_accepts_snapshot_without_lease_token(client):
     create_jam(client)
-    acquire(client)
-
     response = client.post("/api/jams/jam_test/snapshots/", {
         "clientId": "client_1",
         "snapshot": {
@@ -392,50 +352,13 @@ def test_rejects_snapshot_without_lease_token(client):
         },
     }, content_type="application/json")
 
-    assert response.status_code == 403
+    assert response.status_code == 201
 
-
-def test_acquire_heartbeat_release_and_takeover(client):
-    create_jam(client)
-    lease = acquire(client, client_id="client_1")
-
-    heartbeat = client.post("/api/jams/jam_test/client-session/heartbeat/", {
-        "clientId": "client_1",
-        "leaseToken": lease["leaseToken"],
-    }, content_type="application/json")
-    assert heartbeat.status_code == 200
-    assert heartbeat.json()["status"] == "renewed"
-
-    locked = client.post("/api/jams/jam_test/client-session/acquire/", {"clientId": "client_2"}, content_type="application/json")
-    assert locked.status_code == 423
-
-    takeover = client.post("/api/jams/jam_test/client-session/takeover/", {"clientId": "client_2", "previousClientId": "client_1", "confirm": True}, content_type="application/json")
-    assert takeover.status_code == 200
-    assert takeover.json()["clientId"] == "client_2"
-
-    release = client.post("/api/jams/jam_test/client-session/release/", {
-        "clientId": "client_2",
-        "leaseToken": takeover.json()["leaseToken"],
-    }, content_type="application/json")
-    assert release.status_code == 200
-    assert release.json()["status"] == "released"
-
-
-def test_expired_session_allows_another_client(client):
-    create_jam(client)
-    acquire(client, client_id="client_1")
-    JamClientSession.objects.update(lease_expires_at=timezone.now() - timezone.timedelta(seconds=1))
-
-    response = client.post("/api/jams/jam_test/client-session/acquire/", {"clientId": "client_2"}, content_type="application/json")
-    assert response.status_code == 200
-    assert response.json()["clientId"] == "client_2"
 
 def test_rejects_event_payload_missing_required_fields(client):
     jam = create_jam(client)
-    lease = acquire(client, jam["jamId"], "client_payload")
     response = client.post(f"/api/jams/{jam['jamId']}/transactions/", {
         "clientId": "client_payload",
-        "leaseToken": lease["leaseToken"],
         "transaction": {
             "transactionId": "tx_bad_payload",
             "jamId": jam["jamId"],
@@ -452,6 +375,51 @@ def test_rejects_event_payload_missing_required_fields(client):
     }, content_type="application/json")
 
     assert response.status_code == 400
+
+
+
+def test_accepts_transactions_from_multiple_client_ids(client):
+    create_jam(client)
+
+    first = client.post("/api/jams/jam_test/transactions/", {
+        "clientId": "client_1",
+        "baseServerSequenceNumber": 1,
+        "transaction": transaction_payload(tx_id="transaction_client_1", event_id="event_client_1", sequence=2),
+    }, content_type="application/json")
+    second = client.post("/api/jams/jam_test/transactions/", {
+        "clientId": "client_2",
+        "baseServerSequenceNumber": 1,
+        "transaction": transaction_payload(tx_id="transaction_client_2", event_id="event_client_2", sequence=1),
+    }, content_type="application/json")
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert JamTransaction.objects.filter(jam__jam_id="jam_test").count() == 3
+
+
+def test_accepts_duplicate_client_sequence_number_as_metadata(client):
+    create_jam(client)
+
+    first = client.post("/api/jams/jam_test/transactions/", {
+        "clientId": "client_1",
+        "transaction": transaction_payload(tx_id="transaction_dup_1", event_id="event_dup_1", sequence=2),
+    }, content_type="application/json")
+    second = client.post("/api/jams/jam_test/transactions/", {
+        "clientId": "client_1",
+        "transaction": transaction_payload(tx_id="transaction_dup_2", event_id="event_dup_2", sequence=2),
+    }, content_type="application/json")
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert list(JamTransaction.objects.filter(transaction_id__startswith="transaction_dup_").values_list("client_sequence_number", flat=True)) == [2, 2]
+
+
+def test_client_session_endpoints_return_404(client):
+    create_jam(client)
+
+    for action in ["acquire", "heartbeat", "release", "takeover"]:
+        response = client.post(f"/api/jams/jam_test/client-session/{action}/", {"clientId": "client_1"}, content_type="application/json")
+        assert response.status_code == 404
 
 
 def test_list_empty_jams_returns_json_results(client):
@@ -476,10 +444,8 @@ def test_list_jams_returns_json_results_with_existing_jam(client):
 
 def test_retrieve_jam_with_snapshot_includes_transactions_and_events(client):
     create_jam(client)
-    lease = acquire(client)
     transaction_response = client.post("/api/jams/jam_test/transactions/", {
         "clientId": "client_1",
-        "leaseToken": lease["leaseToken"],
         "baseServerSequenceNumber": 1,
         "transaction": transaction_payload(),
     }, content_type="application/json")

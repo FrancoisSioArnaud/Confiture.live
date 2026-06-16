@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Jam, JamClientSession, JamEvent, JamSnapshot, JamTransaction
+from .models import Jam, JamEvent, JamSnapshot, JamTransaction
 
 
 class JamSerializer(serializers.ModelSerializer):
@@ -50,16 +50,3 @@ class JamSnapshotSerializer(serializers.ModelSerializer):
     class Meta:
         model = JamSnapshot
         fields = ["snapshotId", "clientId", "lastServerSequenceNumber", "payload", "schemaVersion", "created_at"]
-
-
-class JamClientSessionSerializer(serializers.ModelSerializer):
-    sessionId = serializers.CharField(source="session_id")
-    clientId = serializers.CharField(source="client_id")
-    leaseToken = serializers.CharField(source="lease_token")
-    leaseExpiresAt = serializers.DateTimeField(source="lease_expires_at")
-    acquiredAt = serializers.DateTimeField(source="acquired_at")
-    lastHeartbeatAt = serializers.DateTimeField(source="last_heartbeat_at")
-
-    class Meta:
-        model = JamClientSession
-        fields = ["sessionId", "leaseToken", "clientId", "status", "leaseExpiresAt", "acquiredAt", "lastHeartbeatAt", "metadata"]
