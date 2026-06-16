@@ -126,7 +126,7 @@ export function JamConfigDialog({ open, projection, clientId, clientSequenceNumb
       <ConfirmDialog
         open={Boolean(pendingHide)}
         title="Masquer cet instrument ?"
-        description="Cet instrument contient déjà des données. Tu peux le renommer si besoin ; si tu confirmes, la colonne sera masquée sans supprimer l’historique."
+        description="La colonne ne sera plus affichée dans le tableau ni dans le drawer d’appel. L’historique reste conservé."
         confirmLabel="Masquer l’instrument"
         onCancel={() => setPendingHide(null)}
         onConfirm={confirmHide}

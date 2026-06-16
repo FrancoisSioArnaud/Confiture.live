@@ -268,9 +268,9 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
       </Paper>
       <ConfirmDialog
         open={Boolean(pendingDelinkAction)}
-        title="Supprimer le link existant ?"
-        description="Cette action supprimera le link associé uniquement pour ce remplacement. Les autres passages restent conservés."
-        confirmLabel="Continuer"
+        title="Délier ce passage ?"
+        description="Ce musicien est lié à un autre passage. Pour le repousser ou le remplacer, le link sera supprimé."
+        confirmLabel="Délier et continuer"
         onCancel={() => setPendingDelinkAction(null)}
         onConfirm={confirmPendingDelinkAction}
       />
@@ -376,12 +376,16 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
 
   function requestParticipantLeft(card) {
     closeMenu();
-    setConfirmState({ kind: 'participant-left', card, title: 'Marquer ce musicien comme parti ?', description: 'Ses passages futurs seront retirés du tableau. Ses passages déjà joués resteront visibles dans l’historique.', confirmLabel: 'Marquer parti' });
+    setConfirmState({ kind: 'participant-left', card, title: 'Marquer ce musicien comme parti ?', description: 'Ses passages futurs seront retirés du tableau. Ses passages déjà joués resteront visibles dans l’historique.', confirmLabel: 'Marquer comme parti' });
   }
 
   function requestRemoveParticipant(card) {
     closeMenu();
-    setConfirmState({ kind: 'remove-participant', card, title: 'Supprimer ce participant ?', description: 'Le participant sera supprimé uniquement s’il n’a jamais joué.', confirmLabel: 'Supprimer participant' });
+    if (participantHasPlayed(projection, card.participantId)) {
+      onFeedback?.('Ce musicien a déjà joué. Tu peux le marquer comme parti.');
+      return;
+    }
+    setConfirmState({ kind: 'remove-participant', card, title: 'Supprimer ce participant ?', description: 'Le participant n’a encore jamais joué. Il sera retiré de la jam avec ses instruments.', confirmLabel: 'Supprimer participant' });
   }
 
   function confirmAction() {
@@ -395,11 +399,8 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
       onFeedback?.('Musicien marqué comme parti');
     }
     if (kind === 'remove-participant') {
-      if (participantHasPlayed(projection, card.participantId)) onFeedback?.('Suppression impossible : ce participant a déjà joué');
-      else {
-        dispatch(buildRemoveParticipantTransaction({ jamId, clientId, clientSequenceNumber, participantId: card.participantId }));
-        onFeedback?.('Participant supprimé');
-      }
+      dispatch(buildRemoveParticipantTransaction({ jamId, clientId, clientSequenceNumber, participantId: card.participantId }));
+      onFeedback?.('Participant supprimé');
     }
     if (kind === 'plateau-unplayed') {
       dispatch(buildTogglePlateauPlayedTransaction({ jamId, clientId, clientSequenceNumber, plateauIndex: confirmState.plateauIndex, targets: confirmState.targets, played: true }));
@@ -590,7 +591,6 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
   }
 
   const menuCard = menuState.card;
-  const menuCardHasPlayedParticipant = menuCard?.type === 'appearance' ? participantHasPlayed(projection, menuCard.participantId) : false;
 
   return (
     <>
@@ -639,7 +639,7 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
         {menuCard?.type === 'appearance' ? <MenuItem onClick={() => { const anchor = menuCard; closeMenu(); setLinkMode({ active: false, anchor: null, selectedIds: new Set() }); setConflictMode({ active: true, anchor, target: null }); }}>Créer / retirer un conflit</MenuItem> : null}
         <MenuItem onClick={() => requestRemoveCard(menuCard)}>{menuCard?.type === 'hole' ? 'Supprimer le trou' : 'Supprimer ce passage'}</MenuItem>
         {menuCard?.type === 'appearance' ? <MenuItem onClick={() => requestParticipantLeft(menuCard)}>Musicien parti</MenuItem> : null}
-        {menuCard?.type === 'appearance' ? <MenuItem disabled={menuCardHasPlayedParticipant} onClick={() => requestRemoveParticipant(menuCard)}>Supprimer participant</MenuItem> : null}
+        {menuCard?.type === 'appearance' ? <MenuItem onClick={() => requestRemoveParticipant(menuCard)}>Supprimer participant</MenuItem> : null}
       </Menu>
 
       <CallDrawer
@@ -671,8 +671,11 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
       </Dialog>
 
       <Dialog open={Boolean(conflictMode.active && conflictMode.target)} onClose={() => setConflictMode((current) => ({ ...current, target: null }))}>
-        <DialogTitle>Créer / retirer un conflit</DialogTitle>
-        <DialogContent><Typography>Appliquer ce conflit seulement à ce passage ou pour toute la soirée ?</Typography></DialogContent>
+        <DialogTitle>Ce conflit concerne quoi ?</DialogTitle>
+        <DialogContent>
+          <Typography mb={1}>“Seulement ce passage” bloque uniquement les cards sélectionnées.</Typography>
+          <Typography>“Toute la soirée” bloque les participations entre elles pour les prochains rounds.</Typography>
+        </DialogContent>
         <DialogActions>
           <Button onClick={() => setConflictMode((current) => ({ ...current, target: null }))}>Annuler</Button>
           <Button onClick={() => validateConflictMode('appearance')}>Seulement ce passage</Button>
