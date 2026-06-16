@@ -20,7 +20,6 @@ export function NewJamPage() {
   const [instruments, setInstruments] = useState(() => DEFAULT_INSTRUMENT_ROWS);
   const [selectedInstrumentIds, setSelectedInstrumentIds] = useState(() => DEFAULT_INSTRUMENT_ROWS.map((instrument) => instrument.instrumentId));
   const [customInstrument, setCustomInstrument] = useState('');
-  const [creationWarning, setCreationWarning] = useState(null);
   const clientId = useMemo(() => getOrCreateClientId(), []);
 
   const mutation = useMutation({
@@ -39,15 +38,6 @@ export function NewJamPage() {
         await markTransactionSynced(transaction.jamId, transaction.transactionId, ack);
         await saveSyncState(transaction.jamId, { lastServerSequenceNumber: response.latestServerSequenceNumber ?? ack.serverSequenceNumberEnd, status: 'synced' });
         await jamStore.getState().reloadFromLocalDb(transaction.jamId);
-      }
-      try {
-        await jamStore.getState().acquireSession({
-          jamId: transaction.jamId,
-          clientId,
-          deviceLabel: 'Navigateur',
-        });
-      } catch (error) {
-        setCreationWarning('Jam créée, mais session d’édition non acquise. Ouvre la jam et reprends le contrôle.');
       }
       navigate(`/jams/${transaction.jamId}`);
     },
@@ -86,7 +76,6 @@ export function NewJamPage() {
           <Typography color="text.secondary">Configure les instruments de départ. Tu pourras ajuster la jam ensuite.</Typography>
         </Box>
         {mutation.isError ? <Alert severity="error">Impossible de créer la jam côté serveur. Vérifie la connexion puis réessaie.</Alert> : null}
-        {creationWarning ? <Alert severity="warning">{creationWarning}</Alert> : null}
         <TextField label="Nom" placeholder="Nom de la jam" value={name} onChange={(event) => setName(event.target.value)} fullWidth autoFocus />
         <TextField label="Date indicative" type="date" value={indicativeDate} onChange={(event) => setIndicativeDate(event.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
         <Box>

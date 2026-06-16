@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="jamclientsession",
             name="session_id",
-            field=models.CharField(default=jams.models.generate_session_id, max_length=96, unique=True),
+            field=models.CharField(default=jams.models.generate_snapshot_id, max_length=96, unique=True),
         ),
         migrations.AlterField(
             model_name="jamsnapshot",

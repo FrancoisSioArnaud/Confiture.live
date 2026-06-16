@@ -1,6 +1,5 @@
 import { createStore } from 'zustand/vanilla';
 import { projectJamState } from '../projection/projectJamState';
-import { acquireLease, heartbeatLease, releaseLease, takeoverLease } from '../sync/clientSession';
 import { getLatestLocalSnapshot, getLocalTransactions, saveLocalJam, saveLocalTransaction, saveSnapshot, saveSyncState } from '../sync/localDb';
 import { enqueueTransaction, hydrateFromServer as hydrateTransactionsFromServer, pushPendingTransactions, scheduleSync } from '../sync/syncQueue';
 
@@ -97,21 +96,5 @@ export const jamStore = createStore((set, get) => ({
     const result = await pushPendingTransactions({ jamId, api });
     await get().reloadFromLocalDb(jamId);
     return result;
-  },
-
-  async acquireSession({ jamId, clientId, deviceLabel, force = false, api } = {}) {
-    return acquireLease({ jamId, clientId, deviceLabel, force, api });
-  },
-
-  async heartbeatSession({ jamId = get().jamId, api } = {}) {
-    return heartbeatLease({ jamId, api });
-  },
-
-  async releaseSession({ jamId = get().jamId, api } = {}) {
-    return releaseLease({ jamId, api });
-  },
-
-  async takeoverSession({ jamId = get().jamId, clientId, previousClientId, deviceLabel, api } = {}) {
-    return takeoverLease({ jamId, clientId, previousClientId, deviceLabel, api });
   },
 }));

@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.utils.html import escape
 
 from jams.admin import pretty_json
-from jams.models import Jam, JamClientSession, JamEvent, JamSnapshot, JamTransaction
+from jams.models import Jam, JamEvent, JamSnapshot, JamTransaction
 
 pytestmark = pytest.mark.django_db
 
@@ -55,7 +55,7 @@ def test_admin_index_loads_for_superuser(client):
 
 
 def test_main_models_are_registered_in_admin():
-    for model in (Jam, JamTransaction, JamEvent, JamSnapshot, JamClientSession):
+    for model in (Jam, JamTransaction, JamEvent, JamSnapshot):
         assert model in admin.site._registry
 
 

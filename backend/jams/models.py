@@ -12,10 +12,6 @@ def generate_snapshot_id():
     return f"snapshot_{uuid.uuid4().hex}"
 
 
-def generate_session_id():
-    return f"session_{uuid.uuid4().hex}"
-
-
 class Jam(models.Model):
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"
@@ -49,7 +45,6 @@ class JamTransaction(models.Model):
 
     class Meta:
         ordering = ["server_sequence_number_start", "id"]
-        constraints = [models.UniqueConstraint(fields=["jam", "client_id", "client_sequence_number"], name="unique_client_transaction_sequence_per_jam")]
 
     def __str__(self):
         return f"{self.transaction_id} — {self.jam.jam_id}"
@@ -89,26 +84,3 @@ class JamSnapshot(models.Model):
 
     def __str__(self):
         return self.snapshot_id
-
-
-class JamClientSession(models.Model):
-    class Status(models.TextChoices):
-        ACTIVE = "active", "Active"
-        RELEASED = "released", "Released"
-        EXPIRED = "expired", "Expired"
-
-    session_id = models.CharField(max_length=96, unique=True, default=generate_session_id)
-    lease_token = models.CharField(max_length=96, unique=True, default=generate_session_id)
-    jam = models.ForeignKey(Jam, related_name="client_sessions", on_delete=models.CASCADE)
-    client_id = models.CharField(max_length=96)
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
-    lease_expires_at = models.DateTimeField()
-    acquired_at = models.DateTimeField(default=timezone.now)
-    last_heartbeat_at = models.DateTimeField(default=timezone.now)
-    metadata = models.JSONField(default=dict, blank=True)
-
-    class Meta:
-        ordering = ["-last_heartbeat_at"]
-
-    def __str__(self):
-        return f"{self.client_id} — {self.jam.jam_id}"

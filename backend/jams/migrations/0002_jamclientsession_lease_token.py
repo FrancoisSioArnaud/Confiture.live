@@ -11,6 +11,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="jamclientsession",
             name="lease_token",
-            field=models.CharField(default=jams.models.generate_session_id, max_length=96, unique=True),
+            field=models.CharField(default=jams.models.generate_snapshot_id, max_length=96, unique=True),
         ),
     ]

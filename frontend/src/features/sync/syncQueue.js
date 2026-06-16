@@ -1,7 +1,5 @@
 import * as jamsApi from '../../shared/api/jamsApi';
 import {
-  getClientSession,
-  saveClientSession,
   getPendingTransactions,
   getLocalTransactions,
   getSyncState,
@@ -27,65 +25,6 @@ function latestServerSequenceFromError(error) {
 
 function isOffline() {
   return typeof navigator !== 'undefined' && navigator.onLine === false;
-}
-
-export function isLeaseError(error) {
-  const body = error?.payload?.body ?? {};
-  return (
-    error?.status === 403 ||
-    error?.status === 423 ||
-    body?.error === 'jam_locked_by_other_client' ||
-    String(error?.message ?? '').includes('lease') ||
-    String(error?.message ?? '').includes('client session')
-  );
-}
-
-export function isSessionExpired(session, skewMs = 5000) {
-  if (!session?.leaseExpiresAt) return false;
-  return new Date(session.leaseExpiresAt).getTime() <= Date.now() + skewMs;
-}
-
-async function getPushableSession({ jamId, transaction, api }) {
-  let session = await getClientSession(jamId);
-  if (session?.clientId && session?.clientId !== transaction.clientId) {
-    return {
-      ok: false,
-      status: SYNC_STATUS.SESSION_REQUIRED,
-      message: 'Session d’édition incohérente : rechargez la jam ou reprenez le contrôle avant de synchroniser.',
-    };
-  }
-
-  if (!session?.clientId || !session?.leaseToken || isSessionExpired(session)) {
-    try {
-      session = await api.acquireClientSession(jamId, {
-        clientId: transaction.clientId,
-        deviceLabel: 'Navigateur',
-        force: false,
-      });
-      await saveClientSession(jamId, session);
-    } catch (error) {
-      return {
-        ok: false,
-        error,
-        status: isLeaseError(error) ? SYNC_STATUS.LEASE_LOST : SYNC_STATUS.SESSION_REQUIRED,
-        message: isLeaseError(error)
-          ? 'Session d’édition perdue. Reprenez le contrôle ou rechargez la jam avant de synchroniser.'
-          : `Session d’édition indisponible : ${error?.message ?? 'erreur inconnue'}`,
-      };
-    }
-  }
-
-  if (!session?.clientId || !session?.leaseToken) {
-    return { ok: false, status: SYNC_STATUS.SESSION_REQUIRED, message: 'Session d’édition requise avant de synchroniser.' };
-  }
-  if (session.clientId !== transaction.clientId) {
-    return {
-      ok: false,
-      status: SYNC_STATUS.SESSION_REQUIRED,
-      message: 'Session d’édition incohérente : rechargez la jam ou reprenez le contrôle avant de synchroniser.',
-    };
-  }
-  return { ok: true, session };
 }
 
 export async function enqueueTransaction({ jamId, transaction }) {
@@ -122,15 +61,8 @@ export async function pushPendingTransactions({ jamId, api = jamsApi, retryDelay
     const transaction = await getTransactionRecord(jamId, item.transactionId);
     if (!transaction) continue;
     try {
-      const sessionResult = await getPushableSession({ jamId, transaction, api });
-      if (!sessionResult.ok) {
-        setSyncStatus(jamId, { status: sessionResult.status, pendingCount: pending.length, lastError: sessionResult.message });
-        return { pushed, error: sessionResult.error, sessionRequired: true };
-      }
-      const { session } = sessionResult;
       const ack = await api.pushTransaction(jamId, {
-        clientId: session.clientId,
-        leaseToken: session.leaseToken,
+        clientId: transaction.clientId,
         baseServerSequenceNumber: syncState.lastServerSequenceNumber ?? 0,
         transaction,
       });
@@ -155,15 +87,6 @@ export async function pushPendingTransactions({ jamId, api = jamsApi, retryDelay
         return { pushed, error, sequenceConflict: true, latestServerSequenceNumber };
       }
 
-      if (isLeaseError(error)) {
-        setSyncStatus(jamId, {
-          status: SYNC_STATUS.LEASE_LOST,
-          pendingCount: pending.length,
-          lastError: 'Session d’édition perdue. Reprenez le contrôle ou rechargez la jam avant de synchroniser.',
-        });
-        return { pushed, error, leaseLost: true };
-      }
-
       await markTransactionFailed(jamId, transaction.transactionId, error, retryDelayMs);
       setSyncStatus(jamId, { status: SYNC_STATUS.RETRYING, pendingCount: pending.length, lastError: error.message });
       scheduleSync({ jamId, api, delayMs: retryDelayMs });
@@ -183,9 +106,9 @@ export async function hydrateFromServer({ jamId, api = jamsApi, fromServerSequen
   return payload;
 }
 
-export async function saveLocalAndRemoteSnapshot({ jamId, clientId, leaseToken, snapshot, api = jamsApi }) {
+export async function saveLocalAndRemoteSnapshot({ jamId, clientId, snapshot, api = jamsApi }) {
   await saveSnapshot(jamId, snapshot);
-  return api.postSnapshot(jamId, { clientId, leaseToken, snapshot });
+  return api.postSnapshot(jamId, { clientId, snapshot });
 }
 
 async function getTransactionRecord(jamId, transactionId) {
