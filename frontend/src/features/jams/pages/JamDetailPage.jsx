@@ -1,13 +1,14 @@
 import { ArrowBack, PersonAdd, Settings, Undo } from '@mui/icons-material';
 import { Alert, Box, Button, CircularProgress, Fab, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
 import { getJam } from '../../../shared/api/jamsApi';
 import { SyncStatusIndicator } from '../../../shared/components/SyncStatusIndicator';
 import { useFeedback } from '../../../shared/feedback/FeedbackProvider';
 import { jamStore } from '../../jam/jamStore';
 import { buildLinearUndoTransaction, getLatestUndoableTransaction } from '../../transactions/buildUndoTransaction';
+import { getNextClientSequenceNumber, getLatestClientSequenceNumber } from '../../sync/clientSequence';
 import { getSyncStatus } from '../../sync/syncStatus';
 import { getOrCreateClientId } from '../../sync/clientIdentity';
 import { startHeartbeat, stopHeartbeat } from '../../sync/clientSession';
@@ -27,17 +28,26 @@ export function JamDetailPage() {
   const projection = useJamStoreState((state) => state.projection);
   const transactions = useJamStoreState((state) => state.transactions);
   const syncStatus = getSyncStatus(jamId);
-  const nextClientSequenceNumber = (transactions.at(-1)?.clientSequenceNumber ?? 0) + 1;
+  const nextClientSequenceNumber = getNextClientSequenceNumber(transactions, clientId);
   const undoTarget = getLatestUndoableTransaction(transactions);
   const { data, isLoading, isError, error } = useQuery({ queryKey: ['jam', jamId], queryFn: () => getJam(jamId, { includeSnapshot: 'true' }) });
+  const handleLeaseLost = useCallback((error) => {
+    setSessionState({
+      status: 'read_only',
+      message: `Session d’édition perdue : ${error?.message ?? 'reprenez le contrôle pour continuer.'}`,
+      canTakeover: true,
+      activeClientId: null,
+    });
+    enqueueFeedback('Session d’édition perdue. Reprends le contrôle pour continuer.', 'warning');
+  }, [enqueueFeedback]);
 
   useEffect(() => {
     if (data) jamStore.getState().hydrateFromPayload(jamId, data).catch((error) => enqueueFeedback(`Hydratation locale impossible : ${error?.message ?? 'erreur inconnue'}`, 'warning'));
   }, [data, enqueueFeedback, jamId]);
 
   useEffect(() => {
-    clientSequenceRef.current = Math.max(clientSequenceRef.current, transactions.at(-1)?.clientSequenceNumber ?? 0);
-  }, [transactions]);
+    clientSequenceRef.current = Math.max(clientSequenceRef.current, getLatestClientSequenceNumber(transactions, clientId));
+  }, [clientId, transactions]);
 
   useEffect(() => {
     if (!data?.jam) return undefined;
@@ -49,7 +59,7 @@ export function JamDetailPage() {
         if (cancelled) return;
         setSessionState({ status: 'active', message: null, canTakeover: false, activeClientId: null });
         const intervalMs = Math.max(1000, (session?.heartbeatIntervalSeconds ?? 10) * 1000);
-        startHeartbeat({ jamId, intervalMs });
+        startHeartbeat({ jamId, intervalMs, onLeaseLost: handleLeaseLost });
       })
       .catch((error) => {
         if (cancelled) return;
@@ -67,7 +77,7 @@ export function JamDetailPage() {
       stopHeartbeat(jamId);
       jamStore.getState().releaseSession({ jamId }).catch(() => null);
     };
-  }, [clientId, data?.jam, jamId]);
+  }, [clientId, data?.jam, handleLeaseLost, jamId]);
 
   if (isLoading) {
     return <Stack alignItems="center" py={6}><CircularProgress /><Typography mt={2}>Chargement de la jam…</Typography></Stack>;
@@ -85,7 +95,7 @@ export function JamDetailPage() {
       const session = await jamStore.getState().takeoverSession({ jamId, clientId, previousClientId: sessionState.activeClientId, deviceLabel: 'Navigateur' });
       setSessionState({ status: 'active', message: null, canTakeover: false, activeClientId: null });
       const intervalMs = Math.max(1000, (session?.heartbeatIntervalSeconds ?? 10) * 1000);
-      startHeartbeat({ jamId, intervalMs });
+      startHeartbeat({ jamId, intervalMs, onLeaseLost: handleLeaseLost });
       enqueueFeedback('Contrôle de la jam repris');
     } catch (error) {
       setSessionState({

@@ -18,9 +18,15 @@ export async function heartbeatLease({ jamId, api = jamsApi }) {
   return nextSession;
 }
 
-export function startHeartbeat({ jamId, intervalMs = 10_000, api = jamsApi }) {
+export function startHeartbeat({ jamId, intervalMs = 10_000, api = jamsApi, onLeaseLost } = {}) {
   stopHeartbeat(jamId);
-  const id = setInterval(() => { heartbeatLease({ jamId, api }).catch(() => null); }, intervalMs);
+  const id = setInterval(() => {
+    heartbeatLease({ jamId, api }).catch(async (error) => {
+      stopHeartbeat(jamId);
+      await clearClientSession(jamId);
+      if (typeof onLeaseLost === 'function') onLeaseLost(error);
+    });
+  }, intervalMs);
   heartbeats.set(jamId, id);
   return id;
 }
@@ -35,9 +41,14 @@ export async function releaseLease({ jamId, api = jamsApi }) {
   stopHeartbeat(jamId);
   const session = await getClientSession(jamId);
   if (!session) return null;
-  const result = await api.releaseClientSession(jamId, { clientId: session.clientId, leaseToken: session.leaseToken });
-  await clearClientSession(jamId);
-  return result;
+  try {
+    const result = await api.releaseClientSession(jamId, { clientId: session.clientId, leaseToken: session.leaseToken });
+    await clearClientSession(jamId);
+    return result;
+  } catch (error) {
+    await clearClientSession(jamId);
+    throw error;
+  }
 }
 
 export async function takeoverLease({ jamId, clientId, previousClientId, deviceLabel, api = jamsApi }) {
