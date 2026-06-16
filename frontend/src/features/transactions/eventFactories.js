@@ -6,6 +6,7 @@ export const SCHEMA_VERSION = 1;
 const id = z.string().min(1);
 const orderKey = z.string().min(1);
 const isoDate = z.string().min(1);
+const nullableIsoDate = z.union([isoDate, z.null()]);
 const nullableTarget = z.union([z.object({ type: z.enum(['appearance', 'hole']), id }).strict(), z.null()]);
 const target = z.object({ type: z.enum(['appearance', 'hole']), id }).strict();
 const linkReorderStrategy = z.enum(['move_to_first', 'move_to_last', 'average_position']);
@@ -24,13 +25,13 @@ export function jamCreated(payload) {
   return event(EVENT_TYPES.JAM_CREATED, z.object({
     jamId: id,
     name: z.string().min(1),
-    indicativeDate: isoDate,
+    indicativeDate: nullableIsoDate,
     linkReorderStrategy,
   }).strict(), payload);
 }
 
 export function jamUpdated(payload) {
-  return event(EVENT_TYPES.JAM_UPDATED, z.object({ name: z.string().min(1).optional(), indicativeDate: isoDate.optional() }).strict(), payload);
+  return event(EVENT_TYPES.JAM_UPDATED, z.object({ name: z.string().min(1).optional(), indicativeDate: nullableIsoDate.optional() }).strict(), payload);
 }
 
 export function jamLinkReorderStrategyChanged(payload) {

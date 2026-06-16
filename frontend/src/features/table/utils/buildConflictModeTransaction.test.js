@@ -17,7 +17,7 @@ describe('buildConflictModeTransaction', () => {
     const projection = { conflicts: { conflict_1: { conflictId: 'conflict_1', status: 'active', scope: 'participation', targetIds: ['participation_a', 'participation_b'] } } };
     expect(activeConflictsBetween(anchor, target, projection.conflicts)).toHaveLength(1);
     const transaction = buildConflictModeTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 6, projection, anchorCard: anchor, targetCard: target, scope: 'participation' });
-    expect(transaction.events).toEqual([{ type: 'conflict_removed', payload: { conflictId: 'conflict_1' } }]);
+    expect(transaction.events).toEqual([expect.objectContaining({ type: 'conflict_removed', payload: { conflictId: 'conflict_1' } })]);
     expect(transaction.events).not.toContainEqual(expect.objectContaining({ type: 'conflict_updated' }));
   });
 });

@@ -1,11 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
+import * as jamsApi from '../../../shared/api/jamsApi';
 import { JamListPage } from './JamListPage';
 import { NewJamPage } from './NewJamPage';
 import { JamDetailPage } from './JamDetailPage';
+
+const mockedNavigate = vi.hoisted(() => vi.fn());
 
 vi.mock('../../../shared/api/jamsApi', () => ({
   listJams: vi.fn().mockResolvedValue({ results: [{ jamId: 'jam_1', name: 'Jam du jeudi', indicativeDate: '2026-01-15', summary: { uniqueParticipantsCount: 2, playedPlateausCount: 1 } }] }),
@@ -15,11 +18,12 @@ vi.mock('../../../shared/api/jamsApi', () => ({
   acquireClientSession: vi.fn().mockResolvedValue({ clientId: 'client_1', leaseToken: 'lease_1', heartbeatIntervalSeconds: 10 }),
   heartbeatClientSession: vi.fn().mockResolvedValue({ status: 'renewed' }),
   releaseClientSession: vi.fn().mockResolvedValue({ status: 'released' }),
+  takeoverClientSession: vi.fn().mockResolvedValue({ clientId: 'client_1', leaseToken: 'lease_takeover', heartbeatIntervalSeconds: 10 }),
 }));
 
 vi.mock('react-router-dom', async (importOriginal) => {
   const actual = await importOriginal();
-  return { ...actual, useParams: () => ({ jamId: 'jam_1' }), useNavigate: () => vi.fn() };
+  return { ...actual, useParams: () => ({ jamId: 'jam_1' }), useNavigate: () => mockedNavigate };
 });
 
 function renderPage(ui) {
@@ -28,6 +32,10 @@ function renderPage(ui) {
 }
 
 describe('jam pages', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('renders jam list cards with explicit open and delete buttons', async () => {
     renderPage(<JamListPage />);
     expect(await screen.findByText('Jam du jeudi')).toBeInTheDocument();
@@ -51,6 +59,37 @@ describe('jam pages', () => {
     expect(screen.getByText(/Saxophone/)).toBeInTheDocument();
   });
 
+  it('does not navigate to a local-only jam when backend creation fails', async () => {
+    jamsApi.createJam.mockRejectedValueOnce(new Error('server down'));
+
+    renderPage(<NewJamPage />);
+    await userEvent.type(screen.getByPlaceholderText('Nom de la jam'), 'Jam en panne');
+    await userEvent.click(screen.getByRole('button', { name: /créer la jam/i }));
+
+    expect(await screen.findByText(/impossible de créer la jam côté serveur/i)).toBeInTheDocument();
+    expect(mockedNavigate).not.toHaveBeenCalled();
+  });
+
+  it('navigates to the created jam only after backend creation succeeds', async () => {
+    renderPage(<NewJamPage />);
+    await userEvent.type(screen.getByPlaceholderText('Nom de la jam'), 'Jam OK');
+    await userEvent.click(screen.getByRole('button', { name: /créer la jam/i }));
+
+    await waitFor(() => expect(mockedNavigate).toHaveBeenCalledWith(expect.stringMatching(/^\/jams\/jam_/)));
+  });
+
+  it('sends a null indicative date and respects initial instrument reorder', async () => {
+    renderPage(<NewJamPage />);
+    await userEvent.type(screen.getByPlaceholderText('Nom de la jam'), 'Jam sans date');
+    await userEvent.click(screen.getByRole('button', { name: 'Descendre Chant' }));
+    await userEvent.click(screen.getByRole('button', { name: /créer la jam/i }));
+
+    await waitFor(() => expect(jamsApi.createJam).toHaveBeenCalled());
+    const { transaction } = jamsApi.createJam.mock.calls[0][0];
+    expect(transaction.events[0]).toMatchObject({ type: 'jam_created', payload: { indicativeDate: null } });
+    expect(transaction.events.filter((event) => event.type === 'instrument_added').map((event) => event.payload.label).slice(0, 2)).toEqual(['Guitare', 'Chant']);
+  });
+
   it('renders jam detail header and projected table without route debug text', async () => {
     renderPage(<JamDetailPage />);
     expect(await screen.findByRole('heading', { name: 'Jam du jeudi' })).toBeInTheDocument();
@@ -61,10 +100,30 @@ describe('jam pages', () => {
   it('opens jam configuration from the jam detail header', async () => {
     renderPage(<JamDetailPage />);
     await screen.findByRole('heading', { name: 'Jam du jeudi' });
-    await userEvent.click(screen.getByLabelText('Configuration'));
+    await userEvent.click(screen.getByRole('button', { name: 'Configuration' }));
     expect(await screen.findByRole('heading', { name: 'Configuration de la jam' })).toBeInTheDocument();
     expect(screen.getByDisplayValue('Jam du jeudi')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Guitare')).toBeInTheDocument();
     expect(screen.getByRole('combobox')).toBeInTheDocument();
+  });
+
+  it('offers takeover when another active client holds the jam session', async () => {
+    const locked = new Error('HTTP 423');
+    locked.status = 423;
+    locked.payload = { body: { error: 'jam_locked_by_other_client', activeClientId: 'client_other', canForceTakeover: true } };
+    jamsApi.acquireClientSession.mockRejectedValueOnce(locked);
+
+    renderPage(<JamDetailPage />);
+    expect(await screen.findByText(/lecture seule/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /reprendre le contrôle/i }));
+
+    await waitFor(() => expect(jamsApi.takeoverClientSession).toHaveBeenCalledWith('jam_1', {
+      clientId: expect.any(String),
+      previousClientId: 'client_other',
+      deviceLabel: 'Navigateur',
+      confirm: true,
+    }));
+    expect(await screen.findByRole('button', { name: /ajouter un musicien/i })).not.toBeDisabled();
   });
 });

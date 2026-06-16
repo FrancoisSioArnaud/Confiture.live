@@ -2,7 +2,7 @@ import { addConflict, removeConflict } from './conflicts';
 import { addHole, getTargetEntity } from './holes';
 import { addLink, removeLink, reapplyActiveLinks } from './links';
 import { setLock } from './locks';
-import { orderBetween } from './ordering';
+import { orderBetween, stableOrderValue } from './ordering';
 import { setPlayed } from './played';
 import { addProjectionWarning } from './projectionWarnings';
 import { ensureVisibleRoundCount } from './rounds';
@@ -61,7 +61,7 @@ export function applyEvent(state, event) {
       else addProjectionWarning(state, 'missing_participation', 'participation_removed targets a missing participation.', payload);
       break;
     case 'appearance_materialized':
-      state.appearances[payload.appearanceId] = { id: payload.appearanceId, type: 'appearance', ...state.appearances[payload.appearanceId], ...payload, status: 'active', played: false, locked: false, materialized: true };
+      state.appearances[payload.appearanceId] = { id: payload.appearanceId, type: 'appearance', ...state.appearances[payload.appearanceId], ...payload, status: 'active', played: false, locked: false, materialized: true, orderScore: state.appearances[payload.appearanceId]?.orderScore ?? stableOrderValue(payload.positionKey) };
       break;
     case 'appearance_moved_between':
       moveTargetBetween(state, { type: 'appearance', id: payload.appearanceId }, payload);
