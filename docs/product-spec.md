@@ -322,6 +322,7 @@ Principe :
 - une colonne = un instrument ;
 - une card = une appearance ou un hole ;
 - les plateaux sont déduits de l’alignement horizontal des cards ;
+- cet alignement doit être visuellement strict : rail plateau et cards doivent partager les mêmes hauteurs de lignes ;
 - il n’y a pas de drag horizontal ;
 - le drag est uniquement vertical dans une colonne ;
 - les colonnes sont indépendantes par défaut ;
@@ -396,15 +397,29 @@ Marquer comme parti :
 
 ## Cards
 
-Une card appearance doit afficher :
+Une card appearance V0 doit afficher par défaut :
 
 - nom du musicien ;
-- instrument si nécessaire ;
-- états importants : linked, locked, played ;
 - bouton link avec état lié/non lié ;
 - bouton lock/unlock ;
 - menu trois-points ;
 - handle de drag sur desktop si applicable.
+
+Structure attendue :
+
+```text
+Nom du musicien
+[link] [lock/unlock] [menu]
+```
+
+Sur desktop, le handle de drag est placé à gauche du bloc nom/actions :
+
+```text
+[drag] Nom du musicien
+       [link] [lock/unlock] [menu]
+```
+
+La card ne répète pas l’instrument quand elle est affichée dans une colonne d’instrument. Le round 1 n’est pas affiché. Les rounds supérieurs peuvent être indiqués par un badge discret si nécessaire.
 
 Le menu trois-points d’une appearance contient uniquement les actions secondaires non redondantes :
 
@@ -420,11 +435,12 @@ Le menu ne doit pas contenir d’action link.
 Une card hole affiche :
 
 - libellé de trou ;
-- instrument concerné ;
 - états linked/locked/played ;
 - bouton link ;
 - bouton lock/unlock ;
 - menu trois-points avec suppression du trou.
+
+Comme les appearances, une card hole ne répète pas l’instrument quand elle est déjà dans une colonne d’instrument.
 
 ---
 
@@ -520,6 +536,15 @@ Si un hole linké est supprimé :
 Toute suppression de hole demande confirmation.
 
 Si le hole a un link, le Dialog doit le préciser.
+
+
+Ajout entre deux cards :
+
+- l’élément visible entre deux cards doit être une zone fine avec un seul bouton `+` ;
+- ne pas afficher en permanence le texte `Entre les cards` ;
+- ne pas afficher en permanence deux boutons `Ajouter un trou` et `Ajouter un participant` ;
+- au clic sur `+`, proposer le choix `Ajouter un trou` / `Ajouter un participant` dans un menu, popover, bottom sheet ou dialog compact ;
+- la hauteur de cette zone doit rester commune à toutes les colonnes pour préserver l’alignement des plateaux.
 
 ---
 

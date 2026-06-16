@@ -37,8 +37,8 @@ Chaque colonne contient :
 
 ```txt
 - header instrument
-- cards appearance/hole
-- séparateurs ou zones d’ajout entre cards
+- lignes de cards appearance/hole alignées avec le rail plateau
+- zones d’ajout fines entre les lignes
 - bouton afficher round suivant
 ```
 
@@ -56,7 +56,48 @@ Plateau 3 = troisième card visible de chaque colonne
 
 Le tableau ne stocke pas directement une ligne plateau comme vérité métier. Les plateaux sont une projection visuelle à partir des colonnes.
 
-## 1.3 Mobile/tablette
+## 1.3 Alignement visuel obligatoire des lignes
+
+L’alignement horizontal n’est pas seulement une règle métier : il doit être visible et stable dans l’UI.
+
+Règles strictes :
+
+```txt
+- chaque ligne plateau doit avoir une hauteur visuelle commune ;
+- la cellule du rail plateau et les cellules des colonnes instrument doivent partager cette hauteur ;
+- une appearance card, une hole card et la cellule plateau en face doivent rester alignées ;
+- les zones d’insertion entre cards doivent avoir une hauteur fine et commune ;
+- aucune colonne ne doit dériver verticalement parce qu’une card affiche plus de texte ou plus de badges.
+```
+
+La structure visuelle recommandée est une grille par lignes :
+
+```txt
+ligne insertion fine
+ligne plateau/card hauteur commune
+ligne insertion fine
+ligne plateau/card hauteur commune
+...
+```
+
+À éviter :
+
+```txt
+- des colonnes rendues comme des stacks indépendantes avec des hauteurs de cards variables ;
+- un rail plateau avec des blocs fixes sans hauteur commune avec les cards ;
+- des zones “entre les cards” visibles en permanence avec texte + plusieurs boutons.
+```
+
+Si l’implémentation garde un rendu par colonnes, elle doit tout de même garantir des constantes de hauteur partagées, par exemple :
+
+```txt
+INSERT_ZONE_HEIGHT
+TABLE_ROW_HEIGHT
+CARD_MIN_HEIGHT = TABLE_ROW_HEIGHT
+PLATEAU_CELL_MIN_HEIGHT = TABLE_ROW_HEIGHT
+```
+
+## 1.4 Mobile/tablette
 
 Le tableau doit être utilisable sur mobile/tablette.
 
@@ -313,14 +354,34 @@ Même logique pour round 3+.
 
 # 6. Zones entre cards
 
-Entre deux cards, une zone d’action peut apparaître au tap/clic.
+Entre deux cards, la zone d’action doit être très compacte.
 
-Options :
+Rendu par défaut :
 
 ```txt
-- Ajouter un participant ici
-- Ajouter un trou ici
+- une ligne fine entre deux cards ;
+- un seul bouton “+” centré ou discret ;
+- pas de label visible du type “Entre les cards” ;
+- pas de boutons “Ajouter un trou” et “Ajouter un participant” affichés directement dans le tableau.
 ```
+
+Au clic/tap sur le bouton `+`, l’UI ouvre un choix compact :
+
+```txt
+- Ajouter un trou
+- Ajouter un participant
+```
+
+Le choix peut être rendu par un `Menu`, `Popover`, `BottomSheet` ou `Dialog` compact selon la taille d’écran. Sur mobile, l’action doit rester tactile et facile à viser, mais l’élément visible dans le tableau doit rester fin pour ne pas casser l’alignement des plateaux.
+
+Hauteur recommandée :
+
+```txt
+zone insertion visible : 24 à 36 px
+bouton + : petit IconButton ou Button circulaire discret
+```
+
+La zone d’insertion doit avoir la même hauteur dans le rail plateau et dans toutes les colonnes afin de préserver l’alignement horizontal des cards.
 
 ## 6.1 Ajouter un participant ici
 

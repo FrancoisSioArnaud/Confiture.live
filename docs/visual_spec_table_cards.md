@@ -95,12 +95,14 @@ Une `AppearanceCard` représente :
 participant + participation + appearanceIndex + instrument + position courante
 ```
 
-Exemple :
+Affichage V0 compact recommandé :
 
 ```txt
 Nicolas
-Guitare · Round 2
+[link] [lock/unlock] [menu]
 ```
+
+L’instrument n’est pas répété dans la card lorsque la card est déjà affichée dans une colonne d’instrument nommée. Le round n’est pas affiché en round 1. Pour les rounds supérieurs, un badge discret `R2`, `R3`, etc. peut être affiché si nécessaire, sans casser la hauteur standard des lignes.
 
 Elle est liée à :
 
@@ -150,44 +152,61 @@ Un hole ne peut pas :
 
 ## 3.1 Structure recommandée
 
+Structure mobile/tablette :
+
 ```txt
 ┌──────────────────────────────┐
-│ Nicolas                  ⋮   │
-│ Guitare · Round 2            │
-│ [badges éventuels]           │
-│                              │
-│ [link] [lock/unlock]         │
+│ Nicolas                      │
+│ [link] [lock/unlock] [menu]  │
 └──────────────────────────────┘
 ```
 
-Sur desktop uniquement, un handle drag peut apparaître :
+Structure desktop avec handle drag :
 
 ```txt
 ┌──────────────────────────────┐
-│ ⋮⋮ Nicolas              ⋮    │
-│ Guitare · Round 2            │
-│ [badges éventuels]           │
-│ [link] [lock/unlock]         │
+│ ⋮⋮  Nicolas                  │
+│     [link] [lock/unlock] [⋮] │
 └──────────────────────────────┘
+```
+
+Règles de layout :
+
+```txt
+- le nom est au-dessus des actions ;
+- les trois actions directes sont côte à côte sous le nom ;
+- le handle drag desktop est à gauche du bloc nom/actions ;
+- le handle drag ne fait pas partie de la rangée d’actions ;
+- la card ne répète pas l’instrument de la colonne ;
+- la card reste compacte en largeur.
 ```
 
 ## 3.2 Informations principales
 
-La card doit afficher :
+La card appearance V0 affiche par défaut :
 
 ```txt
 - nom du participant
-- instrument, si nécessaire dans les contextes ambigus
-- round / appearanceIndex si le round est supérieur à 1 ou si le contexte le nécessite
+- bouton link
+- bouton lock/unlock
+- menu trois-points
 ```
 
-Dans une colonne nommée “Guitare”, il n’est pas obligatoire de répéter “Guitare” sur chaque card si cela surcharge l’UI.
+Elle n’affiche pas l’instrument, car l’instrument est déjà donné par le header de colonne.
 
-Reco :
+Exceptions autorisées :
 
 ```txt
-- Round 1 : ne pas afficher le round si cela allège l’interface.
-- Round 2+ : afficher un badge ou une petite mention “R2”, “R3”.
+- afficher l’instrument seulement dans un contexte hors colonne ou dans un drawer où la colonne n’est pas visible ;
+- afficher un badge discret “R2”, “R3”, etc. si le round est supérieur à 1 et si cela ne casse pas la hauteur standard de ligne.
+```
+
+Reco stricte :
+
+```txt
+- Round 1 : ne pas afficher le round.
+- Round 2+ : badge discret seulement si utile.
+- Ne pas afficher simultanément une mention texte “Round 2” et un badge “R2”.
 ```
 
 ## 3.3 Badges d’état
@@ -195,14 +214,15 @@ Reco :
 Badges possibles :
 
 ```txt
-- linked
-- locked
+- R2/R3 si round supérieur à 1
+- linked si l’état n’est pas déjà suffisamment clair via le bouton link
+- locked si l’état n’est pas déjà suffisamment clair via le bouton lock
 - played
 - skipped récent / remplacé, si visible temporairement
 - conflict warning, seulement en mode conflict ou si action refusée
 ```
 
-Les badges doivent rester discrets. Les états principaux doivent aussi être visibles par la forme/couleur de la card.
+Les badges doivent rester discrets et ne doivent pas augmenter la hauteur standard des lignes. Les états principaux doivent d’abord être visibles via les icônes, la bordure, l’opacité ou la couleur de la card.
 
 ---
 
@@ -414,7 +434,7 @@ Si l’action échoue :
 Position :
 
 ```txt
-en haut ou à droite de la card
+dans la rangée d’actions sous le nom, à côté de link et lock/unlock
 ```
 
 Fonction :
@@ -430,8 +450,10 @@ Ne doit pas contenir les actions de link.
 Desktop :
 
 ```txt
-handle dédié discret
+handle dédié discret à gauche du bloc nom/actions
 ```
+
+Le handle desktop ne doit pas être placé dans la rangée des actions link/lock/menu. Il doit rester visuellement séparé pour que les trois actions gardent une lecture simple sous le nom.
 
 Mobile/tablette :
 
