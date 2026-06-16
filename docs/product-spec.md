@@ -43,7 +43,7 @@ confiture_event_actions_spec.md
 = liste détaillée des actions/events, payloads, règles d’ordre, feedback organisateur.
 
 sync_strategy.md
-= stratégie local-first, sync backend, session active unique, snapshots et erreurs de sync.
+= stratégie local-first, sync backend sans client sessions V0, snapshots et erreurs de sync.
 
 data_model.md
 = modèles client/backend, eventLog, transactions, snapshots, projection.
@@ -131,8 +131,8 @@ Codex doit donc développer l’application autour de ces principes :
 - Pas d’authentification organisateur obligatoire.
 - L’écran d’accueil affiche les jams existantes.
 - Une jam peut être créée et ouverte directement.
-- Une seule session active peut éditer une jam en temps réel.
-- Si une autre session ouvre la même jam, elle doit être bloquée ou placée en lecture seule selon la stratégie détaillée dans `sync_strategy.md`.
+- V0 : aucune client session. Plusieurs devices peuvent envoyer des transactions. Le backend accepte les transactions valides et les ordonne par `serverSequenceNumber`.
+- Les client sessions, leases, heartbeat, takeover et lecture seule multi-device sont repoussés en V1.
 
 ### V1 / hors V0
 
