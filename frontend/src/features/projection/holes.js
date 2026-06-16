@@ -3,6 +3,7 @@ import { getEntityOrder, orderBetween } from './ordering';
 export function addHole(state, payload) {
   const after = payload.afterTarget ? getTargetEntity(state, payload.afterTarget) : null;
   const before = payload.beforeTarget ? getTargetEntity(state, payload.beforeTarget) : null;
+  const positionInRound = orderBetween(after, before, getEntityOrder({ positionKey: payload.positionKey }));
   state.holes[payload.holeId] = {
     id: payload.holeId,
     holeId: payload.holeId,
@@ -14,7 +15,9 @@ export function addHole(state, payload) {
     played: false,
     locked: false,
     positionKey: payload.positionKey,
-    orderScore: orderBetween(after, before, getEntityOrder({ positionKey: payload.positionKey })),
+    positionInRound,
+    roundOrder: positionInRound,
+    orderScore: payload.appearanceIndex * 1_000_000 + positionInRound,
   };
 }
 

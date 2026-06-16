@@ -29,6 +29,10 @@ describe('buildParticipantDrawerTransaction', () => {
     const result = buildCreateParticipantTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 2, projection: emptyProjection, instruments, draft: { name: 'Nico', selectedInstrumentIds: ['instrument_vocals', 'instrument_guitar'], initialLinkedInstrumentPairs: [], customInstrumentLabels: {} } });
     expect(result.ok).toBe(true);
     expect(result.transaction.events.map((event) => event.type)).toEqual(['participant_created', 'participation_added', 'participation_added', 'conflict_created']);
+    expect(result.transaction.events.filter((event) => event.type === 'participation_added').map((event) => event.payload)).toEqual([
+      expect.objectContaining({ insertionMode: 'end_of_visible_rounds', startAppearanceIndex: 1, afterTarget: null, beforeTarget: null, baseOrderKey: 'order_0' }),
+      expect.objectContaining({ insertionMode: 'end_of_visible_rounds', startAppearanceIndex: 1, afterTarget: null, beforeTarget: null, baseOrderKey: 'order_0' }),
+    ]);
     expect(result.transaction.events.at(-1).payload.reason).toBe('instrument_constraint');
   });
 

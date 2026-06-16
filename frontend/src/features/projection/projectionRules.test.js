@@ -35,19 +35,18 @@ describe('projection engine business rules', () => {
     expect(state.links.link_contradictory.suppressedByConflict).toBe(true);
   });
 
-  it('handles round 2 reveal, a participant added after reveal, and a between-target round 2 insertion', () => {
+  it('handles round 2 reveal and a participant added after reveal with round-first order', () => {
     const state = project([
       ...baseJamTransactions(),
       tx(5, [{ type: 'instrument_round_visibility_changed', payload: { instrumentId: 'instrument_guitar', visibleRoundCount: 2 } }]),
-      participantWithParticipation(6, { participantId: 'participant_paul', name: 'Paul', participationId: 'participation_paul_guitar', instrumentId: 'instrument_guitar', baseOrderKey: 'a' }),
-      tx(7, [
-        { type: 'participant_created', payload: { participantId: 'participant_emma', name: 'Emma' } },
-        { type: 'participation_added', payload: { participationId: 'participation_emma_guitar', participantId: 'participant_emma', instrumentId: 'instrument_guitar', customInstrumentLabel: null, insertionMode: 'between_targets', startAppearanceIndex: 2, afterTarget: { type: 'appearance', id: 'appearance_participation_paul_guitar_2' }, beforeTarget: null, baseOrderKey: 'b' } },
-      ]),
+      participantWithParticipation(6, { participantId: 'participant_noe', name: 'Noé', participationId: 'participation_noe_guitar', instrumentId: 'instrument_guitar', baseOrderKey: 'order_0' }),
+      participantWithParticipation(7, { participantId: 'participant_iris', name: 'Iris', participationId: 'participation_iris_guitar', instrumentId: 'instrument_guitar', baseOrderKey: 'order_1' }),
+      participantWithParticipation(8, { participantId: 'participant_tom', name: 'Tom', participationId: 'participation_tom_guitar', instrumentId: 'instrument_guitar', baseOrderKey: 'order_2' }),
+      participantWithParticipation(9, { participantId: 'participant_paul', name: 'Paul', participationId: 'participation_paul_guitar', instrumentId: 'instrument_guitar', baseOrderKey: 'order_3' }),
     ]);
 
-    expect(Object.values(state.appearances).filter((appearance) => appearance.participationId === 'participation_paul_guitar').map((appearance) => appearance.appearanceIndex)).toEqual([1, 2]);
-    expect(Object.values(state.appearances).filter((appearance) => appearance.participationId === 'participation_emma_guitar').map((appearance) => appearance.appearanceIndex)).toEqual([2]);
+    const guitar = state.columns.find((column) => column.instrument.instrumentId === 'instrument_guitar');
+    expect(guitar.cards.map((card) => state.participants[card.participantId].name)).toEqual(['Noé', 'Iris', 'Tom', 'Paul', 'Noé', 'Iris', 'Tom', 'Paul']);
   });
 
   it('applies link strategies move_to_first, move_to_last, average_position, and supports hole targets', () => {
@@ -57,9 +56,9 @@ describe('projection engine business rules', () => {
       tx(6, [{ type: 'hole_added', payload: { holeId: 'hole_z', instrumentId: 'instrument_guitar', appearanceIndex: 1, reason: 'manual', afterTarget: null, beforeTarget: null, positionKey: 'z' } }]),
     ];
 
-    expect(project([...common, tx(7, [{ type: 'link_created', payload: { linkId: 'link_first', targets: [{ type: 'appearance', id: 'appearance_a' }, { type: 'hole', id: 'hole_z' }], anchorTarget: { type: 'appearance', id: 'appearance_a' }, reorderStrategy: 'move_to_first' } }])]).holes.hole_z.orderScore).toBe(97);
-    expect(project([...common, tx(7, [{ type: 'link_created', payload: { linkId: 'link_last', targets: [{ type: 'appearance', id: 'appearance_a' }, { type: 'hole', id: 'hole_z' }], anchorTarget: { type: 'appearance', id: 'appearance_a' }, reorderStrategy: 'move_to_last' } }])]).appearances.appearance_a.orderScore).toBe(122);
-    expect(project([...common, tx(7, [{ type: 'link_created', payload: { linkId: 'link_avg', targets: [{ type: 'appearance', id: 'appearance_a' }, { type: 'hole', id: 'hole_z' }], anchorTarget: { type: 'appearance', id: 'appearance_a' }, reorderStrategy: 'average_position' } }])]).appearances.appearance_a.orderScore).toBe(109.5);
+    expect(project([...common, tx(7, [{ type: 'link_created', payload: { linkId: 'link_first', targets: [{ type: 'appearance', id: 'appearance_a' }, { type: 'hole', id: 'hole_z' }], anchorTarget: { type: 'appearance', id: 'appearance_a' }, reorderStrategy: 'move_to_first' } }])]).holes.hole_z.positionInRound).toBe(97);
+    expect(project([...common, tx(7, [{ type: 'link_created', payload: { linkId: 'link_last', targets: [{ type: 'appearance', id: 'appearance_a' }, { type: 'hole', id: 'hole_z' }], anchorTarget: { type: 'appearance', id: 'appearance_a' }, reorderStrategy: 'move_to_last' } }])]).appearances.appearance_a.positionInRound).toBe(122);
+    expect(project([...common, tx(7, [{ type: 'link_created', payload: { linkId: 'link_avg', targets: [{ type: 'appearance', id: 'appearance_a' }, { type: 'hole', id: 'hole_z' }], anchorTarget: { type: 'appearance', id: 'appearance_a' }, reorderStrategy: 'average_position' } }])]).appearances.appearance_a.positionInRound).toBe(109.5);
   });
 
   it('keeps conflicts active for appearance and participation scopes and does not move played or locked conflict targets', () => {

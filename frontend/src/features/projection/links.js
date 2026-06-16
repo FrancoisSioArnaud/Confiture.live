@@ -40,7 +40,12 @@ export function applyLink(state, link) {
   const order = nextLinkedOrder(entities, link.reorderStrategy);
   link.targets.forEach((target) => {
     const entity = getTargetEntity(state, target);
-    if (entity && !isLocked(state, target) && !isPlayed(state, target)) entity.orderScore = order;
+    if (entity && !isLocked(state, target) && !isPlayed(state, target)) {
+      entity.positionInRound = order;
+      entity.roundOrder = order;
+      entity.manualRoundOrder = order;
+      entity.orderScore = (entity.appearanceIndex ?? 1) * 1_000_000 + order;
+    }
   });
 }
 

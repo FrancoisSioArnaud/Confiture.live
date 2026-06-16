@@ -20,25 +20,38 @@ const participantDraftSchema = z.object({
   customInstrumentLabels: z.record(z.string()).default({}),
 }).strict();
 
-function toTarget(card) {
-  if (!card) return null;
-  return { type: card.type, id: card.id };
+function nextBaseOrderKey(projection, instrumentId) {
+  const activeParticipations = Object.values(projection.participations ?? {})
+    .filter((participation) => (
+      participation.instrumentId === instrumentId
+      && participation.status === 'active'
+    ));
+
+  const numericOrders = activeParticipations
+    .map((participation) => {
+      const match = String(participation.baseOrderKey ?? '').match(/(-?\d+(?:\.\d+)?)/);
+      return match ? Number(match[1]) : null;
+    })
+    .filter((value) => Number.isFinite(value));
+
+  const nextOrder = numericOrders.length > 0 ? Math.max(...numericOrders) + 1 : activeParticipations.length;
+
+  return `order_${nextOrder}`;
 }
 
-function baseParticipationPayload({ participationId, participantId, instrumentId, customInstrumentLabel, insertionContext }) {
+function baseParticipationPayload({ projection, participationId, participantId, instrumentId, customInstrumentLabel }) {
   return {
     participationId,
     participantId,
     instrumentId,
     customInstrumentLabel: customInstrumentLabel || null,
-    insertionMode: insertionContext?.afterCard || insertionContext?.beforeCard ? 'between_targets' : 'end_of_visible_rounds',
-    startAppearanceIndex: insertionContext?.appearanceIndex ?? 1,
-    afterTarget: toTarget(insertionContext?.afterCard ?? null),
-    beforeTarget: toTarget(insertionContext?.beforeCard ?? null),
-    baseOrderKey: `position_${participationId}`,
+    insertionMode: 'end_of_visible_rounds',
+    startAppearanceIndex: 1,
+    afterTarget: null,
+    beforeTarget: null,
+    baseOrderKey: nextBaseOrderKey(projection, instrumentId),
   };
 }
-
 function pairKey(leftInstrumentId, rightInstrumentId) {
   return [leftInstrumentId, rightInstrumentId].sort().join('__');
 }
@@ -120,7 +133,7 @@ export function validateParticipantDraft({ draft, projection, participantId = nu
   return { ok: true, draft: { ...parsed.data, name, initialLinkedInstrumentPairs: parsed.data.initialLinkedInstrumentPairs ?? [] } };
 }
 
-export function buildCreateParticipantTransaction({ jamId, clientId, clientSequenceNumber, projection, draft, instruments, insertionContext = null }) {
+export function buildCreateParticipantTransaction({ jamId, clientId, clientSequenceNumber, projection, draft, instruments }) {
   const validation = validateParticipantDraft({ draft, projection, instruments });
   if (!validation.ok) return validation;
   const participantId = createId('participant');
@@ -128,11 +141,11 @@ export function buildCreateParticipantTransaction({ jamId, clientId, clientSeque
   const participations = validation.draft.selectedInstrumentIds.map((instrumentId) => {
     const participationId = createId('participation');
     const payload = baseParticipationPayload({
+      projection,
       participationId,
       participantId,
       instrumentId,
       customInstrumentLabel: validation.draft.customInstrumentLabels[instrumentId]?.trim() || null,
-      insertionContext,
     });
     events.push(participationAdded(payload));
     return payload;
@@ -141,7 +154,7 @@ export function buildCreateParticipantTransaction({ jamId, clientId, clientSeque
   return { ok: true, transaction: createTransaction({ jamId, clientId, clientSequenceNumber, label: 'Créer participant', events }) };
 }
 
-export function buildEditParticipantTransaction({ jamId, clientId, clientSequenceNumber, projection, participantId, draft, instruments, confirmedRemovedParticipationIds = [], insertionContext = null }) {
+export function buildEditParticipantTransaction({ jamId, clientId, clientSequenceNumber, projection, participantId, draft, instruments, confirmedRemovedParticipationIds = [] }) {
   const validation = validateParticipantDraft({ draft, projection, participantId, instruments });
   if (!validation.ok) return validation;
   const participant = projection.participants[participantId];
@@ -164,11 +177,11 @@ export function buildEditParticipantTransaction({ jamId, clientId, clientSequenc
     if (!activeByInstrument.has(instrumentId)) {
       const participationId = createId('participation');
       const payload = baseParticipationPayload({
+        projection,
         participationId,
         participantId,
         instrumentId,
         customInstrumentLabel: validation.draft.customInstrumentLabels[instrumentId]?.trim() || null,
-        insertionContext,
       });
       events.push(participationAdded(payload));
     }

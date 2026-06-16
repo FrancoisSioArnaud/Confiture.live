@@ -47,27 +47,16 @@ describe('projectJamState', () => {
     expect(state.countersByInstrument.instrument_guitar.appearances).toBe(1);
   });
 
-  it('reveals rounds by instrument and starts between-target insertions at round 2', () => {
+  it('reveals round 2 with round-first ordering in one column', () => {
     const state = projectJamState({ transactions: [
       ...jamAndGuitar,
       tx(3, [{ type: 'instrument_round_visibility_changed', payload: { instrumentId: 'instrument_guitar', visibleRoundCount: 2 } }]),
-      tx(4, [{ type: 'participant_created', payload: { participantId: 'participant_anna', name: 'Anna' } }]),
-      tx(5, [{ type: 'participation_added', payload: {
-        participationId: 'participation_anna_guitar',
-        participantId: 'participant_anna',
-        instrumentId: 'instrument_guitar',
-        customInstrumentLabel: null,
-        insertionMode: 'between_targets',
-        startAppearanceIndex: 2,
-        afterTarget: { type: 'appearance', id: 'appearance_x' },
-        beforeTarget: null,
-        baseOrderKey: 'b',
-      } }]),
+      tx(4, [{ type: 'participant_created', payload: { participantId: 'participant_noe', name: 'Noé' } }, { type: 'participation_added', payload: { participationId: 'participation_noe_guitar', participantId: 'participant_noe', instrumentId: 'instrument_guitar', customInstrumentLabel: null, insertionMode: 'end_of_visible_rounds', startAppearanceIndex: 1, afterTarget: null, beforeTarget: null, baseOrderKey: 'order_0' } }]),
+      tx(5, [{ type: 'participant_created', payload: { participantId: 'participant_iris', name: 'Iris' } }, { type: 'participation_added', payload: { participationId: 'participation_iris_guitar', participantId: 'participant_iris', instrumentId: 'instrument_guitar', customInstrumentLabel: null, insertionMode: 'end_of_visible_rounds', startAppearanceIndex: 1, afterTarget: null, beforeTarget: null, baseOrderKey: 'order_1' } }]),
+      tx(6, [{ type: 'participant_created', payload: { participantId: 'participant_tom', name: 'Tom' } }, { type: 'participation_added', payload: { participationId: 'participation_tom_guitar', participantId: 'participant_tom', instrumentId: 'instrument_guitar', customInstrumentLabel: null, insertionMode: 'end_of_visible_rounds', startAppearanceIndex: 1, afterTarget: null, beforeTarget: null, baseOrderKey: 'order_2' } }]),
     ] });
 
-    const appearances = Object.values(state.appearances).filter((appearance) => appearance.participationId === 'participation_anna_guitar');
-    expect(appearances.map((appearance) => appearance.appearanceIndex)).toEqual([2]);
-    expect(state.visibleRoundsByInstrument.instrument_guitar).toBe(2);
+    expect(state.columns[0].cards.map((card) => state.participants[card.participantId].name)).toEqual(['Noé', 'Iris', 'Tom', 'Noé', 'Iris', 'Tom']);
   });
 
   it('projects holes and play-without as hole_added plus link_created', () => {
@@ -126,9 +115,9 @@ describe('projectJamState', () => {
       ] });
     }
 
-    expect(linkedWith('move_to_first').appearances.appearance_a.orderScore).toBe(97);
-    expect(linkedWith('move_to_last').appearances.appearance_a.orderScore).toBe(122);
-    expect(linkedWith('average_position').appearances.appearance_a.orderScore).toBe(109.5);
+    expect(linkedWith('move_to_first').appearances.appearance_a.positionInRound).toBe(97);
+    expect(linkedWith('move_to_last').appearances.appearance_a.positionInRound).toBe(122);
+    expect(linkedWith('average_position').appearances.appearance_a.positionInRound).toBe(109.5);
   });
 
   it('reapplies an active link when a contradictory conflict is removed', () => {
@@ -157,7 +146,7 @@ describe('projectJamState', () => {
     ] });
 
     expect(state.appearances.appearance_a.locked).toBe(true);
-    expect(state.appearances.appearance_a.orderScore).toBe(97);
+    expect(state.appearances.appearance_a.positionInRound).toBe(97);
     expect(state.holes.hole_b.played).toBe(true);
     expect(state.projectionWarnings.map((warning) => warning.code)).toContain('immobile_target');
   });

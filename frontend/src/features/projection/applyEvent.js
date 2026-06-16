@@ -2,7 +2,7 @@ import { addConflict, removeConflict } from './conflicts';
 import { addHole, getTargetEntity } from './holes';
 import { addLink, removeLink, reapplyActiveLinks } from './links';
 import { setLock } from './locks';
-import { orderBetween, stableOrderValue } from './ordering';
+import { getPositionInRound, orderBetween, stableOrderValue } from './ordering';
 import { setPlayed } from './played';
 import { addProjectionWarning } from './projectionWarnings';
 import { ensureVisibleRoundCount } from './rounds';
@@ -61,7 +61,7 @@ export function applyEvent(state, event) {
       else addProjectionWarning(state, 'missing_participation', 'participation_removed targets a missing participation.', payload);
       break;
     case 'appearance_materialized':
-      state.appearances[payload.appearanceId] = { id: payload.appearanceId, type: 'appearance', ...state.appearances[payload.appearanceId], ...payload, status: 'active', played: false, locked: false, materialized: true, orderScore: state.appearances[payload.appearanceId]?.orderScore ?? stableOrderValue(payload.positionKey) };
+      state.appearances[payload.appearanceId] = { id: payload.appearanceId, type: 'appearance', ...state.appearances[payload.appearanceId], ...payload, status: 'active', played: false, locked: false, materialized: true, positionInRound: state.appearances[payload.appearanceId]?.positionInRound ?? stableOrderValue(payload.positionKey), roundOrder: state.appearances[payload.appearanceId]?.roundOrder ?? stableOrderValue(payload.positionKey), orderScore: state.appearances[payload.appearanceId]?.orderScore ?? (payload.appearanceIndex * 1_000_000 + stableOrderValue(payload.positionKey)) };
       break;
     case 'appearance_moved_between':
       moveTargetBetween(state, { type: 'appearance', id: payload.appearanceId }, payload);
@@ -173,6 +173,8 @@ function removeAppearance(state, appearanceId, payload = {}) {
     locked: false,
     materialized: true,
     positionKey: `${participation.baseOrderKey}:${parsed.appearanceIndex}`,
+    positionInRound: stableOrderValue(participation.baseOrderKey),
+    roundOrder: stableOrderValue(participation.baseOrderKey),
   };
   removeLinksTargeting(state, { type: 'appearance', id: appearanceId });
 }
@@ -208,5 +210,8 @@ function moveTargetBetween(state, target, payload) {
     addProjectionWarning(state, 'immobile_target', 'move ignored because target is locked or played.', { target });
     return;
   }
-  entity.orderScore = orderBetween(getTargetEntity(state, payload.afterTarget), getTargetEntity(state, payload.beforeTarget), entity.orderScore);
+  entity.positionInRound = orderBetween(getTargetEntity(state, payload.afterTarget), getTargetEntity(state, payload.beforeTarget), entity.positionInRound ?? getPositionInRound(entity));
+  entity.roundOrder = entity.positionInRound;
+  entity.manualRoundOrder = entity.positionInRound;
+  entity.orderScore = (entity.appearanceIndex ?? 1) * 1_000_000 + entity.positionInRound;
 }

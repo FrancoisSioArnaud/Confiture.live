@@ -1,11 +1,10 @@
-import { Add, Call, CheckCircle, DragIndicator, Link as LinkIcon, Lock, LockOpen, MoreVert, RadioButtonUnchecked } from '@mui/icons-material';
+import { Call, CheckCircle, DragIndicator, Link as LinkIcon, Lock, LockOpen, MoreVert, RadioButtonUnchecked } from '@mui/icons-material';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Alert, Box, Button, Card, CardContent, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Drawer, FormControlLabel, FormGroup, IconButton, List, ListItem, ListItemText, Menu, MenuItem, Paper, Stack, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { useState } from 'react';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import {
-  buildAddHoleTransaction,
   buildRevealRoundTransaction,
   buildTogglePlateauPlayedTransaction,
 } from '../utils/buildTableActionTransaction';
@@ -23,7 +22,6 @@ import { buildPlayWithoutTransaction } from '../utils/buildPlayWithoutTransactio
 import { buildSkipWithReplacementTransaction, buildSkipWithoutMusicianTransaction, replacementCandidatePresentation, replacementCandidatesForCallDrawer } from '../utils/buildCallDrawerTransaction';
 
 const TABLE_HEADER_HEIGHT = 48;
-const INSERT_ZONE_HEIGHT = 32;
 const TABLE_ROW_HEIGHT = 96;
 
 function transformToCss(transform) {
@@ -134,27 +132,6 @@ function SortableProjectedCard({ card, projection, instrument, linkMode, conflic
   );
 }
 
-function InsertionZone({ onAddHole, onAddParticipant }) {
-  const [anchorEl, setAnchorEl] = useState(null);
-  const open = Boolean(anchorEl);
-
-  function close() {
-    setAnchorEl(null);
-  }
-
-  return (
-    <Box sx={{ height: INSERT_ZONE_HEIGHT, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <IconButton size="small" aria-label="Ajouter entre les cards" onClick={(event) => setAnchorEl(event.currentTarget)} sx={{ width: 28, height: 28, border: 1, borderColor: 'divider', bgcolor: 'background.default' }}>
-        <Add fontSize="small" />
-      </IconButton>
-      <Menu anchorEl={anchorEl} open={open} onClose={close}>
-        <MenuItem onClick={() => { close(); onAddHole?.(); }}>Ajouter un trou</MenuItem>
-        <MenuItem onClick={() => { close(); onAddParticipant?.(); }}>Ajouter un participant</MenuItem>
-      </Menu>
-    </Box>
-  );
-}
-
 function PlateauRail({ rows, projection, onOpenCallDrawer, onTogglePlateauPlayed }) {
   return (
     <Box sx={{ minWidth: 132, flex: '0 0 132px', position: { sm: 'sticky' }, left: 0, zIndex: 1, bgcolor: 'background.paper' }}>
@@ -164,8 +141,7 @@ function PlateauRail({ rows, projection, onOpenCallDrawer, onTogglePlateauPlayed
           const played = row.targets.length > 0 && row.targets.every((target) => (target.type === 'appearance' ? projection.appearances[target.id]?.played : projection.holes[target.id]?.played));
           return (
             <Box key={row.plateauIndex}>
-              <Box sx={{ height: INSERT_ZONE_HEIGHT }} />
-              <Paper variant="outlined" sx={{ p: 1, height: TABLE_ROW_HEIGHT, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <Paper variant="outlined" sx={{ p: 1, height: TABLE_ROW_HEIGHT, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <Typography variant="subtitle2" fontWeight={900}>Plateau {row.plateauIndex + 1}</Typography>
                 <Stack spacing={0.5}>
                   <Tooltip title={played ? 'Ce plateau est déjà joué.' : 'Appeler ce plateau'}>
@@ -181,7 +157,6 @@ function PlateauRail({ rows, projection, onOpenCallDrawer, onTogglePlateauPlayed
             </Box>
           );
         })}
-        <Box sx={{ height: INSERT_ZONE_HEIGHT }} />
       </Stack>
     </Box>
   );
@@ -338,7 +313,7 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
   );
 }
 
-export function JamTable({ projection, clientId, clientSequenceNumber, onTransaction, onOpenCallDrawer, onFeedback, onCreateParticipant, onEditParticipant }) {
+export function JamTable({ projection, clientId, clientSequenceNumber, onTransaction, onOpenCallDrawer, onFeedback, onEditParticipant }) {
   const [openPlateauIndex, setOpenPlateauIndex] = useState(null);
   const [menuState, setMenuState] = useState({ anchorEl: null, card: null });
   const [confirmState, setConfirmState] = useState(null);
@@ -366,22 +341,6 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
 
   function dispatch(transaction) {
     if (transaction) onTransaction?.(transaction);
-  }
-
-  function slotContext(column, index) {
-    const afterCard = column.cards[index - 1] ?? null;
-    const beforeCard = column.cards[index] ?? null;
-    const appearanceIndex = beforeCard?.appearanceIndex ?? ((afterCard?.appearanceIndex ?? 0) + 1);
-    return { afterCard, beforeCard, appearanceIndex };
-  }
-
-  function addHole(column, index) {
-    dispatch(buildAddHoleTransaction({ jamId, clientId, clientSequenceNumber, instrumentId: column.instrument.instrumentId, ...slotContext(column, index) }));
-  }
-
-  function addParticipant(column, index) {
-    const context = slotContext(column, index);
-    onCreateParticipant?.({ instrumentId: column.instrument.instrumentId, ...context });
   }
 
   function revealRound(column) {
@@ -678,15 +637,10 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
                       <Chip size="small" label={`${counter} à faire passer`} />
                     </Stack>
                     <SortableContext items={column.cards.map((card) => card.id)} strategy={verticalListSortingStrategy}>
-                      <Stack spacing={0}>
-                        {Array.from({ length: Math.max(column.cards.length, 1) + 1 }, (_, index) => (
-                          <Box key={`${column.instrument.instrumentId}:slot:${index}`}>
-                            <InsertionZone onAddHole={() => addHole(column, index)} onAddParticipant={() => addParticipant(column, index)} />
-                            {column.cards[index] ? (
-                              <Box sx={{ height: TABLE_ROW_HEIGHT, display: 'flex', alignItems: 'stretch' }}>
-                                <SortableProjectedCard card={column.cards[index]} projection={projection} instrument={column.instrument} linkMode={linkMode} conflictMode={conflictMode} onToggleLink={selectCardForLink} onSelectConflict={selectConflictTarget} onToggleLock={toggleLock} onOpenMenu={openMenu} onBlockedDrag={() => onFeedback?.('Déplacement impossible : passage joué, verrouillé ou en conflit')} />
-                              </Box>
-                            ) : null}
+                      <Stack spacing={1}>
+                        {column.cards.map((card) => (
+                          <Box key={card.id} sx={{ height: TABLE_ROW_HEIGHT, display: 'flex', alignItems: 'stretch' }}>
+                            <SortableProjectedCard card={card} projection={projection} instrument={column.instrument} linkMode={linkMode} conflictMode={conflictMode} onToggleLink={selectCardForLink} onSelectConflict={selectConflictTarget} onToggleLock={toggleLock} onOpenMenu={openMenu} onBlockedDrag={() => onFeedback?.('Déplacement impossible : passage joué, verrouillé ou en conflit')} />
                           </Box>
                         ))}
                       </Stack>

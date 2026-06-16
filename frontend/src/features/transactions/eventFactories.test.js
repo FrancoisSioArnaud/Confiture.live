@@ -131,7 +131,7 @@ describe('event factories', () => {
       participantId: 'participant_1',
       instrumentId: 'instrument_guitar',
       customInstrumentLabel: null,
-      insertionMode: 'somewhere',
+      insertionMode: 'between_targets',
       startAppearanceIndex: 1,
       afterTarget: null,
       beforeTarget: null,

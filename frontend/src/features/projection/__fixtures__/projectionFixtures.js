@@ -31,7 +31,7 @@ export function participantWithParticipation(sequence, { participantId, name, pa
       participantId,
       instrumentId,
       customInstrumentLabel: null,
-      insertionMode: startAppearanceIndex === 1 ? 'end_of_visible_rounds' : 'between_targets',
+      insertionMode: 'end_of_visible_rounds',
       startAppearanceIndex,
       afterTarget: null,
       beforeTarget: null,

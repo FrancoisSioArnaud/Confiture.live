@@ -9,7 +9,6 @@ const baseProps = {
   onTransaction: vi.fn(),
   onOpenCallDrawer: vi.fn(),
   onFeedback: vi.fn(),
-  onCreateParticipant: vi.fn(),
   onEditParticipant: vi.fn(),
 };
 
@@ -50,8 +49,7 @@ function renderTable(props = {}) {
     onTransaction: vi.fn(),
     onOpenCallDrawer: vi.fn(),
     onFeedback: vi.fn(),
-    onCreateParticipant: vi.fn(),
-    onEditParticipant: vi.fn(),
+      onEditParticipant: vi.fn(),
     ...props,
   };
   render(<JamTable {...mergedProps} />);
@@ -87,39 +85,14 @@ describe('JamTable empty states', () => {
 });
 
 describe('JamTable insertion zones and compact cards', () => {
-  it('replaces visible insertion labels with compact add menus', async () => {
-    const user = userEvent.setup();
+  it('does not render between-card insertion UI', () => {
     renderTable({ projection: tableProjection() });
 
     expect(screen.queryByText('Entre les cards')).not.toBeInTheDocument();
     expect(screen.queryByText('Début de colonne')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ajouter entre les cards' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Ajouter un trou' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Ajouter un participant' })).not.toBeInTheDocument();
-
-    const addButtons = screen.getAllByRole('button', { name: 'Ajouter entre les cards' });
-    expect(addButtons.length).toBeGreaterThan(0);
-
-    await user.click(addButtons[0]);
-
-    expect(screen.getByRole('menuitem', { name: 'Ajouter un trou' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Ajouter un participant' })).toBeInTheDocument();
-  });
-
-  it('keeps add-hole and add-participant actions available from the plus menu', async () => {
-    const user = userEvent.setup();
-    const onTransaction = vi.fn();
-    const onCreateParticipant = vi.fn();
-    renderTable({ projection: tableProjection(), onTransaction, onCreateParticipant });
-
-    await user.click(screen.getAllByRole('button', { name: 'Ajouter entre les cards' })[0]);
-    await user.click(screen.getByRole('menuitem', { name: 'Ajouter un trou' }));
-
-    expect(onTransaction).toHaveBeenCalledWith(expect.objectContaining({ label: 'Ajouter un trou' }));
-
-    await user.click(screen.getAllByRole('button', { name: 'Ajouter entre les cards' })[0]);
-    await user.click(screen.getByRole('menuitem', { name: 'Ajouter un participant' }));
-
-    expect(onCreateParticipant).toHaveBeenCalledWith(expect.objectContaining({ instrumentId: 'instrument_guitar' }));
   });
 
   it('does not repeat the instrument label inside an appearance card', () => {
