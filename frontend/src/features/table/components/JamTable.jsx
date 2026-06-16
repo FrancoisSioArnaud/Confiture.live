@@ -1,7 +1,7 @@
 import { Add, Call, CheckCircle, DragIndicator, Link as LinkIcon, Lock, LockOpen, MoreVert, RadioButtonUnchecked } from '@mui/icons-material';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { Alert, Box, Button, Card, CardContent, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, FormControlLabel, FormGroup, IconButton, List, ListItem, ListItemText, Menu, MenuItem, Paper, Stack, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Drawer, FormControlLabel, FormGroup, IconButton, List, ListItem, ListItemText, Menu, MenuItem, Paper, Stack, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { useState } from 'react';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import {
@@ -22,6 +22,10 @@ import { activeConflictsBetween, buildConflictModeTransaction } from '../utils/b
 import { buildPlayWithoutTransaction } from '../utils/buildPlayWithoutTransaction';
 import { buildSkipWithReplacementTransaction, buildSkipWithoutMusicianTransaction, replacementCandidatePresentation, replacementCandidatesForCallDrawer } from '../utils/buildCallDrawerTransaction';
 
+const TABLE_HEADER_HEIGHT = 48;
+const INSERT_ZONE_HEIGHT = 32;
+const TABLE_ROW_HEIGHT = 96;
+
 function transformToCss(transform) {
   if (!transform) return undefined;
   const x = Math.round(transform.x ?? 0);
@@ -41,42 +45,52 @@ function cardTitle(card, projection) {
   return projection.participants[card.participantId]?.name ?? 'Musicien';
 }
 
-function CardActions({ card, linked, linkModeActive, onToggleLink, onToggleLock, onOpenMenu, onBlockedDrag, dragListeners, dragAttributes, dragDisabled }) {
+function DragHandle({ onBlockedDrag, dragListeners, dragAttributes, dragDisabled }) {
   return (
-    <Stack direction="row" spacing={0.25} alignItems="center">
+    <Tooltip title={dragDisabled ? 'Déplacement impossible' : 'Déplacer verticalement'}>
+      <span>
+        <IconButton
+          size="small"
+          aria-label="Déplacer verticalement"
+          sx={{ display: { xs: 'none', sm: 'inline-flex' }, cursor: dragDisabled ? 'not-allowed' : 'grab', mt: 0.25 }}
+          onClick={dragDisabled ? onBlockedDrag : undefined}
+          {...(!dragDisabled ? dragAttributes : {})}
+          {...(!dragDisabled ? dragListeners : {})}
+        >
+          <DragIndicator fontSize="small" />
+        </IconButton>
+      </span>
+    </Tooltip>
+  );
+}
+
+function CardActions({ card, linked, linkModeActive, onToggleLink, onToggleLock, onOpenMenu }) {
+  return (
+    <Stack direction="row" spacing={0.25} alignItems="center" sx={{ mt: 0.25 }}>
       <Tooltip title={linkModeActive ? 'Sélection link' : linked ? 'Lié' : 'Non lié'}><IconButton size="small" aria-label={linked ? 'Card liée' : 'Card non liée'} onClick={onToggleLink}><LinkIcon fontSize="small" color={linked || linkModeActive ? 'primary' : 'disabled'} /></IconButton></Tooltip>
       <Tooltip title={card.locked ? 'Déverrouiller' : 'Verrouiller'}><IconButton size="small" aria-label={card.locked ? 'Déverrouiller' : 'Verrouiller'} onClick={onToggleLock}>{card.locked ? <Lock fontSize="small" /> : <LockOpen fontSize="small" />}</IconButton></Tooltip>
-      <Tooltip title={dragDisabled ? 'Déplacement impossible' : 'Déplacer verticalement'}>
-        <span>
-          <IconButton size="small" aria-label="Déplacer verticalement" sx={{ display: { xs: 'none', sm: 'inline-flex' }, cursor: dragDisabled ? 'not-allowed' : 'grab' }} onClick={dragDisabled ? onBlockedDrag : undefined} {...(!dragDisabled ? dragAttributes : {})} {...(!dragDisabled ? dragListeners : {})}>
-            <DragIndicator fontSize="small" />
-          </IconButton>
-        </span>
-      </Tooltip>
       <IconButton size="small" aria-label="Menu card" onClick={onOpenMenu}><MoreVert fontSize="small" /></IconButton>
     </Stack>
   );
 }
 
-function AppearanceCard({ card, projection, instrument, linkModeActive, conflictMode, selectedForLink, selectableForLink, selectedForConflict, selectableForConflict, onToggleLink, onToggleLock, onOpenMenu, onBlockedDrag, dragListeners, dragAttributes, dragDisabled }) {
+function AppearanceCard({ card, projection, linkModeActive, selectedForLink, selectableForLink, selectedForConflict, selectableForConflict, onToggleLink, onToggleLock, onOpenMenu, onBlockedDrag, dragListeners, dragAttributes, dragDisabled }) {
   const linked = cardLinks(card, projection.links).length > 0;
   const conflicted = cardConflicts(card, projection.conflicts).length > 0;
   return (
-    <Card variant="outlined" sx={{ opacity: card.played ? 0.55 : 1, borderStyle: card.locked || linked ? 'solid' : 'dashed', borderColor: selectedForConflict ? 'error.main' : selectableForConflict ? 'error.light' : selectedForLink ? 'success.main' : selectableForLink ? 'primary.light' : linked ? 'primary.main' : card.locked ? 'warning.main' : 'divider', bgcolor: card.played ? 'action.hover' : 'background.paper', transition: 'transform 850ms ease, opacity 300ms ease, border-color 200ms ease' }}>
-      <CardContent sx={{ p: 1.25, '&:last-child': { pb: 1.25 } }}>
-        <Stack direction="row" spacing={1} alignItems="flex-start">
+    <Card variant="outlined" data-testid={`appearance-card-${card.id}`} sx={{ height: '100%', opacity: card.played ? 0.55 : 1, borderStyle: card.locked || linked ? 'solid' : 'dashed', borderColor: selectedForConflict ? 'error.main' : selectableForConflict ? 'error.light' : selectedForLink ? 'success.main' : selectableForLink ? 'primary.light' : linked ? 'primary.main' : card.locked ? 'warning.main' : conflicted ? 'error.main' : 'divider', bgcolor: card.played ? 'action.hover' : 'background.paper', transition: 'transform 850ms ease, opacity 300ms ease, border-color 200ms ease' }}>
+      <CardContent sx={{ p: 1, height: '100%', '&:last-child': { pb: 1 } }}>
+        <Stack direction="row" spacing={0.75} alignItems="flex-start" sx={{ height: '100%' }}>
+          <DragHandle onBlockedDrag={onBlockedDrag} dragListeners={dragListeners} dragAttributes={dragAttributes} dragDisabled={dragDisabled} />
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-            <Typography fontWeight={800} noWrap>{cardTitle(card, projection)}</Typography>
-            <Typography variant="caption" color="text.secondary">{instrument.label}{card.appearanceIndex > 1 ? ` · R${card.appearanceIndex}` : ''}</Typography>
+            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
+              <Typography fontWeight={800} noWrap>{cardTitle(card, projection)}</Typography>
+              {card.appearanceIndex > 1 ? <Chip size="small" label={`R${card.appearanceIndex}`} sx={{ height: 20 }} /> : null}
+              {(selectedForConflict || conflicted) ? <Chip size="small" label="Conflit" color="error" variant="outlined" sx={{ height: 20 }} /> : null}
+              {card.played ? <Chip size="small" label="Joué" color="success" sx={{ height: 20 }} /> : null}
+            </Stack>
+            <CardActions card={card} linked={linked} linkModeActive={linkModeActive} onToggleLink={onToggleLink} onToggleLock={onToggleLock} onOpenMenu={onOpenMenu} />
           </Box>
-          <CardActions card={card} linked={linked} linkModeActive={linkModeActive} onToggleLink={onToggleLink} onToggleLock={onToggleLock} onOpenMenu={onOpenMenu} onBlockedDrag={onBlockedDrag} dragListeners={dragListeners} dragAttributes={dragAttributes} dragDisabled={dragDisabled} />
-        </Stack>
-        <Stack direction="row" spacing={0.5} mt={0.75} flexWrap="wrap">
-          {card.appearanceIndex > 1 ? <Chip size="small" label={`R${card.appearanceIndex}`} /> : null}
-          {linked ? <Chip size="small" label="Lié" color="primary" variant="outlined" /> : null}
-          {(selectedForConflict || conflicted) ? <Chip size="small" label="Conflit" color="error" variant="outlined" /> : null}
-          {card.locked ? <Chip size="small" label="Verrouillé" color="warning" /> : null}
-          {card.played ? <Chip size="small" label="Joué" color="success" /> : null}
         </Stack>
       </CardContent>
     </Card>
@@ -86,17 +100,18 @@ function AppearanceCard({ card, projection, instrument, linkModeActive, conflict
 function HoleCard({ card, projection, linkModeActive, selectedForLink, selectableForLink, onToggleLink, onToggleLock, onOpenMenu, onBlockedDrag, dragListeners, dragAttributes, dragDisabled }) {
   const linked = cardLinks(card, projection.links).length > 0;
   return (
-    <Card variant="outlined" sx={{ opacity: card.played ? 0.55 : 1, borderColor: selectedForLink ? 'success.main' : selectableForLink ? 'primary.light' : linked ? 'primary.main' : card.locked ? 'warning.main' : 'divider', bgcolor: card.played ? 'action.hover' : 'background.paper', transition: 'transform 850ms ease, opacity 300ms ease, border-color 200ms ease' }}>
-      <CardContent sx={{ p: 1.25, '&:last-child': { pb: 1.25 } }}>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Typography fontWeight={800} sx={{ flexGrow: 1 }}>Trou</Typography>
-          <CardActions card={card} linked={linked} linkModeActive={linkModeActive} onToggleLink={onToggleLink} onToggleLock={onToggleLock} onOpenMenu={onOpenMenu} onBlockedDrag={onBlockedDrag} dragListeners={dragListeners} dragAttributes={dragAttributes} dragDisabled={dragDisabled} />
-        </Stack>
-        <Stack direction="row" spacing={0.5} mt={0.75} flexWrap="wrap">
-          <Chip size="small" label={`R${card.appearanceIndex}`} />
-          {linked ? <Chip size="small" label="Lié" color="primary" variant="outlined" /> : null}
-          {card.locked ? <Chip size="small" icon={<Lock />} label="Verrouillé" color="warning" /> : null}
-          {card.played ? <Chip size="small" label="Joué" color="success" /> : null}
+    <Card variant="outlined" data-testid={`hole-card-${card.id}`} sx={{ height: '100%', opacity: card.played ? 0.55 : 1, borderColor: selectedForLink ? 'success.main' : selectableForLink ? 'primary.light' : linked ? 'primary.main' : card.locked ? 'warning.main' : 'divider', bgcolor: card.played ? 'action.hover' : 'background.paper', transition: 'transform 850ms ease, opacity 300ms ease, border-color 200ms ease' }}>
+      <CardContent sx={{ p: 1, height: '100%', '&:last-child': { pb: 1 } }}>
+        <Stack direction="row" spacing={0.75} alignItems="flex-start" sx={{ height: '100%' }}>
+          <DragHandle onBlockedDrag={onBlockedDrag} dragListeners={dragListeners} dragAttributes={dragAttributes} dragDisabled={dragDisabled} />
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              <Typography fontWeight={800} noWrap>Trou</Typography>
+              {card.appearanceIndex > 1 ? <Chip size="small" label={`R${card.appearanceIndex}`} sx={{ height: 20 }} /> : null}
+              {card.played ? <Chip size="small" label="Joué" color="success" sx={{ height: 20 }} /> : null}
+            </Stack>
+            <CardActions card={card} linked={linked} linkModeActive={linkModeActive} onToggleLink={onToggleLink} onToggleLock={onToggleLock} onOpenMenu={onOpenMenu} />
+          </Box>
         </Stack>
       </CardContent>
     </Card>
@@ -111,49 +126,62 @@ function SortableProjectedCard({ card, projection, instrument, linkMode, conflic
   const dragDisabled = linkMode?.active || conflictMode?.active || !canDragCard(card, projection);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id, data: { card, instrumentId: instrument.instrumentId } });
   return (
-    <Box ref={setNodeRef} onClick={conflictMode?.active && selectableForConflict ? () => onSelectConflict(card) : undefined} sx={{ transform: transformToCss(transform), transition, opacity: isDragging ? 0.7 : 1, cursor: conflictMode?.active && selectableForConflict ? 'crosshair' : 'default' }}>
+    <Box ref={setNodeRef} onClick={conflictMode?.active && selectableForConflict ? () => onSelectConflict(card) : undefined} sx={{ height: '100%', transform: transformToCss(transform), transition, opacity: isDragging ? 0.7 : 1, cursor: conflictMode?.active && selectableForConflict ? 'crosshair' : 'default' }}>
       {card.type === 'hole'
         ? <HoleCard card={card} projection={projection} linkModeActive={linkMode?.active} conflictMode={conflictMode} selectedForLink={selectedForLink} selectableForLink={selectableForLink} selectedForConflict={selectedForConflict} selectableForConflict={selectableForConflict} onToggleLink={() => (conflictMode?.active ? onSelectConflict(card) : onToggleLink(card))} onToggleLock={() => onToggleLock(card)} onOpenMenu={(event) => onOpenMenu(event, card)} onBlockedDrag={() => onBlockedDrag(card)} dragListeners={listeners} dragAttributes={attributes} dragDisabled={dragDisabled} />
-        : <AppearanceCard card={card} projection={projection} instrument={instrument} linkModeActive={linkMode?.active} conflictMode={conflictMode} selectedForLink={selectedForLink} selectableForLink={selectableForLink} selectedForConflict={selectedForConflict} selectableForConflict={selectableForConflict} onToggleLink={() => (conflictMode?.active ? onSelectConflict(card) : onToggleLink(card))} onToggleLock={() => onToggleLock(card)} onOpenMenu={(event) => onOpenMenu(event, card)} onBlockedDrag={() => onBlockedDrag(card)} dragListeners={listeners} dragAttributes={attributes} dragDisabled={dragDisabled} />}
+        : <AppearanceCard card={card} projection={projection} linkModeActive={linkMode?.active} conflictMode={conflictMode} selectedForLink={selectedForLink} selectableForLink={selectableForLink} selectedForConflict={selectedForConflict} selectableForConflict={selectableForConflict} onToggleLink={() => (conflictMode?.active ? onSelectConflict(card) : onToggleLink(card))} onToggleLock={() => onToggleLock(card)} onOpenMenu={(event) => onOpenMenu(event, card)} onBlockedDrag={() => onBlockedDrag(card)} dragListeners={listeners} dragAttributes={attributes} dragDisabled={dragDisabled} />}
     </Box>
   );
 }
 
-function InsertionZone({ label, onAddHole, onAddParticipant }) {
+function InsertionZone({ onAddHole, onAddParticipant }) {
+  const [anchorEl, setAnchorEl] = useState(null);
+  const open = Boolean(anchorEl);
+
+  function close() {
+    setAnchorEl(null);
+  }
+
   return (
-    <Paper variant="outlined" sx={{ p: 0.75, borderStyle: 'dashed', bgcolor: 'background.default' }}>
-      <Typography variant="caption" color="text.secondary">{label}</Typography>
-      <Stack direction="row" spacing={0.75} mt={0.5}>
-        <Button size="small" variant="text" startIcon={<Add />} onClick={onAddHole}>Ajouter un trou</Button>
-        <Button size="small" variant="text" startIcon={<Add />} onClick={onAddParticipant}>Ajouter un participant</Button>
-      </Stack>
-    </Paper>
+    <Box sx={{ height: INSERT_ZONE_HEIGHT, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <IconButton size="small" aria-label="Ajouter entre les cards" onClick={(event) => setAnchorEl(event.currentTarget)} sx={{ width: 28, height: 28, border: 1, borderColor: 'divider', bgcolor: 'background.default' }}>
+        <Add fontSize="small" />
+      </IconButton>
+      <Menu anchorEl={anchorEl} open={open} onClose={close}>
+        <MenuItem onClick={() => { close(); onAddHole?.(); }}>Ajouter un trou</MenuItem>
+        <MenuItem onClick={() => { close(); onAddParticipant?.(); }}>Ajouter un participant</MenuItem>
+      </Menu>
+    </Box>
   );
 }
 
 function PlateauRail({ rows, projection, onOpenCallDrawer, onTogglePlateauPlayed }) {
   return (
     <Box sx={{ minWidth: 132, flex: '0 0 132px', position: { sm: 'sticky' }, left: 0, zIndex: 1, bgcolor: 'background.paper' }}>
-      <Stack spacing={1}>
-        <Box sx={{ minHeight: 48 }} />
+      <Stack spacing={0}>
+        <Box sx={{ height: TABLE_HEADER_HEIGHT }} />
         {rows.map((row) => {
           const played = row.targets.length > 0 && row.targets.every((target) => (target.type === 'appearance' ? projection.appearances[target.id]?.played : projection.holes[target.id]?.played));
           return (
-            <Paper key={row.plateauIndex} variant="outlined" sx={{ p: 1, minHeight: 132, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-              <Typography variant="subtitle2" fontWeight={900}>Plateau {row.plateauIndex + 1}</Typography>
-              <Stack spacing={0.75}>
-                <Tooltip title={played ? 'Ce plateau est déjà joué.' : 'Appeler ce plateau'}>
-                  <span>
-                    <Button size="small" variant="outlined" startIcon={<Call />} onClick={() => onOpenCallDrawer?.(row.plateauIndex)} disabled={played}>Appeler</Button>
-                  </span>
-                </Tooltip>
-                <Button size="small" color={played ? 'success' : 'primary'} variant={played ? 'contained' : 'outlined'} startIcon={played ? <CheckCircle /> : <RadioButtonUnchecked />} onClick={() => onTogglePlateauPlayed(row.plateauIndex, row.targets, played)} disabled={row.targets.length === 0}>
-                  {played ? 'Joué' : 'Marquer joué'}
-                </Button>
-              </Stack>
-            </Paper>
+            <Box key={row.plateauIndex}>
+              <Box sx={{ height: INSERT_ZONE_HEIGHT }} />
+              <Paper variant="outlined" sx={{ p: 1, height: TABLE_ROW_HEIGHT, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <Typography variant="subtitle2" fontWeight={900}>Plateau {row.plateauIndex + 1}</Typography>
+                <Stack spacing={0.5}>
+                  <Tooltip title={played ? 'Ce plateau est déjà joué.' : 'Appeler ce plateau'}>
+                    <span>
+                      <Button size="small" variant="outlined" startIcon={<Call />} onClick={() => onOpenCallDrawer?.(row.plateauIndex)} disabled={played}>Appeler</Button>
+                    </span>
+                  </Tooltip>
+                  <Button size="small" color={played ? 'success' : 'primary'} variant={played ? 'contained' : 'outlined'} startIcon={played ? <CheckCircle /> : <RadioButtonUnchecked />} onClick={() => onTogglePlateauPlayed(row.plateauIndex, row.targets, played)} disabled={row.targets.length === 0}>
+                    {played ? 'Joué' : 'Marquer joué'}
+                  </Button>
+                </Stack>
+              </Paper>
+            </Box>
           );
         })}
+        <Box sx={{ height: INSERT_ZONE_HEIGHT }} />
       </Stack>
     </Box>
   );
@@ -641,8 +669,8 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
               const counter = projection.countersByInstrument[column.instrument.instrumentId]?.notYetPlayedFirstTime ?? 0;
               return (
                 <Box key={column.instrument.instrumentId} sx={{ minWidth: { xs: 236, sm: 272 }, maxWidth: 292, flex: '0 0 auto' }}>
-                  <Stack spacing={1} sx={{ height: '100%' }}>
-                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ minHeight: 48 }}>
+                  <Stack spacing={0} sx={{ height: '100%' }}>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ height: TABLE_HEADER_HEIGHT }}>
                       <Box sx={{ minWidth: 0 }}>
                         <Typography variant="subtitle1" fontWeight={900} noWrap>{column.instrument.label}</Typography>
                         <Typography variant="caption" color="text.secondary">Round {column.visibleRoundCount ?? 1} visible</Typography>
@@ -650,17 +678,22 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
                       <Chip size="small" label={`${counter} à faire passer`} />
                     </Stack>
                     <SortableContext items={column.cards.map((card) => card.id)} strategy={verticalListSortingStrategy}>
-                      <Stack spacing={1}>
+                      <Stack spacing={0}>
                         {Array.from({ length: Math.max(column.cards.length, 1) + 1 }, (_, index) => (
                           <Box key={`${column.instrument.instrumentId}:slot:${index}`}>
-                            <InsertionZone label={index === 0 ? 'Début de colonne' : 'Entre les cards'} onAddHole={() => addHole(column, index)} onAddParticipant={() => addParticipant(column, index)} />
-                            {column.cards[index] ? <Box mt={1}><SortableProjectedCard card={column.cards[index]} projection={projection} instrument={column.instrument} linkMode={linkMode} conflictMode={conflictMode} onToggleLink={selectCardForLink} onSelectConflict={selectConflictTarget} onToggleLock={toggleLock} onOpenMenu={openMenu} onBlockedDrag={() => onFeedback?.('Déplacement impossible : passage joué, verrouillé ou en conflit')} /></Box> : null}
-                            {column.cards[index]?.appearanceIndex !== column.cards[index + 1]?.appearanceIndex && column.cards[index + 1] ? <Divider sx={{ mt: 1 }}><Chip size="small" label={`Round ${column.cards[index + 1].appearanceIndex}`} /></Divider> : null}
+                            <InsertionZone onAddHole={() => addHole(column, index)} onAddParticipant={() => addParticipant(column, index)} />
+                            {column.cards[index] ? (
+                              <Box sx={{ height: TABLE_ROW_HEIGHT, display: 'flex', alignItems: 'stretch' }}>
+                                <SortableProjectedCard card={column.cards[index]} projection={projection} instrument={column.instrument} linkMode={linkMode} conflictMode={conflictMode} onToggleLink={selectCardForLink} onSelectConflict={selectConflictTarget} onToggleLock={toggleLock} onOpenMenu={openMenu} onBlockedDrag={() => onFeedback?.('Déplacement impossible : passage joué, verrouillé ou en conflit')} />
+                              </Box>
+                            ) : null}
                           </Box>
                         ))}
                       </Stack>
                     </SortableContext>
-                    <Button size="large" variant="outlined" onClick={() => revealRound(column)}>Afficher le round suivant</Button>
+                    <Box sx={{ pt: 1 }}>
+                      <Button size="large" variant="outlined" onClick={() => revealRound(column)}>Afficher le round suivant</Button>
+                    </Box>
                   </Stack>
                 </Box>
               );
