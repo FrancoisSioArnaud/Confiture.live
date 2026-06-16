@@ -22,7 +22,7 @@ export function JamDetailPage() {
   const clientId = useMemo(() => getOrCreateClientId(), []);
   const [configOpen, setConfigOpen] = useState(false);
   const { enqueueFeedback } = useFeedback();
-  const [participantDrawer, setParticipantDrawer] = useState({ open: false, mode: 'create', participantId: null, insertionContext: null });
+  const [participantDrawer, setParticipantDrawer] = useState({ open: false, mode: 'create', participantId: null });
   const [sessionState, setSessionState] = useState({ status: 'idle', message: null, canTakeover: false, activeClientId: null });
   const clientSequenceRef = useRef(0);
   const projection = useJamStoreState((state) => state.projection);
@@ -158,8 +158,7 @@ export function JamDetailPage() {
           onTransaction={applyOrganizerTransaction}
           onOpenCallDrawer={(plateauIndex) => enqueueFeedback(`Appel du plateau ${plateauIndex + 1}`, 'info')}
           onFeedback={(message) => enqueueFeedback(message)}
-          onCreateParticipant={(insertionContext) => setParticipantDrawer({ open: true, mode: 'create', participantId: null, insertionContext })}
-          onEditParticipant={(participantId) => setParticipantDrawer({ open: true, mode: 'edit', participantId, insertionContext: null })}
+          onEditParticipant={(participantId) => setParticipantDrawer({ open: true, mode: 'edit', participantId })}
         />
       </Paper>
 
@@ -179,14 +178,13 @@ export function JamDetailPage() {
         mode={participantDrawer.mode}
         projection={projection}
         participantId={participantDrawer.participantId}
-        insertionContext={participantDrawer.insertionContext}
         clientId={clientId}
         clientSequenceNumber={nextClientSequenceNumber}
-        onClose={() => setParticipantDrawer({ open: false, mode: 'create', participantId: null, insertionContext: null })}
+        onClose={() => setParticipantDrawer({ open: false, mode: 'create', participantId: null })}
         onTransaction={applyOrganizerTransaction}
         onFeedback={(message) => enqueueFeedback(message)}
       />
-      <Fab color="primary" aria-label="Ajouter un musicien" disabled={!canEdit} onClick={() => setParticipantDrawer({ open: true, mode: 'create', participantId: null, insertionContext: null })} sx={{ position: 'fixed', right: 24, bottom: 24 }}><PersonAdd /></Fab>
+      <Fab color="primary" aria-label="Ajouter un musicien" disabled={!canEdit} onClick={() => setParticipantDrawer({ open: true, mode: 'create', participantId: null })} sx={{ position: 'fixed', right: 24, bottom: 24 }}><PersonAdd /></Fab>
     </Stack>
   );
 }

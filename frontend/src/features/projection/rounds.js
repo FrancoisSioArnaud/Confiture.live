@@ -14,6 +14,7 @@ export function materializeCalculatedAppearances(state) {
     for (let index = participation.startAppearanceIndex; index <= visibleRoundCount; index += 1) {
       const appearanceId = `appearance_${participation.participationId}_${index}`;
       if (!state.appearances[appearanceId]) {
+        const positionInRound = stableOrderValue(participation.baseOrderKey);
         state.appearances[appearanceId] = {
           id: appearanceId,
           appearanceId,
@@ -27,7 +28,9 @@ export function materializeCalculatedAppearances(state) {
           locked: false,
           materialized: false,
           positionKey: `${participation.baseOrderKey}:${index}`,
-          orderScore: stableOrderValue(participation.baseOrderKey) * 1000 + index,
+          positionInRound,
+          roundOrder: positionInRound,
+          orderScore: index * 1_000_000 + positionInRound,
         };
       }
     }

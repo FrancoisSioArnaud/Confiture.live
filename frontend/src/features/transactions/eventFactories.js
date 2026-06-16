@@ -10,7 +10,7 @@ const nullableIsoDate = z.union([isoDate, z.null()]);
 const nullableTarget = z.union([z.object({ type: z.enum(['appearance', 'hole']), id }).strict(), z.null()]);
 const target = z.object({ type: z.enum(['appearance', 'hole']), id }).strict();
 const linkReorderStrategy = z.enum(['move_to_first', 'move_to_last', 'average_position']);
-const insertionMode = z.enum(['end_of_visible_rounds', 'between_targets']);
+const insertionMode = z.enum(['end_of_visible_rounds']);
 const replacement = z.union([
   z.object({ mode: z.literal('appearance'), appearanceId: id }).strict(),
   z.object({ mode: z.literal('hole'), holeId: id }).strict(),

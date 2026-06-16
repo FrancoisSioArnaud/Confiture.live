@@ -61,7 +61,7 @@ function draftHasChanges({ mode, draft, participant, activeParticipations, initi
     || JSON.stringify(normalizedCustomLabels({}, addedInstrumentIds)) !== JSON.stringify(normalizedCustomLabels(draft.customInstrumentLabels, addedInstrumentIds));
 }
 
-export function ParticipantDrawer({ open, mode = 'create', projection, participantId = null, insertionContext = null, clientId, clientSequenceNumber, onClose, onTransaction, onFeedback }) {
+export function ParticipantDrawer({ open, mode = 'create', projection, participantId = null, clientId, clientSequenceNumber, onClose, onTransaction, onFeedback }) {
   const instruments = useMemo(() => visibleInstruments(projection), [projection]);
   const participant = participantId ? projection.participants[participantId] : null;
   const activeParticipations = useMemo(() => activeParticipationsFor(projection, participantId), [participantId, projection]);
@@ -78,8 +78,8 @@ export function ParticipantDrawer({ open, mode = 'create', projection, participa
     if (!open) return;
     const labels = Object.fromEntries(editableActiveParticipations.filter((participation) => participation.customInstrumentLabel).map((participation) => [participation.instrumentId, participation.customInstrumentLabel]));
     const visibleInstrumentIds = instruments.map((instrument) => instrument.instrumentId);
-    const selectedInstrumentIds = mode === 'create' && insertionContext?.instrumentId
-      ? [insertionContext.instrumentId]
+    const selectedInstrumentIds = mode === 'create'
+      ? []
       : visibleInstrumentIds.filter((instrumentId) => editableActiveParticipations.some((participation) => participation.instrumentId === instrumentId));
     setDraft({
       name: participant?.name ?? '',
@@ -90,7 +90,7 @@ export function ParticipantDrawer({ open, mode = 'create', projection, participa
     setError('');
     setPendingRemovalConfirm(null);
     setIsSaving(false);
-  }, [editableActiveParticipations, insertionContext, instruments, mode, open, participant, projection]);
+  }, [editableActiveParticipations, instruments, mode, open, participant, projection]);
 
   function toggleInstrument(instrumentId) {
     setDraft((current) => {
@@ -132,8 +132,8 @@ export function ParticipantDrawer({ open, mode = 'create', projection, participa
     }
 
     const result = mode === 'create'
-      ? buildCreateParticipantTransaction({ jamId: projection.jam?.jamId, clientId, clientSequenceNumber, projection, draft: validation.draft, instruments, insertionContext })
-      : buildEditParticipantTransaction({ jamId: projection.jam?.jamId, clientId, clientSequenceNumber, projection, participantId, draft: validation.draft, instruments, confirmedRemovedParticipationIds, insertionContext });
+      ? buildCreateParticipantTransaction({ jamId: projection.jam?.jamId, clientId, clientSequenceNumber, projection, draft: validation.draft, instruments })
+      : buildEditParticipantTransaction({ jamId: projection.jam?.jamId, clientId, clientSequenceNumber, projection, participantId, draft: validation.draft, instruments, confirmedRemovedParticipationIds });
     if (!result.ok) {
       setError(result.error);
       return;

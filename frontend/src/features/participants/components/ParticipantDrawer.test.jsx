@@ -44,9 +44,10 @@ describe('ParticipantDrawer', () => {
     expect(screen.queryByLabelText('Masqué')).not.toBeInTheDocument();
   });
 
-  it('preselects the insertion context instrument', () => {
-    renderDrawer({ insertionContext: { instrumentId: 'instrument_guitar', appearanceIndex: 1 } });
-    expect(screen.getByLabelText('Guitare')).toBeChecked();
+  it('does not preselect an instrument in standard creation', () => {
+    renderDrawer();
+    expect(screen.getByLabelText('Guitare')).not.toBeChecked();
+    expect(screen.getByLabelText('Chant')).not.toBeChecked();
   });
 
   it('refuses creation without a name', async () => {
