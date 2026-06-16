@@ -80,6 +80,19 @@ describe('buildParticipantDrawerTransaction', () => {
     expect(result).toMatchObject({ ok: false, error: 'Impossible d’ajouter un instrument à un musicien marqué parti.' });
   });
 
+  it('requires confirmation before removing an impacted participation', () => {
+    const projection = {
+      ...emptyProjection,
+      participants: { participant_1: { participantId: 'participant_1', name: 'Nico', status: 'active' } },
+      participations: { participation_vocals: { participationId: 'participation_vocals', participantId: 'participant_1', instrumentId: 'instrument_vocals', status: 'active', startAppearanceIndex: 1, baseOrderKey: 'position_vocals' } },
+      appearances: { appearance_vocals_1: { appearanceId: 'appearance_vocals_1', participationId: 'participation_vocals', status: 'active' } },
+    };
+
+    const result = buildEditParticipantTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 8, projection, participantId: 'participant_1', instruments, draft: { name: 'Nico', selectedInstrumentIds: ['instrument_guitar'], initialLinkedInstrumentPairs: [], customInstrumentLabels: {} } });
+
+    expect(result).toMatchObject({ ok: false, error: 'Confirmation requise pour retirer cet instrument.' });
+  });
+
   it('edits name, adds an instrument and removes an instrument via events', () => {
     const projection = {
       ...emptyProjection,
