@@ -40,3 +40,31 @@ Nginx doit proxyfier `/api/` vers Gunicorn afin que les routes Django comme `/ap
 Certaines bases SQLite de développement ou de production peuvent avoir appliqué une ancienne version de `backend/jams/migrations/0001_initial.py` avant l'ajout de colonnes aujourd'hui attendues par les modèles Django. Les migrations de réparation ultérieures inspectent le schéma réel et ajoutent uniquement les colonnes absentes, ce qui les rend idempotentes sur les bases déjà réparées comme sur les bases récentes.
 
 Ne modifiez jamais une migration déjà appliquée sur un environnement existant : créez une nouvelle migration de réparation pour préserver les données et garder l'historique Django cohérent.
+
+
+## Fichiers statiques Django admin en production
+
+L’admin Django (`/admin/`) a besoin des static files collectés dans `backend/staticfiles`.
+Après un déploiement backend, exécuter :
+
+```bash
+cd backend
+source venv/bin/activate
+python manage.py collectstatic --noinput
+```
+
+Nginx doit servir `/static/` depuis ce dossier :
+
+```nginx
+location /static/ {
+    alias /home/confiture/confiture.live/backend/staticfiles/;
+}
+```
+
+Test rapide :
+
+```bash
+curl -I -H "Host: confiture.live" http://127.0.0.1/static/admin/css/base.css
+```
+
+Le CSS admin est correctement servi si la réponse est `200 OK`.

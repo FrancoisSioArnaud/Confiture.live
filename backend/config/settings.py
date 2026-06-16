@@ -56,7 +56,14 @@ LANGUAGE_CODE = "fr-fr"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
-STATIC_URL = "static/"
+# Static files
+#
+# Django admin depends on files from django.contrib.admin being collected into
+# STATIC_ROOT, then served by the production web server at STATIC_URL. Keep the
+# leading slash: without it, admin pages can generate relative static URLs.
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {"DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"]}

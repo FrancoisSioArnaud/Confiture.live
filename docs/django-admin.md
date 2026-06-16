@@ -18,6 +18,49 @@ Ne stockez jamais d'identifiants, mots de passe ou tokens de production dans le 
 /admin/
 ```
 
+
+## Fichiers statiques de l’admin
+
+L’admin Django utilise les fichiers statiques fournis par `django.contrib.admin`.
+En production, ils doivent être collectés puis servis par Nginx.
+
+Collecter les fichiers statiques :
+
+```bash
+cd backend
+source venv/bin/activate
+python manage.py collectstatic --noinput
+```
+
+Vérifier que les CSS admin existent :
+
+```bash
+ls -la staticfiles/admin/css | head
+```
+
+Tester depuis le serveur :
+
+```bash
+curl -I -H "Host: confiture.live" http://127.0.0.1/static/admin/css/base.css
+```
+
+Résultat attendu : `200 OK`. Si le résultat est `404`, ajouter ou corriger ce bloc dans la configuration Nginx du site :
+
+```nginx
+location /static/ {
+    alias /home/confiture/confiture.live/backend/staticfiles/;
+}
+```
+
+Avec `alias`, les deux `/` finaux sont importants : `location /static/` et `staticfiles/`.
+
+Après modification Nginx :
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
 ## Usage recommandé
 
 Utiliser l'admin comme outil d'inspection/debug pour :
