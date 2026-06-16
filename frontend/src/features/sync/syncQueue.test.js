@@ -74,6 +74,10 @@ beforeEach(async () => {
   jamStore.setState({ jamId: null, transactions: [], events: [], snapshot: null, projection: projectJamState(), projectionWarnings: [], lastProjectedAt: null });
 });
 
+async function saveValidSession(clientId = 'client_1', leaseToken = 'lease_1') {
+  await saveClientSession('jam_sync', { clientId, leaseToken, leaseExpiresAt: '2999-01-15T21:00:00.000Z' });
+}
+
 describe('local-first sync layer', () => {
   it('stores a local transaction as pending and rebuilds the projection immediately', async () => {
     const projection = await jamStore.getState().applyLocalTransaction(transaction(1), { sync: false });
@@ -87,6 +91,7 @@ describe('local-first sync layer', () => {
 
   it('pushes pending transactions successfully and records server sequence state', async () => {
     await jamStore.getState().applyLocalTransaction(transaction(1), { sync: false });
+    await saveValidSession();
     const api = { pushTransaction: vi.fn().mockResolvedValue({ status: 'accepted', transactionId: 'transaction_1', serverSequenceNumberStart: 1, serverSequenceNumberEnd: 1, latestServerSequenceNumber: 1 }) };
 
     const result = await pushPendingTransactions({ jamId: 'jam_sync', api });
@@ -101,6 +106,7 @@ describe('local-first sync layer', () => {
   it('keeps a transaction pending and schedules retry after push error', async () => {
     vi.useFakeTimers();
     await jamStore.getState().applyLocalTransaction(transaction(1), { sync: false });
+    await saveValidSession();
     const api = { pushTransaction: vi.fn().mockRejectedValue(new Error('offline')) };
 
     const result = await pushPendingTransactions({ jamId: 'jam_sync', api, retryDelayMs: 500 });
@@ -124,6 +130,7 @@ describe('local-first sync layer', () => {
         latestServerSequenceNumber: 4,
       },
     };
+    await saveValidSession();
     const api = { pushTransaction: vi.fn().mockRejectedValue(sequenceConflict) };
 
     const result = await pushPendingTransactions({ jamId: 'jam_sync', api, retryDelayMs: 500 });
@@ -173,6 +180,7 @@ describe('local-first sync layer', () => {
     expect(await getSyncState('jam_sync')).toMatchObject({ lastServerSequenceNumber: 7, status: SYNC_STATUS.SYNCED });
 
     await jamStore.getState().applyLocalTransaction(transaction(2), { sync: false });
+    await saveValidSession();
     const api = { pushTransaction: vi.fn().mockResolvedValue({ transactionId: 'transaction_2', serverSequenceNumberStart: 8, serverSequenceNumberEnd: 8, latestServerSequenceNumber: 8 }) };
 
     await pushPendingTransactions({ jamId: 'jam_sync', api });
@@ -243,10 +251,86 @@ describe('local-first sync layer', () => {
   it('uses the last server sequence number as push base', async () => {
     await saveSyncState('jam_sync', { lastServerSequenceNumber: 12, status: SYNC_STATUS.SYNCED });
     await jamStore.getState().applyLocalTransaction(transaction(1), { sync: false });
+    await saveValidSession();
     const api = { pushTransaction: vi.fn().mockResolvedValue({ transactionId: 'transaction_1', serverSequenceNumberStart: 13, serverSequenceNumberEnd: 13, latestServerSequenceNumber: 13 }) };
 
     await pushPendingTransactions({ jamId: 'jam_sync', api });
 
     expect(api.pushTransaction).toHaveBeenCalledWith('jam_sync', expect.objectContaining({ baseServerSequenceNumber: 12 }));
   });
+
+  it('acquires a missing session with the transaction client before pushing', async () => {
+    await jamStore.getState().applyLocalTransaction(transaction(1), { sync: false });
+    const api = {
+      acquireClientSession: vi.fn().mockResolvedValue({ clientId: 'client_1', leaseToken: 'lease_acquired', leaseExpiresAt: '2999-01-15T21:00:00.000Z' }),
+      pushTransaction: vi.fn().mockResolvedValue({ transactionId: 'transaction_1', serverSequenceNumberStart: 1, serverSequenceNumberEnd: 1, latestServerSequenceNumber: 1 }),
+    };
+
+    await pushPendingTransactions({ jamId: 'jam_sync', api });
+
+    expect(api.acquireClientSession).toHaveBeenCalledWith('jam_sync', { clientId: 'client_1', deviceLabel: 'Navigateur', force: false });
+    expect(api.pushTransaction).toHaveBeenCalledWith('jam_sync', expect.objectContaining({
+      clientId: 'client_1',
+      leaseToken: 'lease_acquired',
+      transaction: expect.objectContaining({ clientId: 'client_1' }),
+    }));
+  });
+
+  it('keeps pending and does not push when acquiring a missing session is locked', async () => {
+    await jamStore.getState().applyLocalTransaction(transaction(1), { sync: false });
+    const locked = new Error('locked');
+    locked.status = 423;
+    const api = { acquireClientSession: vi.fn().mockRejectedValue(locked), pushTransaction: vi.fn() };
+
+    await pushPendingTransactions({ jamId: 'jam_sync', api });
+
+    expect(api.pushTransaction).not.toHaveBeenCalled();
+    expect((await getPendingTransactions('jam_sync'))[0]).toMatchObject({ transactionId: 'transaction_1' });
+    expect(getSyncStatus('jam_sync')).toMatchObject({ status: SYNC_STATUS.LEASE_LOST, pendingCount: 1 });
+  });
+
+  it('refuses to mix a transaction clientId with another client session leaseToken', async () => {
+    await jamStore.getState().applyLocalTransaction({ ...transaction(1), clientId: 'client_2', events: transaction(1).events.map((event) => ({ ...event, clientId: 'client_2' })) }, { sync: false });
+    await saveClientSession('jam_sync', { clientId: 'client_1', leaseToken: 'lease_1', leaseExpiresAt: '2999-01-15T21:00:00.000Z' });
+    const api = { pushTransaction: vi.fn() };
+
+    await pushPendingTransactions({ jamId: 'jam_sync', api });
+
+    expect(api.pushTransaction).not.toHaveBeenCalled();
+    expect((await getPendingTransactions('jam_sync'))[0]).toMatchObject({ transactionId: 'transaction_1' });
+    expect(getSyncStatus('jam_sync').lastError).toContain('Session d’édition incohérente');
+  });
+
+  it('reacquires an expired session before pushing', async () => {
+    await jamStore.getState().applyLocalTransaction(transaction(1), { sync: false });
+    await saveClientSession('jam_sync', { clientId: 'client_1', leaseToken: 'old_lease', leaseExpiresAt: '2000-01-15T21:00:00.000Z' });
+    const api = {
+      acquireClientSession: vi.fn().mockResolvedValue({ clientId: 'client_1', leaseToken: 'new_lease', leaseExpiresAt: '2999-01-15T21:00:00.000Z' }),
+      pushTransaction: vi.fn().mockResolvedValue({ transactionId: 'transaction_1', serverSequenceNumberStart: 1, serverSequenceNumberEnd: 1, latestServerSequenceNumber: 1 }),
+    };
+
+    await pushPendingTransactions({ jamId: 'jam_sync', api });
+
+    expect(api.acquireClientSession).toHaveBeenCalled();
+    expect(api.pushTransaction).toHaveBeenCalledWith('jam_sync', expect.objectContaining({ leaseToken: 'new_lease' }));
+  });
+
+  it('keeps pending without scheduling normal retry on lease error during push', async () => {
+    vi.useFakeTimers();
+    await jamStore.getState().applyLocalTransaction(transaction(1), { sync: false });
+    await saveValidSession();
+    const forbidden = new Error('No active client session for this jam.');
+    forbidden.status = 403;
+    const api = { pushTransaction: vi.fn().mockRejectedValue(forbidden) };
+
+    await pushPendingTransactions({ jamId: 'jam_sync', api, retryDelayMs: 500 });
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(api.pushTransaction).toHaveBeenCalledTimes(1);
+    expect((await getPendingTransactions('jam_sync'))[0]).toMatchObject({ transactionId: 'transaction_1', status: 'pending' });
+    expect(getSyncStatus('jam_sync')).toMatchObject({ status: SYNC_STATUS.LEASE_LOST, pendingCount: 1 });
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
 });

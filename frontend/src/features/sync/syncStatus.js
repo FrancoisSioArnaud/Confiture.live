@@ -8,6 +8,8 @@ export const SYNC_STATUS = Object.freeze({
   RETRYING: 'retrying',
   OFFLINE: 'offline',
   ERROR: 'error',
+  SESSION_REQUIRED: 'session_required',
+  LEASE_LOST: 'lease_lost',
 });
 
 export const syncStatusStore = createStore((set, get) => ({
