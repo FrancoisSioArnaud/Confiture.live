@@ -7,6 +7,7 @@ import * as jamsApi from '../../../shared/api/jamsApi';
 import { JamListPage } from './JamListPage';
 import { NewJamPage } from './NewJamPage';
 import { JamDetailPage } from './JamDetailPage';
+import { getLocalTransactions, resetLocalDbForTests } from '../../sync/localDb';
 
 const mockedNavigate = vi.hoisted(() => vi.fn());
 
@@ -32,8 +33,9 @@ function renderPage(ui) {
 }
 
 describe('jam pages', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    await resetLocalDbForTests();
   });
 
   it('renders jam list cards with explicit open and delete buttons', async () => {
@@ -68,6 +70,9 @@ describe('jam pages', () => {
 
     expect(await screen.findByText(/impossible de créer la jam côté serveur/i)).toBeInTheDocument();
     expect(mockedNavigate).not.toHaveBeenCalled();
+
+    const { transaction } = jamsApi.createJam.mock.calls[0][0];
+    await expect(getLocalTransactions(transaction.jamId)).resolves.toEqual([]);
   });
 
   it('navigates to the created jam only after backend creation succeeds', async () => {
@@ -95,6 +100,17 @@ describe('jam pages', () => {
     expect(await screen.findByRole('heading', { name: 'Jam du jeudi' })).toBeInTheDocument();
     expect(screen.getByText(/Sauvegardé sur cet appareil|Synchronisé|Synchronisation/)).toBeInTheDocument();
     expect(screen.queryByText(/route jam_1/i)).not.toBeInTheDocument();
+  });
+
+  it('does not acquire an editing session when the jam API returns 404', async () => {
+    const notFound = new Error('HTTP 404');
+    notFound.status = 404;
+    jamsApi.getJam.mockRejectedValueOnce(notFound);
+
+    renderPage(<JamDetailPage />);
+
+    expect(await screen.findByText(/impossible de charger cette jam/i)).toBeInTheDocument();
+    await waitFor(() => expect(jamsApi.acquireClientSession).not.toHaveBeenCalled());
   });
 
   it('opens jam configuration from the jam detail header', async () => {

@@ -31,8 +31,8 @@ export function NewJamPage() {
         selectedInstrumentIds,
         orderedInstruments: instruments,
       });
-      await jamStore.getState().applyLocalTransaction(transaction, { sync: false });
       const response = await createJamApi({ clientId, transaction });
+      await jamStore.getState().applyLocalTransaction(transaction, { sync: false });
       const ack = response?.transactionAck;
       if (ack) {
         await markTransactionSynced(transaction.jamId, transaction.transactionId, ack);

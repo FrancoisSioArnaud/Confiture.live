@@ -1,4 +1,5 @@
 import pytest
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 from jams.models import Jam, JamClientSession, JamEvent, JamTransaction
 
@@ -157,6 +158,54 @@ def test_create_jam_rolls_back_if_initial_transaction_fails(client, monkeypatch)
     assert response.status_code == 500
     assert not Jam.objects.filter(jam_id="jam_rollback").exists()
 
+
+
+def test_api_post_create_jam_ignores_admin_session_csrf(client):
+    User = get_user_model()
+    user = User.objects.create_superuser(username="admin", email="admin@example.com", password="password")
+    client.enforce_csrf_checks = True
+    client.force_login(user)
+
+    response = client.post("/api/jams/", {
+        "clientId": "client_admin_session",
+        "transaction": {
+            "transactionId": "transaction_admin_session_create",
+            "jamId": "jam_admin_session",
+            "clientSequenceNumber": 1,
+            "schemaVersion": 1,
+            "events": [{
+                "eventId": "event_admin_session_create",
+                "jamId": "jam_admin_session",
+                "type": "jam_created",
+                "payload": {
+                    "jamId": "jam_admin_session",
+                    "name": "Jam admin session",
+                    "indicativeDate": "2026-06-17",
+                    "linkReorderStrategy": "move_to_first",
+                },
+                "schemaVersion": 1,
+            }],
+        },
+    }, content_type="application/json")
+
+    assert response.status_code == 201
+    assert Jam.objects.filter(jam_id="jam_admin_session").exists()
+
+
+def test_api_post_acquire_session_ignores_admin_session_csrf(client):
+    create_jam(client, jam_id="jam_admin_session_acquire", client_id="client_admin_session")
+    User = get_user_model()
+    user = User.objects.create_superuser(username="admin", email="admin@example.com", password="password")
+    client.enforce_csrf_checks = True
+    client.force_login(user)
+
+    response = client.post("/api/jams/jam_admin_session_acquire/client-session/acquire/", {
+        "clientId": "client_admin_session",
+        "deviceLabel": "Navigateur",
+    }, content_type="application/json")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "acquired"
 
 def test_patch_and_archive_jam(client):
     create_jam(client)

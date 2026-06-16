@@ -22,7 +22,7 @@ export function JamDetailPage() {
   const [configOpen, setConfigOpen] = useState(false);
   const { enqueueFeedback } = useFeedback();
   const [participantDrawer, setParticipantDrawer] = useState({ open: false, mode: 'create', participantId: null, insertionContext: null });
-  const [sessionState, setSessionState] = useState({ status: 'acquiring', message: null, canTakeover: false, activeClientId: null });
+  const [sessionState, setSessionState] = useState({ status: 'idle', message: null, canTakeover: false, activeClientId: null });
   const clientSequenceRef = useRef(0);
   const projection = useJamStoreState((state) => state.projection);
   const transactions = useJamStoreState((state) => state.transactions);
@@ -40,6 +40,8 @@ export function JamDetailPage() {
   }, [transactions]);
 
   useEffect(() => {
+    if (!data?.jam) return undefined;
+
     let cancelled = false;
     setSessionState({ status: 'acquiring', message: null, canTakeover: false, activeClientId: null });
     jamStore.getState().acquireSession({ jamId, clientId, deviceLabel: 'Navigateur' })
@@ -65,7 +67,7 @@ export function JamDetailPage() {
       stopHeartbeat(jamId);
       jamStore.getState().releaseSession({ jamId }).catch(() => null);
     };
-  }, [clientId, jamId]);
+  }, [clientId, data?.jam, jamId]);
 
   if (isLoading) {
     return <Stack alignItems="center" py={6}><CircularProgress /><Typography mt={2}>Chargement de la jam…</Typography></Stack>;

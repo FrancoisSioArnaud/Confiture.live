@@ -3,6 +3,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import AllowAny
 
 from .models import Jam, JamTransaction
 from .serializers import JamSerializer
@@ -41,6 +42,12 @@ def health(request):
 
 
 class JamViewSet(viewsets.ModelViewSet):
+    # The organizer API is a public same-origin JSON API for the V0 app.
+    # Keep it independent from Django admin sessions: if a browser is logged
+    # into /admin/, DRF SessionAuthentication would otherwise enforce CSRF on
+    # these endpoints and block jam creation/session acquisition with 403.
+    authentication_classes = []
+    permission_classes = [AllowAny]
     queryset = Jam.objects.all().order_by("-updated_at")
     serializer_class = JamSerializer
     lookup_field = "jam_id"
