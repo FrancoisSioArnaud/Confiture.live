@@ -263,7 +263,7 @@ Contient :
 
 ```js
 {
-  status: "synced" | "local_saved" | "syncing" | "pending" | "offline" | "blocked_by_other_client",
+  status: "synced" | "syncing" | "pending" | "offline_pending" | "sync_warning" | "readonly" | "blocked_by_other_client",
   pendingTransactionCount,
   lastSuccessfulSyncAt,
   lastSyncError,
@@ -276,10 +276,13 @@ Feedback : toujours positif et non bloquant.
 Exemples de wording :
 
 ```txt
-Synchronisé
-Sauvegardé sur cet appareil
-Connexion instable, sauvegarde locale active
-Synchronisation en attente
+Sauvegardé
+Sauvegarde…
+Sauvegarde en attente
+Hors ligne — vos actions sont gardées sur cet appareil
+Sauvegarde en attente — vos actions sont gardées sur cet appareil
+Lecture seule
+Lecture seule — jam active sur un autre appareil
 ```
 
 ---
