@@ -31,7 +31,7 @@ Date d’audit : 2026-06-15
 ## Partiellement conforme
 
 - **Projection engine** : couvre les règles majeures mais reste simplifié pour l’algorithme d’ordre (`orderScore` numérique), le ranking des remplaçants, le déplacement automatique conflict/link et certains warnings de cibles manquantes.
-- **Drawer d’appel** : fonctionne pour appeler, marquer joué, introuvable, remplaçant et faire sans musicien. Le choix de confirmation de delink utilise maintenant le dialog central MUI ; les règles de remplacement restent simplifiées.
+- **Drawer d’appel** : fonctionne pour appeler, marquer joué, introuvable, remplaçant et Plateau sans [instrument manquant]. Le choix de confirmation de delink utilise maintenant le dialog central MUI ; les règles de remplacement restent simplifiées.
 - **Drawer participant** : création/édition et validation de base existent, mais l’impact détaillé retrait instrument / links / locks / played demande davantage de cas de tests et de confirmations fines.
 - **Drag vertical** : dnd-kit est intégré et refuse played/locked/conflict, mais le déplacement de groupe linké et le feedback impossible restent simplifiés.
 - **Sync local-first** : queue et retry existent, mais les scénarios offline réels, conflits serveur, reprise de lease et réhydratation avancée restent peu testés.

@@ -448,8 +448,8 @@ Règles :
 
 ```txt
 - pas deux targets dans la même colonne
-- pas de target played incompatible
-- pas de target locked si cela force son déplacement
+- pas de target played
+- pas de target locked
 - pas de target en conflict contradictoire
 ```
 
@@ -582,6 +582,7 @@ Règles :
 - conflict sur appearance pour “ce passage seulement”
 - conflict sur participation pour “en général”
 - hole non concerné par conflict en V0
+- holes visibles atténués/non sélectionnables en mode conflict
 ```
 
 ## 9.4 Validation
@@ -644,7 +645,6 @@ Le drawer affiche :
 ```txt
 - chaque instrument du plateau
 - le musicien ou hole correspondant
-- état disponible/prêt
 - action “musicien introuvable” pour chaque appearance musicien
 ```
 
@@ -735,12 +735,12 @@ Affichage :
 - indication si déplacement nécessaire
 ```
 
-## 11.4 Faire sans musicien
+## 11.4 Plateau sans [instrument manquant]
 
 Toujours proposer :
 
 ```txt
-Faire sans musicien
+Plateau sans [instrument manquant]
 ```
 
 Effet :
@@ -1047,7 +1047,7 @@ Sauvegarde locale active. Les changements seront envoyés dès que possible.
 - appeler plateau
 - musicien introuvable
 - 3 remplaçants
-- faire sans musicien
+- Plateau sans [instrument manquant]
 - appearance_skipped ponctuel
 ```
 

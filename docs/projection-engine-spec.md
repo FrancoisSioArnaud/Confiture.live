@@ -712,7 +712,7 @@ Si un remplaçant est choisi :
 - l’appearance skippée est repoussée ;
 - si le remplaçant était linké, l’UI doit confirmer le délink avant validation.
 
-Si “faire sans musicien” est choisi :
+Si “Plateau sans [instrument manquant]” est choisi :
 
 - un hole est créé à la place ;
 - l’appearance skippée est repoussée ;

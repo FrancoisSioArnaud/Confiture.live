@@ -105,7 +105,7 @@ function HoleCard({ card, projection, linkModeActive, selectedForLink, selectabl
 
 function SortableProjectedCard({ card, projection, instrument, linkMode, conflictMode, onToggleLink, onSelectConflict, onToggleLock, onOpenMenu, onBlockedDrag }) {
   const selectedForLink = Boolean(linkMode?.selectedIds?.has(card.id));
-  const selectableForLink = Boolean(linkMode?.active && linkMode.anchor?.instrumentId !== card.instrumentId && !card.played && !card.locked);
+  const selectableForLink = Boolean(linkMode?.active && linkMode.anchor?.instrumentId !== card.instrumentId && !card.played && !card.locked && !hasContradictoryConflict([linkMode.anchor, card].filter(Boolean), projection));
   const selectedForConflict = Boolean(conflictMode?.active && (conflictMode.anchor?.id === card.id || conflictMode.target?.id === card.id));
   const selectableForConflict = Boolean(conflictMode?.active && card.type === 'appearance' && conflictMode.anchor?.id !== card.id);
   const dragDisabled = linkMode?.active || conflictMode?.active || !canDragCard(card, projection);
@@ -167,6 +167,8 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
   const alreadyPlayed = targets.length > 0 && targets.every((target) => (target.type === 'appearance' ? projection.appearances[target.id]?.played : projection.holes[target.id]?.played));
   const replacementCandidates = missingCard ? replacementCandidatesForCallDrawer({ projection, sourceCard: missingCard, plateauIndex }) : [];
   const missingCardLinked = missingCard ? cardLinks(missingCard, projection.links).length > 0 : false;
+  const missingInstrument = missingCard ? columns.find((column) => column.instrument.instrumentId === missingCard.instrumentId)?.instrument : null;
+  const withoutMusicianLabel = `Plateau sans ${missingInstrument?.label ?? 'instrument'}`;
 
   function close() {
     setMissingCard(null);
@@ -196,8 +198,8 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
   }
 
   function runWithoutMusician(confirmedDelink) {
-    onTransaction?.(buildSkipWithoutMusicianTransaction({ jamId, clientId, clientSequenceNumber, projection, sourceCard: missingCard, plateauIndex, confirmedDelink }));
-    onFeedback?.('Le plateau jouera sans musicien sur cet instrument');
+    onTransaction?.(buildSkipWithoutMusicianTransaction({ jamId, clientId, clientSequenceNumber, projection, sourceCard: missingCard, plateauIndex, confirmedDelink, instrumentLabel: missingInstrument?.label }));
+    onFeedback?.(`${withoutMusicianLabel} préparé`);
     setMissingCard(null);
     setPendingDelinkAction(null);
   }
@@ -244,7 +246,7 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
         {missingCard ? (
           <Paper variant="outlined" sx={{ p: 1.5, mt: 2, borderColor: 'warning.main' }}>
             <Typography fontWeight={900}>Musicien introuvable</Typography>
-            <Typography variant="body2" color="text.secondary" mb={1}>Choisis un remplaçant dans la même colonne ou fais sans musicien.</Typography>
+            <Typography variant="body2" color="text.secondary" mb={1}>Choisis un remplaçant dans la même colonne ou prépare un plateau sans cet instrument.</Typography>
             <Stack spacing={1}>
               {replacementCandidates.map((candidate) => {
                 const participant = projection.participants[candidate.participantId];
@@ -252,7 +254,7 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
                 return <Button key={candidate.id} variant="outlined" onClick={() => chooseReplacement(candidate)}>{participant?.name ?? 'Musicien'} · prochain passage{linked ? ' · lié' : ''}</Button>;
               })}
               {replacementCandidates.length === 0 ? <Typography variant="caption" color="text.secondary">Aucun remplaçant disponible dans cette colonne.</Typography> : null}
-              <Button color="warning" variant="contained" onClick={chooseWithoutMusician}>Faire sans musicien</Button>
+              <Button color="warning" variant="contained" onClick={chooseWithoutMusician}>{withoutMusicianLabel}</Button>
               <Button onClick={() => setMissingCard(null)}>Annuler</Button>
             </Stack>
           </Paper>
@@ -513,6 +515,11 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
         const sameInstrument = [...nextIds].map((id) => cardById.get(id)?.card).find((selectedCard) => selectedCard?.instrumentId === card.instrumentId);
         if (sameInstrument) {
           onFeedback?.('Link impossible : une seule cible par instrument');
+          return current;
+        }
+        const candidateCards = [...nextIds].map((id) => cardById.get(id)?.card).filter(Boolean).concat(card);
+        if (hasContradictoryConflict(candidateCards, projection)) {
+          onFeedback?.('Link impossible : ces passages sont en conflit');
           return current;
         }
         nextIds.add(card.id);

@@ -545,7 +545,7 @@ hole
 none
 ```
 
-Si “faire sans musicien” :
+Si “Plateau sans [instrument manquant]” :
 
 ```js
 replacement: { mode: "hole", holeId: "hole_..." }
@@ -579,7 +579,7 @@ Effet : supprime uniquement cette occurrence.
 
 ### 10.1 `hole_added`
 
-UI : insertion entre cards, jouer sans, drawer d’appel “faire sans musicien”.
+UI : insertion entre cards, jouer sans, drawer d’appel “Plateau sans [instrument manquant]”.
 
 Feedback : silent ou snackbar selon contexte.
 
@@ -909,7 +909,7 @@ appearance_skipped
 appearance_moved_between pour le remplaçant si nécessaire
 ```
 
-### Musicien introuvable, faire sans musicien
+### Musicien introuvable, Plateau sans [instrument manquant]
 
 ```txt
 hole_added reason: call_drawer_without_musician

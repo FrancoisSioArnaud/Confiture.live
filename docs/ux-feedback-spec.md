@@ -128,7 +128,7 @@ En cas d’échec de sync répété, ne pas changer d’état agressif. Garder u
 | `appearance_removed` | dialog + snackbar | oui | Passage supprimé |
 | `hole_added` manuel | visual/silent | oui | Aucun |
 | `hole_added` jouer sans | snackbar + visual | oui | Trou ajouté et lié au passage |
-| `hole_added` faire sans musicien | snackbar + visual | oui | Le plateau jouera sans musicien sur cet instrument |
+| `hole_added` Plateau sans [instrument manquant] | snackbar + visual | oui | Plateau sans [instrument manquant] préparé |
 | `hole_removed` | dialog + snackbar | oui | Trou supprimé |
 | `hole_moved_between` | visual/silent | oui | Aucun si déplacement simple |
 | `hole_locked` | visual/silent | non | Aucun |
