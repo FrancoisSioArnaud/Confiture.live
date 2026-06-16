@@ -96,7 +96,7 @@ La nouvelle participation reçoit une appearance à la fin de chaque round déj�
 
 ---
 
-## 5. Appearances jouées et hiérarchie d’ordre
+## 5. Appearances jouées, rounds visibles et resolver global
 
 Une appearance jouée ne doit pas être déplacée visuellement par un ajout ultérieur.
 
@@ -117,7 +117,15 @@ Après : A, B, C, A', D, B', C', D'
 A, B, C, D, A', B', C', D'
 ```
 
-La hiérarchie complète est définie dans `order-resolution-hierarchy-spec.md` :
+Règle déterministe :
+
+```txt
+Chaque transaction est appliquée dans l’ordre.
+Après chaque transaction, le moteur de résolution d’ordre recalcule le tableau.
+Le même eventLog doit toujours produire le même tableau final.
+```
+
+Donc l’ajout de D ne se contente pas de trier par `appearanceIndex`. Il passe par la hiérarchie officielle :
 
 ```txt
 0. removed / left / hidden
@@ -133,4 +141,8 @@ La hiérarchie complète est définie dans `order-resolution-hierarchy-spec.md` 
 10. fallback stable par id
 ```
 
-Le code doit éviter de réordonner brutalement les cards jouées et doit réconcilier les contraintes globalement à chaque action qui modifie l’ordre.
+La hiérarchie complète et les règles d’anchor sont définies dans :
+
+```txt
+docs/order-resolution-hierarchy-spec.md
+```

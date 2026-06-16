@@ -34,6 +34,55 @@ Objectifs :
 - debug facilité ;
 - projection déterministe côté client et côté serveur.
 
+
+
+## Principe de projection après chaque action
+
+Chaque action organisateur produit une transaction. La transaction contient les events qui décrivent l’intention utilisateur.
+
+Après application des events d’une transaction, le moteur doit relancer la résolution d’ordre :
+
+```txt
+transaction appliquée
+→ resolveOrderAfterTransaction(state, context)
+→ tableau résolu déterministe
+```
+
+Le resolver est défini dans :
+
+```txt
+docs/order-resolution-hierarchy-spec.md
+```
+
+Règle non négociable : le même eventLog rejoué depuis zéro doit produire le même tableau final.
+
+La dernière action utilisateur fournit une `anchor` :
+
+- drag manuel → card déplacée ;
+- link → card d’origine du mode link ;
+- conflict → card d’origine du mode conflict ;
+- ajout participation → nouvelle appearance ;
+- action drawer d’appel → décision d’appel ;
+- played/locked → card désormais figée.
+
+Le resolver conserve cette anchor autant que possible, puis réorganise les autres cards selon la hiérarchie :
+
+```txt
+removed / left / hidden
+> played
+> locked
+> anchor
+> décisions d’appel
+> conflict
+> link
+> manual order
+> round / appearanceIndex
+> base order
+> id stable
+```
+
+Les déplacements induits par un link ou un conflict peuvent être des résultats de projection déterministes : ils ne nécessitent pas forcément des events supplémentaires tant que le replay reproduit exactement le même ordre.
+
 ---
 
 # 1. Lexique métier
@@ -1487,8 +1536,10 @@ Priorité de stabilité :
 ```txt
 1. Ne jamais bouger played.
 2. Ne jamais bouger locked.
-3. Garder l’origin card / anchor.
-4. Déplacer l’autre target au premier slot valide suivant.
+3. Garder l’origin card / anchor de la dernière action.
+4. Résoudre le conflict en déplaçant la target non-anchor si elle est mobile.
+5. Respecter les links restants si cela ne recrée pas de conflict.
+6. Compléter avec manual order, round order, base order puis id stable.
 ```
 
 Si aucun slot valide n’existe :
@@ -1968,10 +2019,15 @@ appearance ou participation
 
 ## 9.3 Résolution d’un conflict qui touche deux cards déjà alignées
 
+La résolution est faite par le resolver global après application de la transaction.
+
 ```txt
-1. Garder l’origin card / anchor.
-2. Déplacer l’autre target au premier slot suivant valide.
-3. Refuser si aucun slot valide.
+1. Ne jamais bouger played.
+2. Ne jamais bouger locked.
+3. Garder l’origin card / anchor si possible.
+4. Déplacer l’autre target au premier slot suivant valide.
+5. Respecter les links actifs si cela ne viole pas le conflict.
+6. Refuser si aucun ordre valide n’existe.
 ```
 
 Slot valide :

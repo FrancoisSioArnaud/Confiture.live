@@ -86,3 +86,32 @@ Déplacer/supprimer les tests portant sur :
 - `session_required`.
 
 Ces scénarios appartiennent à une future V1.
+
+
+---
+
+## 5. Tests moteur d’ordre déterministe
+
+Ajouter des tests frontend purs pour :
+
+```txt
+frontend/src/features/projection/orderResolution.js
+```
+
+Cas minimaux :
+
+1. même eventLog rejoué deux fois → même projection exacte ;
+2. ajout D après `A, B, C, A'` joués → `A, B, C, A', D, B', C', D'` ;
+3. drag A sur B avec conflict, B mobile → A reste anchor, B bouge ;
+4. drag A sur B avec conflict, B played → action refusée ou warning déterministe ;
+5. drag A sur B avec conflict, B locked → action refusée ou warning déterministe ;
+6. drag A linké à C → C suit A ;
+7. drag A linké à C avec conflict externe mobile → le conflict pousse la card externe ;
+8. link direct refusé si conflict direct ;
+9. lock empêchant un ajout ultérieur de passer devant ;
+10. link_removed ne provoquant pas un retour magique à un ancien ordre ;
+11. conflict_removed ne provoquant pas un retour magique à un ancien ordre ;
+12. round_revealed respectant played/locked/manual/link/conflict ;
+13. replay après undo linéaire produisant un état stable.
+
+Ces tests doivent être indépendants de React et tester le moteur de projection comme une fonction pure.

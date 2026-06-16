@@ -32,14 +32,16 @@ Ce fichier doit être lu avec :
 - `data_model.md` ;
 - `visual_spec_table.md` ;
 - `visual_spec_table_cards.md` ;
-- `event-payloads-reference.md`.
+- `event-payloads-reference.md` ;
+- `order-resolution-hierarchy-spec.md`.
 
 En cas de conflit, l’ordre de priorité est :
 
 1. `event-payloads-reference.md` pour les payloads ;
-2. ce fichier pour les règles de projection ;
-3. `confiture_event_actions_spec.md` pour les règles produit d’action ;
-4. les fichiers visuels pour le rendu UI.
+2. `order-resolution-hierarchy-spec.md` pour la hiérarchie d’ordre et la résolution des contraintes ;
+3. ce fichier pour les règles générales de projection ;
+4. `confiture_event_actions_spec.md` pour les règles produit d’action ;
+5. les fichiers visuels pour le rendu UI.
 
 ---
 
@@ -104,9 +106,77 @@ Exemples :
 - event ciblant une entity inexistante ;
 - link avec target manquante ;
 - conflict devenu inutile après suppression ;
-- appearance supprimée puis déplacée par un event ultérieur ignoré.
+- appearance supprimée puis déplacée par un event ultérieur ignoré ;
+- resolver incapable de satisfaire une intention à cause d’un `played` ou `locked`.
 
 Ces warnings sont destinés au debug/admin, pas à l’UI organisateur sauf cas explicitement prévu.
+
+---
+
+### 3.5 Résolution d’ordre après chaque transaction
+
+La projection doit appliquer les transactions dans l’ordre, puis relancer le moteur de résolution d’ordre après chaque transaction active.
+
+Flux obligatoire :
+
+```txt
+state initial
+→ appliquer events transaction 1
+→ resolveOrderAfterTransaction(state, context transaction 1)
+→ appliquer events transaction 2
+→ resolveOrderAfterTransaction(state, context transaction 2)
+→ état final
+```
+
+Le resolver doit être déterministe, pur et rejouable depuis zéro. Il ne doit pas dépendre de l’ordre DOM, de React, de Zustand, de Dexie ou d’un cache UI.
+
+Le resolver officiel est spécifié dans :
+
+```txt
+docs/order-resolution-hierarchy-spec.md
+```
+
+---
+
+### 3.6 Les déplacements induits sont des résultats de projection
+
+Une action peut induire des déplacements en cascade.
+
+Exemple :
+
+```txt
+A est déplacé.
+A est linké à C.
+A conflict avec B.
+```
+
+La transaction peut seulement exprimer l’intention principale (`A` déplacé). Le resolver produit ensuite de manière déterministe :
+
+```txt
+A reste anchor.
+C suit A.
+B est repoussé si possible.
+```
+
+Ces déplacements induits sont des champs calculés de projection. Ils peuvent être stockés dans un snapshot, mais ne sont pas la source de vérité principale.
+
+---
+
+### 3.7 Champs dérivés d’ordre
+
+La projection peut calculer et conserver des champs comme :
+
+```js
+{
+  resolvedOrderKey: "...",
+  resolvedPlateauIndex: 4,
+  playedAtPlateauIndex: 3,
+  frozenOrderKey: "...",
+  lastManualOrderKey: "..."
+}
+```
+
+Ces champs doivent être recalculables depuis l’event log. Ils servent à stabiliser l’ordre pendant le replay, notamment pour empêcher une card `played` ou `locked` de bouger lorsqu’une nouvelle card est ajoutée.
 
 ---
 
@@ -534,21 +604,59 @@ L’index est un résultat de projection, pas une donnée durable fiable.
 
 ---
 
-### 8.2 Played et locked
+### 8.2 Hiérarchie d’ordre officielle
 
-Priorités :
+La hiérarchie d’ordre complète est définie dans :
 
 ```txt
-played > locked > link > conflict > manual reorder > base order
+docs/order-resolution-hierarchy-spec.md
 ```
 
-Sens :
+Résumé du plus prioritaire au moins prioritaire :
 
-- `played` est toujours figé ;
+```txt
+0. removed / left / hidden
+1. played
+2. locked
+3. anchor de la dernière action utilisateur
+4. décisions d’appel : appearance_skipped / remplacement / faire sans musicien
+5. conflict
+6. link
+7. manual order existant
+8. round / appearanceIndex
+9. base order
+10. fallback stable par id
+```
+
+Règles clés :
+
+- `played` est toujours figé et conserve sa position historique ;
 - `locked` est figé tant qu’il n’est pas unlock ;
-- un link ne peut pas déplacer du played ou du locked ;
-- un conflict ne peut pas forcer le déplacement du played ou du locked ;
-- si une action demande un déplacement impossible, elle doit être refusée avant création de l’event, ou ignorée par projection avec warning si l’event existe déjà.
+- l’anchor de la dernière action est conservée autant que possible ;
+- un conflict gagne contre un link ;
+- un link peut déplacer un groupe mobile, mais jamais du played/locked ;
+- un manual reorder existant prime sur l’ordre automatique, mais pas sur les contraintes fortes ;
+- si une action demande un déplacement impossible, elle doit être refusée avant création de l’event, ou ignorée/clampée par projection avec warning si l’event existe déjà.
+
+### 8.3 Recalcul global après modification d’ordre
+
+Toute transaction pouvant modifier l’ordre ou les contraintes doit appeler le resolver après application de ses events.
+
+À minima :
+
+- ajout/retrait participation ;
+- drag appearance/hole ;
+- création/suppression link ;
+- création/suppression conflict ;
+- lock/unlock ;
+- skip/remplacement depuis drawer d’appel ;
+- hole ajouté/supprimé ;
+- plateau played/unplayed ;
+- round revealed ;
+- participant left ;
+- instrument hidden/shown.
+
+La suppression d’un link ou d’un conflict ne doit pas provoquer un retour magique à un ancien ordre. Le resolver part de l’ordre résolu courant et ne bouge que ce qui est nécessaire.
 
 ---
 
@@ -659,9 +767,9 @@ Exception : `appearance_skipped` depuis le drawer d’appel délinke puis dépla
 
 ### 9.5 Suppression de link
 
-`link_removed` ne réorganise pas immédiatement la liste.
+`link_removed` relance le resolver, mais ne doit pas provoquer un retour magique à un ancien ordre.
 
-Les cards restent là où elles sont.
+Les cards restent là où elles sont si aucune contrainte active ne les oblige à bouger.
 
 Une future action pourra les réorganiser.
 
@@ -736,7 +844,9 @@ Si les targets en conflict sont déjà sur le même plateau :
 
 ### 10.5 Suppression de conflict
 
-`conflict_removed` ne réorganise pas immédiatement la liste.
+`conflict_removed` relance le resolver, mais ne doit pas provoquer un retour magique à un ancien ordre.
+
+Les cards restent là où elles sont si aucune contrainte active ne les oblige à bouger.
 
 Aucun `conflict_updated` en V0.
 

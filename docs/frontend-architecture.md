@@ -38,9 +38,10 @@ Pour chaque action :
 1. construire une transaction avec `clientId` ;
 2. réserver/incrémenter `clientSequenceNumber` localement ;
 3. appliquer la transaction dans la projection locale ;
-4. sauvegarder la transaction dans IndexedDB ;
-5. la marquer pending ;
-6. planifier la sync.
+4. relancer le resolver d’ordre déterministe après la transaction ;
+5. sauvegarder la transaction dans IndexedDB ;
+6. la marquer pending ;
+7. planifier la sync.
 
 Aucun `leaseToken` n'est demandé ou envoyé.
 
@@ -117,3 +118,34 @@ error
 ## 8. V1
 
 Les client sessions sont repoussées en V1.
+
+
+---
+
+## 9. Moteur d’ordre déterministe
+
+Le frontend doit contenir un module pur dédié :
+
+```txt
+frontend/src/features/projection/orderResolution.js
+```
+
+Responsabilité : recalculer l’ordre du tableau après chaque transaction appliquée.
+
+Signature indicative :
+
+```js
+resolveOrderAfterTransaction(state, context)
+```
+
+Règles :
+
+- le module ne dépend pas de React, MUI, Zustand, Dexie, localStorage ou du DOM ;
+- même state + même context = même projection ;
+- il applique la hiérarchie définie dans `docs/order-resolution-hierarchy-spec.md` ;
+- il protège `played` et `locked` ;
+- il conserve l’anchor de la dernière action autant que possible ;
+- il déplace les cards non-prioritaires pour résoudre conflicts et links ;
+- il complète l’ordre avec manual order, round order, base order et id stable.
+
+Le store frontend ne doit pas coder une logique d’ordre concurrente dans les composants du tableau. Les composants UI doivent seulement construire des transactions et afficher la projection résolue.

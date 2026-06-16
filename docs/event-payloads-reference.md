@@ -45,6 +45,33 @@ Règles :
 
 ---
 
+
+## 2.1 Résolution d’ordre après transaction
+
+Les payloads d’events décrivent l’intention utilisateur, pas nécessairement tous les déplacements induits.
+
+Après chaque transaction appliquée, le moteur doit appeler :
+
+```js
+resolveOrderAfterTransaction(state, context)
+```
+
+Le context doit permettre de dériver l’anchor :
+
+| Event | Anchor dérivable |
+|---|---|
+| `appearance_moved_between` | `payload.appearanceId` |
+| `hole_moved_between` | `payload.holeId` |
+| `link_created` | `payload.anchorTarget` |
+| `conflict_created` | `payload.anchorTargetId` |
+| `participation_added` | nouvelle appearance de la participation |
+| `hole_added` | `payload.holeId` |
+| `appearance_skipped` | `payload.appearanceId` + replacement |
+| `plateau_played` | `payload.targets` |
+| lock/unlock | target lockée/unlockée |
+
+Même payload + même eventLog + même configuration = même ordre final.
+
 ## 3. Enveloppe d’event
 
 ```js
@@ -467,7 +494,7 @@ Feedback : silent si simple ; snackbar si groupe linké déplacé. Animation obl
 }
 ```
 
-Effet : déplace l’appearance ou le groupe linké si applicable.
+Effet : exprime l’intention de déplacer l’appearance. Le resolver global déplace aussi le groupe linké ou les cards conflictuelles si nécessaire.
 
 ---
 
@@ -643,7 +670,7 @@ Feedback : silent ou snackbar si hole linké. Animation obligatoire.
 }
 ```
 
-Effet : déplace le hole si non played et non locked.
+Effet : exprime l’intention de déplacer le hole si non played et non locked. Le resolver global déplace aussi le groupe linké ou les cards conflictuelles si nécessaire.
 
 ---
 
@@ -696,7 +723,7 @@ Feedback : snackbar si déplacement + animation.
 }
 ```
 
-Effet : aligne les targets selon la stratégie.
+Effet : crée la contrainte de link. Le resolver global aligne les targets selon la stratégie sans violer played, locked ou conflict.
 
 ---
 
@@ -772,7 +799,7 @@ Feedback : snackbar.
 }
 ```
 
-Effet : retire la contrainte. Ne réorganise pas immédiatement.
+Effet : retire la contrainte. Le resolver est relancé mais préserve l’ordre courant si aucune contrainte active n’oblige à bouger.
 
 ---
 
