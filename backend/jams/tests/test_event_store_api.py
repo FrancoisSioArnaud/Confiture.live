@@ -1,6 +1,6 @@
 import pytest
 from django.utils import timezone
-from jams.models import JamClientSession
+from jams.models import Jam, JamClientSession, JamEvent, JamTransaction
 
 pytestmark = pytest.mark.django_db
 
@@ -20,6 +20,60 @@ def create_jam(client, jam_id="jam_test", client_id="client_1"):
                 "payload": {"jamId": jam_id, "name": "Jam test", "indicativeDate": "2026-06-17", "linkReorderStrategy": "move_to_first"},
                 "schemaVersion": 1,
             }],
+        },
+    }, content_type="application/json")
+    assert response.status_code == 201
+    return response.json()
+
+
+def create_jam_with_instruments(client, jam_id="jam_with_instruments", client_id="client_1"):
+    response = client.post("/api/jams/", {
+        "clientId": client_id,
+        "transaction": {
+            "transactionId": f"transaction_create_{jam_id}",
+            "jamId": jam_id,
+            "clientSequenceNumber": 1,
+            "schemaVersion": 1,
+            "events": [
+                {
+                    "eventId": f"event_create_{jam_id}",
+                    "jamId": jam_id,
+                    "type": "jam_created",
+                    "payload": {
+                        "jamId": jam_id,
+                        "name": "Jam avec instruments",
+                        "indicativeDate": "2026-06-17",
+                        "linkReorderStrategy": "move_to_first",
+                    },
+                    "schemaVersion": 1,
+                },
+                {
+                    "eventId": f"event_add_voice_{jam_id}",
+                    "jamId": jam_id,
+                    "type": "instrument_added",
+                    "payload": {
+                        "instrumentId": "instrument_vocals",
+                        "label": "Chant",
+                        "orderKey": "order_0",
+                        "visible": True,
+                        "isDefault": True,
+                    },
+                    "schemaVersion": 1,
+                },
+                {
+                    "eventId": f"event_add_guitar_{jam_id}",
+                    "jamId": jam_id,
+                    "type": "instrument_added",
+                    "payload": {
+                        "instrumentId": "instrument_guitar",
+                        "label": "Guitare",
+                        "orderKey": "order_1",
+                        "visible": True,
+                        "isDefault": True,
+                    },
+                    "schemaVersion": 1,
+                },
+            ],
         },
     }, content_type="application/json")
     assert response.status_code == 201
@@ -60,6 +114,48 @@ def test_create_list_and_retrieve_jam(client):
     payload = detail_response.json()
     assert payload["jam"]["jamId"] == "jam_test"
     assert payload["events"][0]["type"] == "jam_created"
+
+
+def test_create_jam_with_instruments_persists_transaction_and_events(client):
+    response = create_jam_with_instruments(client)
+
+    jam = Jam.objects.get(jam_id=response["jamId"])
+    transactions = JamTransaction.objects.filter(jam=jam)
+    events = JamEvent.objects.filter(jam=jam).order_by("server_sequence_number")
+
+    assert jam.latest_server_sequence_number == 3
+    assert transactions.count() == 1
+    assert transactions.first().reverted is False
+    assert events.count() == 3
+    assert [event.type for event in events] == ["jam_created", "instrument_added", "instrument_added"]
+
+
+def test_create_jam_rolls_back_if_initial_transaction_fails(client, monkeypatch):
+    def fail_accept_transaction(*args, **kwargs):
+        raise RuntimeError("forced transaction failure")
+
+    monkeypatch.setattr("jams.views.accept_transaction", fail_accept_transaction)
+    client.raise_request_exception = False
+
+    response = client.post("/api/jams/", {
+        "clientId": "client_rollback",
+        "transaction": {
+            "transactionId": "transaction_create_jam_rollback",
+            "jamId": "jam_rollback",
+            "clientSequenceNumber": 1,
+            "schemaVersion": 1,
+            "events": [{
+                "eventId": "event_create_jam_rollback",
+                "jamId": "jam_rollback",
+                "type": "jam_created",
+                "payload": {"jamId": "jam_rollback", "name": "Jam rollback", "indicativeDate": "2026-06-17", "linkReorderStrategy": "move_to_first"},
+                "schemaVersion": 1,
+            }],
+        },
+    }, content_type="application/json")
+
+    assert response.status_code == 500
+    assert not Jam.objects.filter(jam_id="jam_rollback").exists()
 
 
 def test_patch_and_archive_jam(client):

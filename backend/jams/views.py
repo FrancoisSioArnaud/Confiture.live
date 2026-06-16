@@ -1,3 +1,4 @@
+from django.db import transaction as db_transaction
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
@@ -64,14 +65,17 @@ class JamViewSet(viewsets.ModelViewSet):
             raise ValidationError({"transaction.events.jam_created.payload.jamId": "This field is required."})
         if Jam.objects.filter(jam_id=jam_id).exists():
             raise ValidationError({"jamId": "Jam already exists."})
-        jam = Jam.objects.create(
-            jam_id=jam_id,
-            name=payload.get("name", "Nouvelle jam"),
-            indicative_date=payload.get("indicativeDate") or None,
-            link_reorder_strategy=payload.get("linkReorderStrategy", "move_to_first"),
-        )
-        transaction_payload = {**transaction_payload, "jamId": jam.jam_id}
-        transaction, _created = accept_transaction(jam, client_id, transaction_payload, require_lease=False)
+
+        with db_transaction.atomic():
+            jam = Jam.objects.create(
+                jam_id=jam_id,
+                name=payload.get("name", "Nouvelle jam"),
+                indicative_date=payload.get("indicativeDate") or None,
+                link_reorder_strategy=payload.get("linkReorderStrategy", "move_to_first"),
+            )
+            transaction_payload = {**transaction_payload, "jamId": jam.jam_id}
+            transaction, _created = accept_transaction(jam, client_id, transaction_payload, require_lease=False)
+
         return Response({
             "jamId": jam.jam_id,
             "latestServerSequenceNumber": transaction.server_sequence_number_end,

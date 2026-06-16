@@ -9,6 +9,11 @@ class ClientSequenceConflict(APIException):
     status_code = 409
     default_code = "client_sequence_conflict"
 
+    def __init__(self, detail=None, code=None):
+        # Keep numeric values as JSON numbers. APIException.__init__ wraps
+        # nested values as ErrorDetail strings, which breaks sequence clients.
+        self.detail = detail or {"error": self.default_code}
+
 
 
 def serialize_event(event):
@@ -83,6 +88,7 @@ def accept_transaction(jam, client_id, transaction_payload, lease_token=None, re
             server_sequence_number_end=end,
             schema_version=validated["schema_version"],
             payload={k: v for k, v in transaction_payload.items() if k != "events"},
+            reverted=False,
         )
         for offset, event in enumerate(events):
             JamEvent.objects.create(
