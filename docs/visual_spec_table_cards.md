@@ -358,6 +358,17 @@ Fonction :
 - si mode link actif avec une autre anchor : sélectionne/désélectionne cette card si elle est éligible
 ```
 
+Éligibilité d’une cible link :
+
+```txt
+- autre colonne que l’anchor
+- appearance ou hole
+- non played
+- non locked
+- pas de conflict direct ou induit avec les targets sélectionnées
+- une seule target par instrument
+```
+
 Ne pas ouvrir de drawer.
 
 Ne pas ouvrir de menu dédié.
@@ -488,6 +499,8 @@ Feedback :
 
 ## 6.2 Jouer sans...
 
+Cette action depuis une card est différente du flux `Plateau sans [instrument manquant]` du drawer d’appel : ici, on crée volontairement un trou lié à l’appearance source, sans repousser l’appearance source via `appearance_skipped`.
+
 Déclenche une action métier :
 
 ```txt
@@ -532,6 +545,8 @@ menu card → Créer / retirer un conflit
 → validation dans la barre d’action du tableau
 → dialog pour choisir scope
 ```
+
+Les holes visibles dans le tableau doivent être atténués/non sélectionnables en mode conflict : il n’y a pas de conflict sur hole en V0.
 
 Scope demandé à la validation :
 
@@ -787,7 +802,6 @@ Le drawer d’appel affiche les musiciens du plateau à appeler.
 Pour chaque musicien appelé, l’interface doit proposer :
 
 ```txt
-- confirmer qu’il est prêt / présent
 - le marquer introuvable
 ```
 
@@ -802,7 +816,7 @@ Drawer d’appel
 → Musicien introuvable
 → panneau/remplacement pour cet instrument
 → proposer 3 musiciens de remplacement
-→ proposer “Faire sans musicien”
+→ proposer “Plateau sans [instrument manquant]”
 ```
 
 Les 3 suggestions doivent être calculées selon :
@@ -827,7 +841,7 @@ Si l’organisateur choisit un remplaçant :
 - animation de remplacement dans le tableau
 ```
 
-Si l’organisateur choisit “Faire sans musicien” :
+Si l’organisateur choisit “Plateau sans [instrument manquant]” :
 
 ```txt
 - un hole remplace l’appearance dans le plateau courant
@@ -841,6 +855,7 @@ Important :
 ```txt
 appearance_skipped n’est pas un état durable.
 C’est une action ponctuelle de report.
+Le bouton `Plateau sans [instrument manquant]` produit un hole de remplacement dans le plateau appelé et repousse l’appearance introuvable.
 ```
 
 Feedback :
@@ -879,14 +894,14 @@ Désactiver :
 ```txt
 - drag
 - déplacement automatique
-- suppression sans confirmation renforcée
+- suppression tant que la card reste locked
 ```
 
 Autoriser :
 
 ```txt
 - unlock
-- menu trois-points pour actions compatibles
+- menu trois-points pour actions compatibles ne supprimant pas la card locked
 ```
 
 ## 11.3 Si participant left
@@ -1001,7 +1016,7 @@ Contient :
 ```txt
 - musicien introuvable
 - 3 remplaçants proposés
-- faire sans musicien
+- Plateau sans [instrument manquant]
 ```
 
 ## États importants

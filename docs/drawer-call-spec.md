@@ -10,7 +10,7 @@ Il doit permettre à l’organisateur de :
 - marquer le plateau joué ;
 - gérer un musicien introuvable ;
 - choisir un remplaçant ;
-- faire sans musicien sur un instrument ;
+- préparer un plateau sans l’instrument manquant ;
 - garder le tableau cohérent et déterministe.
 
 ---
@@ -55,7 +55,7 @@ Pour chaque instrument :
 Instrument
 Nom du musicien
 Badges éventuels : lié, rejoue, verrouillé
-Actions : Introuvable / Remplacer / Faire sans musicien selon contexte
+Actions : Introuvable / Remplacer / Plateau sans [instrument manquant] selon contexte
 ```
 
 Pour un hole :
@@ -169,7 +169,7 @@ Critères :
 Afficher aussi toujours :
 
 ```txt
-Faire sans musicien
+Plateau sans [instrument manquant]
 ```
 
 ---
@@ -279,12 +279,12 @@ Si confirmé :
 
 ---
 
-## 12. Faire sans musicien
+## 12. Plateau sans [instrument manquant]
 
 Option toujours disponible dans la liste de remplacement :
 
 ```txt
-Faire sans musicien
+Plateau sans [instrument manquant]
 ```
 
 Effet :
@@ -305,7 +305,7 @@ appearance_skipped
 Feedback :
 
 ```txt
-Snackbar : Le plateau jouera sans musicien sur cet instrument.
+Snackbar : Plateau sans [instrument manquant] préparé.
 ```
 
 Animation :
@@ -321,7 +321,7 @@ Animation :
 Si aucun remplaçant valide n’existe, afficher seulement :
 
 ```txt
-Faire sans musicien
+Plateau sans [instrument manquant]
 ```
 
 Si même cette action est impossible pour une raison de lock/played inattendue, afficher snackbar :
@@ -334,7 +334,7 @@ Impossible de modifier ce passage.
 
 ## 14. Drawer après remplacement
 
-Après choix d’un remplaçant ou “faire sans musicien” :
+Après choix d’un remplaçant ou “Plateau sans [instrument manquant]” :
 
 - le drawer doit rester ouvert ;
 - le contenu du plateau doit être mis à jour ;
@@ -379,7 +379,7 @@ Si drawer ouvert puis plateau joué ailleurs via undo/replay, désactiver les ac
 
 Ne pas proposer un remplaçant qui créerait un conflict avec les autres targets du plateau.
 
-Si la liste est vide à cause des conflicts, l’option “Faire sans musicien” reste disponible.
+Si la liste est vide à cause des conflicts, l’option “Plateau sans [instrument manquant]” reste disponible.
 
 ---
 
@@ -432,7 +432,7 @@ Passage repoussé et remplaçant sélectionné
 Snackbar :
 
 ```txt
-Le plateau jouera sans musicien sur cet instrument
+Plateau sans [instrument manquant] préparé
 ```
 
 ### Delink nécessaire

@@ -506,7 +506,7 @@ Responsabilités :
 - marquer plateau joué ;
 - gérer musicien introuvable ;
 - proposer trois remplaçants ;
-- proposer “faire sans musicien”.
+- proposer “Plateau sans [instrument manquant]”.
 
 ---
 

@@ -41,13 +41,15 @@ describe('buildCallDrawerTransaction', () => {
 
   it('skips the missing appearance and moves a replacement into its slot', () => {
     const transaction = buildSkipWithReplacementTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 1, projection, sourceCard: source, replacementCard: replacement, plateauIndex: 0, confirmedDelink: true });
+    expect(transaction.label).toBe('Remplacer musicien introuvable');
     expect(transaction.events.map((event) => event.type)).toEqual(['link_removed', 'appearance_moved_between', 'appearance_skipped', 'appearance_moved_between']);
     expect(transaction.events[2].payload.replacement).toEqual({ mode: 'appearance', appearanceId: replacement.id });
     expect(transaction.events[2].payload.removedLinkIds).toEqual(['link_source']);
   });
 
-  it('models faire sans musicien as hole_added plus appearance_skipped', () => {
-    const transaction = buildSkipWithoutMusicianTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 1, projection, sourceCard: source, plateauIndex: 0, confirmedDelink: true });
+  it('models Plateau sans instrument as hole_added plus appearance_skipped', () => {
+    const transaction = buildSkipWithoutMusicianTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 1, projection, sourceCard: source, plateauIndex: 0, confirmedDelink: true, instrumentLabel: 'Batterie' });
+    expect(transaction.label).toBe('Plateau sans Batterie');
     expect(transaction.events.map((event) => event.type)).toEqual(['link_removed', 'hole_added', 'appearance_skipped', 'appearance_moved_between']);
     expect(transaction.events[1].payload.reason).toBe('call_drawer_without_musician');
     expect(transaction.events[2].payload.replacement).toEqual({ mode: 'hole', holeId: 'hole_fixed' });

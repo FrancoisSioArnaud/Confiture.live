@@ -100,7 +100,7 @@ export function buildSkipWithReplacementTransaction({ jamId, clientId, clientSeq
   });
 }
 
-export function buildSkipWithoutMusicianTransaction({ jamId, clientId, clientSequenceNumber, projection, sourceCard, plateauIndex, confirmedDelink = false }) {
+export function buildSkipWithoutMusicianTransaction({ jamId, clientId, clientSequenceNumber, projection, sourceCard, plateauIndex, confirmedDelink = false, instrumentLabel = null }) {
   const sourceColumn = columnForCard(projection, sourceCard);
   const sourceIndex = sourceColumn.cards.findIndex((card) => card.id === sourceCard.id);
   const sourceAdjacent = adjacentAt(sourceColumn, sourceIndex);
@@ -111,7 +111,7 @@ export function buildSkipWithoutMusicianTransaction({ jamId, clientId, clientSeq
     jamId,
     clientId,
     clientSequenceNumber,
-    label: 'Faire sans musicien',
+    label: instrumentLabel ? `Plateau sans ${instrumentLabel}` : 'Plateau sans instrument',
     events: [
       ...removedLinkIds.map((linkId) => linkRemoved({ linkId })),
       holeAdded({

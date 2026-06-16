@@ -549,7 +549,7 @@ transaction_reverted dernière transaction active
 - dialog suppression hole/appearance mentionne les links
 - skip delink si besoin
 - remplacement via drawer d'appel
-- “faire sans musicien” disponible
+- “Plateau sans [instrument manquant]” disponible
 - participant left retire futures appearances
 - instrument masqué absent tableau + drawer d'appel
 - undo linéaire visible

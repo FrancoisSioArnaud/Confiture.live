@@ -613,7 +613,7 @@ Résultat attendu :
 
 ---
 
-### 5.21 Faire sans musicien depuis drawer d'appel
+### 5.21 Plateau sans [instrument manquant] depuis drawer d'appel
 
 Input :
 
@@ -1002,9 +1002,9 @@ Tester :
 - bouton plateau joué
 - musicien introuvable ouvre propositions
 - trois remplaçants max affichés
-- option “Faire sans musicien” affichée
+- option “Plateau sans [instrument manquant]” affichée
 - remplacement crée les bons events
-- faire sans musicien crée hole/remplacement
+- Plateau sans [instrument manquant] crée hole/remplacement
 ```
 
 ### 9.7 Feedback UX
@@ -1113,7 +1113,7 @@ Vérifier que participant reste
 Musicien introuvable
 Afficher 3 remplaçants
 Choisir remplaçant
-Tester faire sans musicien
+Tester Plateau sans [instrument manquant]
 ```
 
 ### Scenario G — Left

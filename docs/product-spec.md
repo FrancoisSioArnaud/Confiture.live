@@ -501,7 +501,7 @@ Il peut être créé :
 
 - entre deux cards ;
 - via `Jouer sans…` depuis le menu d’une appearance ;
-- via `Faire sans musicien` dans le drawer d’appel.
+- via `Plateau sans [instrument manquant]` dans le drawer d’appel.
 
 `Jouer sans…` ne doit pas être modélisé comme un type métier séparé.
 
@@ -551,11 +551,11 @@ Musicien introuvable
 Quand un musicien est introuvable :
 
 - proposer trois remplaçants possibles ;
-- proposer aussi `Faire sans musicien` ;
+- proposer aussi `Plateau sans [instrument manquant]` ;
 - si un remplaçant est choisi, il remplace l’appearance dans le tableau ;
 - l’appearance introuvable est skippée et repoussée d’un plateau ;
 - si l’appearance introuvable est linkée, elle est délinkée puis repoussée seule ;
-- si `Faire sans musicien` est choisi, elle est remplacée par un hole.
+- si `Plateau sans [instrument manquant]` est choisi, elle est remplacée par un hole.
 
 Cette logique correspond à `appearance_skipped`.
 
