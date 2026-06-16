@@ -896,11 +896,11 @@ GET    /api/jams/:jamId/
 PATCH  /api/jams/:jamId/
 POST   /api/jams/:jamId/transactions/
 GET    /api/jams/:jamId/transactions/
-GET    /api/jams/:jamId/snapshot/
-POST   /api/jams/:jamId/snapshot/
-POST   /api/jams/:jamId/session/claim/
-POST   /api/jams/:jamId/session/heartbeat/
-POST   /api/jams/:jamId/session/release/
+GET    /api/jams/:jamId/snapshot/latest/
+POST   /api/jams/:jamId/snapshots/
+POST   /api/jams/:jamId/client-session/acquire/
+POST   /api/jams/:jamId/client-session/heartbeat/
+POST   /api/jams/:jamId/client-session/release/
 ```
 
 ### Tests obligatoires

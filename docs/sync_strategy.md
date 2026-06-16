@@ -124,31 +124,41 @@ Il envoie uniquement les nouvelles transactions depuis le dernier `serverSequenc
 
 ### 5.1 Payload recommandé
 
+En V0, le push serveur est **unitaire par transaction**. La queue locale peut contenir plusieurs transactions pending, mais le client les envoie une par une, dans l’ordre, vers `POST /api/jams/:jamId/transactions/`.
+
+Le debounce court reste autorisé côté client pour éviter une rafale de tentatives, mais il ne transforme pas le contrat API en batch.
+
 ```js
 {
-  jamId: "jam_123",
-  clientId: "client_abc",
-  clientSessionId: "session_456",
-  baseServerSequenceNumber: 42,
-  transactions: [
-    {
-      transactionId: "transaction_100",
-      clientTransactionSequenceNumber: 18,
-      createdAt: "2026-06-14T18:00:00.000Z",
-      events: [
-        {
-          eventId: "event_100_1",
-          type: "participation_added",
-          payload: {},
-          clientSequenceNumber: 143,
-          schemaVersion: 1
-        }
-      ]
-    }
-  ],
-  snapshot: null
+  "clientId": "client_abc",
+  "leaseToken": "lease_abc",
+  "baseServerSequenceNumber": 42,
+  "transaction": {
+    "transactionId": "transaction_100",
+    "clientTransactionSequenceNumber": 18,
+    "createdAt": "2026-06-14T18:00:00.000Z",
+    "schemaVersion": 1,
+    "events": [
+      {
+        "eventId": "event_100_1",
+        "type": "participation_added",
+        "payload": {},
+        "clientSequenceNumber": 143,
+        "schemaVersion": 1
+      }
+    ]
+  }
 }
 ```
+
+Règle d’identité session :
+
+```txt
+clientSessionId = identifiant stable de session, stocké pour audit dans JamTransaction/JamEvent.
+leaseToken = jeton de lease présenté aux endpoints d’écriture et validé par le backend.
+```
+
+Le client ne choisit pas le `clientSessionId` durable à partir du `leaseToken`. Le serveur valide le `leaseToken`, retrouve la session active, puis persiste le `clientSessionId` associé dans les transactions/events acceptés.
 
 ### 5.2 `baseServerSequenceNumber`
 
@@ -211,7 +221,7 @@ Réponse recommandée :
 ```js
 {
   status: "rejected",
-  reason: "sequence_mismatch",
+  reason: "sequence_conflict",
   latestServerSequenceNumber: 42
 }
 ```
@@ -257,15 +267,23 @@ status
 Quand un organisateur ouvre une jam en mode édition :
 
 ```txt
-POST /api/jams/{jamId}/sessions/acquire
+POST /api/jams/:jamId/client-session/acquire/
 ```
 
 Le serveur répond :
 
-- `granted` si aucun client actif ;
-- `granted` si le lease précédent est expiré ;
-- `readonly` si un autre client est actif ;
-- `needs_confirmation` si l’utilisateur veut reprendre le contrôle alors qu’un autre client semble actif.
+- `acquired` si aucun client actif ;
+- `acquired` si le lease précédent est expiré ;
+- `jam_locked_by_other_client` si un autre client est actif ;
+- `jam_locked_by_other_client` avec `canForceTakeover: true` si l’UI peut proposer “Reprendre le contrôle”.
+
+Endpoints associés :
+
+```txt
+POST /api/jams/:jamId/client-session/heartbeat/
+POST /api/jams/:jamId/client-session/release/
+POST /api/jams/:jamId/client-session/takeover/
+```
 
 ### 8.2 Heartbeat
 
@@ -333,20 +351,24 @@ Statuts recommandés :
 
 ```txt
 synced
+syncing
 pending
 offline_pending
 sync_warning
 readonly
+blocked_by_other_client
 ```
 
 Libellés recommandés :
 
 ```txt
 synced → “Sauvegardé”
-pending → “Sauvegarde…”
+syncing → “Sauvegarde…”
+pending → “Sauvegarde en attente”
 offline_pending → “Hors ligne — vos actions sont gardées sur cet appareil”
 sync_warning → “Sauvegarde en attente — vos actions sont gardées sur cet appareil”
 readonly → “Lecture seule”
+blocked_by_other_client → “Lecture seule — jam active sur un autre appareil”
 ```
 
 Important : le message offline/pending doit être **positif**.
@@ -437,16 +459,17 @@ Pas de snackbar systématique pour chaque sync réussie.
 Le serveur refuse une sync dans les cas suivants :
 
 ```txt
-sequence_mismatch
+sequence_conflict
 inactive_client_session
 expired_client_session
+jam_locked_by_other_client
 unknown_jam
 schema_version_unsupported
 invalid_event_type
 invalid_payload_shape
 ```
 
-### 12.1 `sequence_mismatch`
+### 12.1 `sequence_conflict`
 
 Le client doit :
 
@@ -459,9 +482,9 @@ Le client doit :
 
 Pas de merge automatique en V0.
 
-### 12.2 `inactive_client_session`
+### 12.2 `inactive_client_session` / `expired_client_session` / `jam_locked_by_other_client`
 
-Le client n’est plus le client actif.
+Le client n’est plus le client actif, son lease a expiré, ou la jam est verrouillée par un autre client.
 
 Il doit :
 
@@ -500,7 +523,7 @@ latestServerSequenceNumber
 Endpoint recommandé :
 
 ```txt
-GET /api/jams/{jamId}/state
+GET /api/jams/:jamId/full-state/
 ```
 
 Réponse recommandée :
@@ -581,8 +604,10 @@ ou quand l’eventLog dépasse un seuil raisonnable.
 Le serveur doit refuser un snapshot si :
 
 ```txt
-snapshot.lastServerSequenceNumber != latestServerSequenceNumber accepté pour cette jam
+snapshot.lastServerSequenceNumber > latestServerSequenceNumber accepté pour cette jam
 ```
+
+En V0, le backend peut ne conserver que le snapshot valide le plus récent par jam. Un snapshot plus ancien reste conceptuellement valide, mais il peut être ignoré ou remplacé par une stratégie de cache simple.
 
 ---
 
@@ -674,7 +699,7 @@ La priorité n’est donc pas la taille brute, mais :
 ### 17.1 Charger une jam
 
 ```txt
-GET /api/jams/{jamId}/state
+GET /api/jams/:jamId/full-state/
 ```
 
 Renvoie metadata, session, snapshot, events après snapshot.
@@ -682,19 +707,19 @@ Renvoie metadata, session, snapshot, events après snapshot.
 ### 17.2 Acquérir une session active
 
 ```txt
-POST /api/jams/{jamId}/sessions/acquire
+POST /api/jams/:jamId/client-session/acquire/
 ```
 
 ### 17.3 Heartbeat
 
 ```txt
-POST /api/jams/{jamId}/sessions/heartbeat
+POST /api/jams/:jamId/client-session/heartbeat/
 ```
 
 ### 17.4 Reprendre le contrôle
 
 ```txt
-POST /api/jams/{jamId}/sessions/takeover
+POST /api/jams/:jamId/client-session/takeover/
 ```
 
 Avec confirmation UI si un autre client est actif.
@@ -702,13 +727,13 @@ Avec confirmation UI si un autre client est actif.
 ### 17.5 Pousser des transactions
 
 ```txt
-POST /api/jams/{jamId}/events/push
+POST /api/jams/:jamId/transactions/
 ```
 
 ### 17.6 Envoyer un snapshot
 
 ```txt
-POST /api/jams/{jamId}/snapshots
+POST /api/jams/:jamId/snapshots/
 ```
 
 ---
@@ -721,7 +746,7 @@ Il valide seulement :
 
 ```txt
 jamId valide
-clientSession active
+leaseToken valide et session client active
 baseServerSequenceNumber correct
 transactionId unique
 eventId unique
@@ -800,7 +825,7 @@ Codex doit respecter ces règles :
 9. Un seul client actif par jam via lease serveur.
 10. Undo = transaction_reverted, jamais suppression d’historique.
 11. En offline, continuer localement et afficher un feedback positif.
-12. En sequence mismatch, refuser et demander resync.
+12. En sequence conflict, refuser et demander resync.
 ```
 
 ---

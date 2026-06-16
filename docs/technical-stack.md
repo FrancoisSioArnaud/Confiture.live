@@ -115,14 +115,14 @@ GET    /api/jams/:jamId/
 PATCH  /api/jams/:jamId/
 DELETE /api/jams/:jamId/
 
-POST   /api/jams/:jamId/session/acquire/
-POST   /api/jams/:jamId/session/heartbeat/
-POST   /api/jams/:jamId/session/release/
-POST   /api/jams/:jamId/session/take-over/
+POST   /api/jams/:jamId/client-session/acquire/
+POST   /api/jams/:jamId/client-session/heartbeat/
+POST   /api/jams/:jamId/client-session/release/
+POST   /api/jams/:jamId/client-session/takeover/
 
-GET    /api/jams/:jamId/events/
+GET    /api/jams/:jamId/transactions/
 POST   /api/jams/:jamId/transactions/
-POST   /api/jams/:jamId/snapshot/
+POST   /api/jams/:jamId/snapshots/
 GET    /api/jams/:jamId/full-state/
 ```
 
@@ -704,10 +704,10 @@ delete jam avec confirmation côté front
 acquire session
 heartbeat session
 expiration session
-take-over session
+takeover session
 push transaction valide
 push transaction duplicée idempotente
-push avec sequence mismatch refusé
+push avec sequence conflict refusé
 push depuis client inactif refusé
 snapshot upload
 full-state download

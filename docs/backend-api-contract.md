@@ -194,16 +194,26 @@ Réponse `201` :
 
 ### 4.3 `GET /api/jams/:jamId/`
 
-Récupère une jam complète.
+Récupère les métadonnées d’une jam.
 
-Query params optionnels :
+Réponse :
 
-```txt
-includeSnapshot=true
-fromSequence=123
+```js
+{
+  "jamId": "jam_...",
+  "name": "Jam du mercredi",
+  "indicativeDate": "2026-06-17",
+  "latestServerSequenceNumber": 123
+}
 ```
 
-Si `fromSequence` est fourni, le backend peut renvoyer seulement les transactions/events après cette séquence.
+---
+
+### 4.4 `GET /api/jams/:jamId/full-state/`
+
+Récupère l’état serveur nécessaire au chargement initial ou à un resync.
+
+Le backend renvoie les métadonnées de jam, le statut de session utile au client, le dernier snapshot valide disponible, les transactions/events après ce snapshot, et les informations de séquence serveur.
 
 Réponse :
 
@@ -214,6 +224,11 @@ Réponse :
     "name": "Jam du mercredi",
     "indicativeDate": "2026-06-17",
     "latestServerSequenceNumber": 123
+  },
+  "session": {
+    "mode": "editable",
+    "clientSessionId": "session_...",
+    "leaseExpiresAt": "2026-06-14T19:01:00.000Z"
   },
   "snapshot": {
     "snapshotId": "snapshot_...",
@@ -227,7 +242,7 @@ Réponse :
 
 ---
 
-### 4.4 `DELETE /api/jams/:jamId/`
+### 4.5 `DELETE /api/jams/:jamId/`
 
 Supprime ou archive une jam depuis la liste des jams.
 

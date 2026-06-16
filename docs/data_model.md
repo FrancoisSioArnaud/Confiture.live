@@ -686,6 +686,8 @@ Un snapshot est valide seulement si :
 snapshot.lastServerSequenceNumber <= jam.latestServerSequenceNumber
 ```
 
+En V0, le backend peut choisir de ne conserver que le snapshot valide le plus récent par jam. Un snapshot dont `lastServerSequenceNumber` est inférieur au dernier sequence number serveur reste valide, mais il peut être ignoré/remplacé comme cache.
+
 Au chargement :
 
 ```txt
@@ -1023,10 +1025,12 @@ serverTransactionSequenceNumber
 
 ```txt
 synced
+syncing
 pending
 offline_pending
 sync_warning
 readonly
+blocked_by_other_client
 ```
 
 ---
