@@ -114,6 +114,37 @@ describe('projectJamState', () => {
     expect(conflicted.appearances.appearance_a.orderScore).not.toBe(conflicted.holes.hole_b.orderScore);
   });
 
+
+
+  it('applies each link reorder strategy deterministically', () => {
+    function linkedWith(strategy) {
+      return projectJamState({ transactions: [
+        ...jamAndGuitar,
+        tx(3, [{ type: 'appearance_materialized', payload: { appearanceId: 'appearance_a', participationId: 'p_a', instrumentId: 'instrument_guitar', appearanceIndex: 1, positionKey: 'a' } }]),
+        tx(4, [{ type: 'hole_added', payload: { holeId: 'hole_z', instrumentId: 'instrument_guitar', appearanceIndex: 1, reason: 'manual', afterTarget: null, beforeTarget: null, positionKey: 'z' } }]),
+        tx(5, [{ type: 'link_created', payload: { linkId: `link_${strategy}`, targets: [{ type: 'appearance', id: 'appearance_a' }, { type: 'hole', id: 'hole_z' }], anchorTarget: { type: 'appearance', id: 'appearance_a' }, reorderStrategy: strategy } }]),
+      ] });
+    }
+
+    expect(linkedWith('move_to_first').appearances.appearance_a.orderScore).toBe(97);
+    expect(linkedWith('move_to_last').appearances.appearance_a.orderScore).toBe(122);
+    expect(linkedWith('average_position').appearances.appearance_a.orderScore).toBe(109.5);
+  });
+
+  it('reapplies an active link when a contradictory conflict is removed', () => {
+    const state = projectJamState({ transactions: [
+      ...jamAndGuitar,
+      tx(3, [{ type: 'appearance_materialized', payload: { appearanceId: 'appearance_a', participationId: 'p_a', instrumentId: 'instrument_guitar', appearanceIndex: 1, positionKey: 'a' } }]),
+      tx(4, [{ type: 'hole_added', payload: { holeId: 'hole_z', instrumentId: 'instrument_guitar', appearanceIndex: 1, reason: 'manual', afterTarget: null, beforeTarget: null, positionKey: 'z' } }]),
+      tx(5, [{ type: 'conflict_created', payload: { conflictId: 'conflict_1', scope: 'appearance', targetIds: ['appearance_a', 'hole_z'], reason: 'manual', anchorTargetId: 'appearance_a' } }]),
+      tx(6, [{ type: 'link_created', payload: { linkId: 'link_1', targets: [{ type: 'appearance', id: 'appearance_a' }, { type: 'hole', id: 'hole_z' }], anchorTarget: { type: 'appearance', id: 'appearance_a' }, reorderStrategy: 'move_to_first' } }]),
+      tx(7, [{ type: 'conflict_removed', payload: { conflictId: 'conflict_1' } }]),
+    ] });
+
+    expect(state.links.link_1.suppressedByConflict).toBe(false);
+    expect(state.appearances.appearance_a.orderScore).toBe(state.holes.hole_z.orderScore);
+  });
+
   it('keeps played and locked targets immobile when move events occur', () => {
     const state = projectJamState({ transactions: [
       ...jamAndGuitar,
@@ -142,6 +173,38 @@ describe('projectJamState', () => {
 
     expect(state.appearances.appearance_a.skippedAtPlateauIndex).toBe(2);
     expect(state.links.link_1.status).toBe('removed');
+  });
+
+
+
+  it('keeps an appearance_removed tombstone for a calculated future appearance before that round is visible', () => {
+    const state = projectJamState({ transactions: [
+      ...jamAndGuitar,
+      tx(3, [{ type: 'participant_created', payload: { participantId: 'participant_nico', name: 'Nico' } }]),
+      tx(4, [{ type: 'participation_added', payload: { participationId: 'participation_nico_guitar', participantId: 'participant_nico', instrumentId: 'instrument_guitar', customInstrumentLabel: null, insertionMode: 'end_of_visible_rounds', startAppearanceIndex: 1, afterTarget: null, beforeTarget: null, baseOrderKey: 'a' } }]),
+      tx(5, [{ type: 'appearance_removed', payload: { appearanceId: 'appearance_participation_nico_guitar_2', confirmedDespiteLink: false } }]),
+      tx(6, [{ type: 'instrument_round_visibility_changed', payload: { instrumentId: 'instrument_guitar', visibleRoundCount: 2 } }]),
+    ] });
+
+    expect(state.appearances.appearance_participation_nico_guitar_2).toMatchObject({ status: 'removed', materialized: true, appearanceIndex: 2 });
+    expect(state.columns[0].cards.map((card) => card.id)).not.toContain('appearance_participation_nico_guitar_2');
+    expect(state.projectionWarnings.map((warning) => warning.code)).not.toContain('missing_appearance');
+  });
+
+  it('participant_marked_left removes materialized unplayed future appearances and their links', () => {
+    const state = projectJamState({ transactions: [
+      ...jamAndGuitar,
+      tx(3, [{ type: 'participant_created', payload: { participantId: 'participant_nico', name: 'Nico' } }]),
+      tx(4, [{ type: 'participation_added', payload: { participationId: 'participation_nico_guitar', participantId: 'participant_nico', instrumentId: 'instrument_guitar', customInstrumentLabel: null, insertionMode: 'end_of_visible_rounds', startAppearanceIndex: 1, afterTarget: null, beforeTarget: null, baseOrderKey: 'a' } }]),
+      tx(5, [{ type: 'appearance_materialized', payload: { appearanceId: 'appearance_participation_nico_guitar_2', participationId: 'participation_nico_guitar', instrumentId: 'instrument_guitar', appearanceIndex: 2, positionKey: 'b' } }]),
+      tx(6, [{ type: 'hole_added', payload: { holeId: 'hole_linked', instrumentId: 'instrument_guitar', appearanceIndex: 2, reason: 'manual', afterTarget: null, beforeTarget: null, positionKey: 'z' } }]),
+      tx(7, [{ type: 'link_created', payload: { linkId: 'link_future', targets: [{ type: 'appearance', id: 'appearance_participation_nico_guitar_2' }, { type: 'hole', id: 'hole_linked' }], anchorTarget: { type: 'appearance', id: 'appearance_participation_nico_guitar_2' }, reorderStrategy: 'move_to_first' } }]),
+      tx(8, [{ type: 'participant_marked_left', payload: { participantId: 'participant_nico', confirmedDespiteFutureLockedAppearances: true } }]),
+    ] });
+
+    expect(state.participants.participant_nico.status).toBe('left');
+    expect(state.appearances.appearance_participation_nico_guitar_2.status).toBe('removed');
+    expect(state.links.link_future.status).toBe('removed');
   });
 
   it('participant_marked_left removes future calculated appearances but keeps played materialized history', () => {

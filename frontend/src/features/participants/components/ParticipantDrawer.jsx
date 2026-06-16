@@ -1,4 +1,4 @@
-import { Box, Button, Checkbox, Divider, Drawer, FormControlLabel, FormGroup, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Checkbox, Divider, Drawer, FormControlLabel, FormGroup, Stack, TextField, Typography } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import {
@@ -42,30 +42,53 @@ function initialLinkedPairsFor(projection, participations) {
   return pairs;
 }
 
+function arraysEqual(left, right) {
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
+}
+
+function normalizedCustomLabels(labels, selectedInstrumentIds) {
+  return Object.fromEntries(selectedInstrumentIds.map((instrumentId) => [instrumentId, (labels[instrumentId] ?? '').trim()]).filter(([, value]) => value));
+}
+
+function draftHasChanges({ mode, draft, participant, activeParticipations, initialLinkedPairs }) {
+  if (mode === 'create') return Boolean(draft.name.trim()) || draft.selectedInstrumentIds.length > 0;
+  const currentInstrumentIds = activeParticipations.map((participation) => participation.instrumentId);
+  const addedInstrumentIds = draft.selectedInstrumentIds.filter((instrumentId) => !currentInstrumentIds.includes(instrumentId));
+  return participant?.name !== draft.name.trim()
+    || !arraysEqual(currentInstrumentIds, draft.selectedInstrumentIds)
+    || !arraysEqual([...initialLinkedPairs].sort(), [...draft.initialLinkedInstrumentPairs].sort())
+    || JSON.stringify(normalizedCustomLabels({}, addedInstrumentIds)) !== JSON.stringify(normalizedCustomLabels(draft.customInstrumentLabels, addedInstrumentIds));
+}
+
 export function ParticipantDrawer({ open, mode = 'create', projection, participantId = null, insertionContext = null, clientId, clientSequenceNumber, onClose, onTransaction, onFeedback }) {
   const instruments = useMemo(() => visibleInstruments(projection), [projection]);
   const participant = participantId ? projection.participants[participantId] : null;
   const activeParticipations = useMemo(() => activeParticipationsFor(projection, participantId), [participantId, projection]);
+  const editableActiveParticipations = useMemo(() => {
+    const visibleInstrumentIds = new Set(instruments.map((instrument) => instrument.instrumentId));
+    return activeParticipations.filter((participation) => visibleInstrumentIds.has(participation.instrumentId));
+  }, [activeParticipations, instruments]);
   const [draft, setDraft] = useState({ name: '', selectedInstrumentIds: [], customInstrumentLabels: {}, initialLinkedInstrumentPairs: [] });
   const [error, setError] = useState('');
   const [pendingRemovalConfirm, setPendingRemovalConfirm] = useState(null);
 
   useEffect(() => {
     if (!open) return;
-    const labels = Object.fromEntries(activeParticipations.filter((participation) => participation.customInstrumentLabel).map((participation) => [participation.instrumentId, participation.customInstrumentLabel]));
+    const labels = Object.fromEntries(editableActiveParticipations.filter((participation) => participation.customInstrumentLabel).map((participation) => [participation.instrumentId, participation.customInstrumentLabel]));
     const visibleInstrumentIds = instruments.map((instrument) => instrument.instrumentId);
     const selectedInstrumentIds = mode === 'create' && insertionContext?.instrumentId
       ? [insertionContext.instrumentId]
-      : visibleInstrumentIds.filter((instrumentId) => activeParticipations.some((participation) => participation.instrumentId === instrumentId));
+      : visibleInstrumentIds.filter((instrumentId) => editableActiveParticipations.some((participation) => participation.instrumentId === instrumentId));
     setDraft({
       name: participant?.name ?? '',
       selectedInstrumentIds,
       customInstrumentLabels: labels,
-      initialLinkedInstrumentPairs: mode === 'edit' ? initialLinkedPairsFor(projection, activeParticipations.filter((participation) => visibleInstrumentIds.includes(participation.instrumentId))) : [],
+      initialLinkedInstrumentPairs: mode === 'edit' ? initialLinkedPairsFor(projection, editableActiveParticipations) : [],
     });
     setError('');
     setPendingRemovalConfirm(null);
-  }, [activeParticipations, insertionContext, instruments, mode, open, participant, projection]);
+  }, [editableActiveParticipations, insertionContext, instruments, mode, open, participant, projection]);
 
   function toggleInstrument(instrumentId) {
     setDraft((current) => {
@@ -97,7 +120,7 @@ export function ParticipantDrawer({ open, mode = 'create', projection, participa
       return;
     }
     if (mode === 'edit') {
-      const impacted = impactedRemovedParticipations({ projection, participantId, selectedInstrumentIds: validation.draft.selectedInstrumentIds });
+      const impacted = impactedRemovedParticipations({ projection, participantId, selectedInstrumentIds: validation.draft.selectedInstrumentIds, instruments });
       const unconfirmed = impacted.filter((participation) => !confirmedRemovedParticipationIds.includes(participation.participationId));
       if (unconfirmed.length > 0) {
         setPendingRemovalConfirm(unconfirmed);
@@ -122,9 +145,13 @@ export function ParticipantDrawer({ open, mode = 'create', projection, participa
   }
 
   const selected = new Set(draft.selectedInstrumentIds);
+  const initialLinkedPairs = mode === 'edit' ? initialLinkedPairsFor(projection, editableActiveParticipations) : [];
+  const hasChanges = draftHasChanges({ mode, draft, participant, activeParticipations: editableActiveParticipations, initialLinkedPairs });
+  const isLeftParticipant = mode === 'edit' && participant?.status === 'left';
   const pairOptions = selectedInstrumentPairs(draft.selectedInstrumentIds);
   const instrumentById = new Map(instruments.map((instrument) => [instrument.instrumentId, instrument]));
   const selectedLinkedPairs = new Set(draft.initialLinkedInstrumentPairs);
+  const editableActiveByInstrument = new Set(editableActiveParticipations.map((participation) => participation.instrumentId));
 
   return (
     <>
@@ -135,6 +162,7 @@ export function ParticipantDrawer({ open, mode = 'create', projection, participa
               <Typography variant="h6" fontWeight={900}>{mode === 'create' ? 'Ajouter un musicien' : 'Modifier le musicien'}</Typography>
               <Typography variant="body2" color="text.secondary">Nom, instruments joués et liens initiaux simples du même musicien.</Typography>
             </Box>
+            {isLeftParticipant ? <Alert severity="warning">Ce musicien est marqué parti : tu peux corriger son nom ou retirer un instrument visible, mais pas ajouter de nouvel instrument.</Alert> : null}
             <TextField label="Nom du musicien" value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} error={Boolean(error)} helperText={error} fullWidth autoFocus />
             <Box>
               <Typography variant="subtitle1" fontWeight={800}>Instruments</Typography>
@@ -143,8 +171,8 @@ export function ParticipantDrawer({ open, mode = 'create', projection, participa
                   const isOther = instrument.label.trim().toLowerCase() === 'autre';
                   return (
                     <Box key={instrument.instrumentId}>
-                      <FormControlLabel control={<Checkbox checked={selected.has(instrument.instrumentId)} onChange={() => toggleInstrument(instrument.instrumentId)} />} label={instrument.label} />
-                      {isOther && selected.has(instrument.instrumentId) ? <TextField size="small" label="Préciser l’instrument" value={draft.customInstrumentLabels[instrument.instrumentId] ?? ''} onChange={(event) => updateCustomLabel(instrument.instrumentId, event.target.value)} fullWidth sx={{ mb: 1 }} /> : null}
+                      <FormControlLabel control={<Checkbox checked={selected.has(instrument.instrumentId)} disabled={isLeftParticipant && !selected.has(instrument.instrumentId)} onChange={() => toggleInstrument(instrument.instrumentId)} />} label={instrument.label} />
+                      {isOther && selected.has(instrument.instrumentId) ? <TextField size="small" label="Préciser l’instrument" value={draft.customInstrumentLabels[instrument.instrumentId] ?? ''} disabled={mode === 'edit' && editableActiveByInstrument.has(instrument.instrumentId)} onChange={(event) => updateCustomLabel(instrument.instrumentId, event.target.value)} fullWidth sx={{ mb: 1 }} /> : null}
                     </Box>
                   );
                 })}
@@ -171,7 +199,7 @@ export function ParticipantDrawer({ open, mode = 'create', projection, participa
         <Box sx={{ position: 'sticky', bottom: 0, p: 2, bgcolor: 'background.paper', borderTop: 1, borderColor: 'divider' }}>
           <Stack direction="row" spacing={1}>
             <Button onClick={onClose} fullWidth>Annuler</Button>
-            <Button variant="contained" onClick={() => save()} fullWidth>{mode === 'create' ? 'Ajouter le musicien' : 'Enregistrer'}</Button>
+            <Button variant="contained" onClick={() => save()} disabled={!hasChanges} fullWidth>{mode === 'create' ? 'Ajouter le musicien' : 'Enregistrer'}</Button>
           </Stack>
         </Box>
       </Drawer>

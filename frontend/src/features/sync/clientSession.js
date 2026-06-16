@@ -20,7 +20,7 @@ export async function heartbeatLease({ jamId, api = jamsApi }) {
 
 export function startHeartbeat({ jamId, intervalMs = 10_000, api = jamsApi }) {
   stopHeartbeat(jamId);
-  const id = setInterval(() => heartbeatLease({ jamId, api }), intervalMs);
+  const id = setInterval(() => { heartbeatLease({ jamId, api }).catch(() => null); }, intervalMs);
   heartbeats.set(jamId, id);
   return id;
 }

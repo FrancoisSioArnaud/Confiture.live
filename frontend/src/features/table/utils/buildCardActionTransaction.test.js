@@ -14,6 +14,15 @@ describe('buildCardActionTransaction', () => {
     expect(buildRemoveCardTransaction({ ...base, card: { type: 'hole', id: 'hole_1' }, linked: false }).events[0]).toEqual({ type: 'hole_removed', payload: { holeId: 'hole_1', confirmedDespiteLink: false } });
   });
 
+
+
+  it('refuses remove and move transactions for locked or played cards', () => {
+    expect(buildRemoveCardTransaction({ ...base, card: { type: 'appearance', id: 'appearance_locked', locked: true }, linked: false })).toBeNull();
+    expect(buildRemoveCardTransaction({ ...base, card: { type: 'hole', id: 'hole_played', played: true }, linked: false })).toBeNull();
+    expect(buildMoveCardTransaction({ ...base, card: { type: 'appearance', id: 'appearance_played', played: true }, instrumentId: 'instrument_guitar' })).toBeNull();
+    expect(buildMoveCardTransaction({ ...base, card: { type: 'hole', id: 'hole_locked', locked: true }, instrumentId: 'instrument_guitar' })).toBeNull();
+  });
+
   it('creates vertical move events for the moved target only', () => {
     const transaction = buildMoveCardTransaction({
       ...base,

@@ -48,6 +48,38 @@ describe('buildParticipantDrawerTransaction', () => {
     expect(result.transaction.events.some((event) => event.type === 'conflict_created')).toBe(false);
   });
 
+
+
+  it('does not remove participations on hidden instruments from the standard drawer', () => {
+    const projection = {
+      ...emptyProjection,
+      participants: { participant_1: { participantId: 'participant_1', name: 'Nico', status: 'active' } },
+      participations: {
+        participation_vocals: { participationId: 'participation_vocals', participantId: 'participant_1', instrumentId: 'instrument_vocals', status: 'active', startAppearanceIndex: 1, baseOrderKey: 'position_vocals' },
+        participation_hidden: { participationId: 'participation_hidden', participantId: 'participant_1', instrumentId: 'instrument_hidden', status: 'active', startAppearanceIndex: 1, baseOrderKey: 'position_hidden' },
+      },
+      instruments: { ...emptyProjection.instruments, instrument_hidden: { instrumentId: 'instrument_hidden', label: 'Sax', orderKey: 'c', visible: false } },
+    };
+
+    const result = buildEditParticipantTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 6, projection, participantId: 'participant_1', instruments, draft: { name: 'Nicolas', selectedInstrumentIds: ['instrument_vocals'], initialLinkedInstrumentPairs: [], customInstrumentLabels: {} } });
+
+    expect(result.ok).toBe(true);
+    expect(result.transaction.events.map((event) => event.type)).toEqual(['participant_updated']);
+    expect(result.transaction.events.some((event) => event.payload.participationId === 'participation_hidden')).toBe(false);
+  });
+
+  it('refuses to add an instrument to a participant marked left', () => {
+    const projection = {
+      ...emptyProjection,
+      participants: { participant_1: { participantId: 'participant_1', name: 'Nico', status: 'left' } },
+      participations: { participation_vocals: { participationId: 'participation_vocals', participantId: 'participant_1', instrumentId: 'instrument_vocals', status: 'active', startAppearanceIndex: 1, baseOrderKey: 'position_vocals' } },
+    };
+
+    const result = buildEditParticipantTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 7, projection, participantId: 'participant_1', instruments, draft: { name: 'Nico', selectedInstrumentIds: ['instrument_vocals', 'instrument_guitar'], initialLinkedInstrumentPairs: [], customInstrumentLabels: {} } });
+
+    expect(result).toMatchObject({ ok: false, error: 'Impossible d’ajouter un instrument à un musicien marqué parti.' });
+  });
+
   it('edits name, adds an instrument and removes an instrument via events', () => {
     const projection = {
       ...emptyProjection,

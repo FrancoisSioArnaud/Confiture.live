@@ -357,6 +357,10 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
 
   function requestRemoveCard(card) {
     closeMenu();
+    if (card.locked || card.played) {
+      onFeedback?.(card.locked ? 'Suppression impossible : passage verrouillé' : 'Suppression impossible : passage joué');
+      return;
+    }
     setConfirmState({
       kind: 'remove-card',
       card,

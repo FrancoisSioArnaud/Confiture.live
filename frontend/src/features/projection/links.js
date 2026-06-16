@@ -36,6 +36,7 @@ export function applyLink(state, link) {
     link.suppressedByConflict = true;
     return;
   }
+  link.suppressedByConflict = false;
   const order = nextLinkedOrder(entities, link.reorderStrategy);
   link.targets.forEach((target) => {
     const entity = getTargetEntity(state, target);

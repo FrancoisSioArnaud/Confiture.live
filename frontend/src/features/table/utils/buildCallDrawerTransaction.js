@@ -23,6 +23,23 @@ function linkIdsForCards(cards, projection) {
   return [...new Set(cards.flatMap((card) => cardLinks(card, projection.links).map((link) => link.linkId)))];
 }
 
+function conflictAppliesToCards(conflict, leftCard, rightCard) {
+  if (conflict.status !== 'active' || leftCard.type !== 'appearance' || rightCard.type !== 'appearance') return false;
+  const ids = conflict.scope === 'participation' ? [leftCard.participationId, rightCard.participationId] : [leftCard.id, rightCard.id];
+  return ids.every((id) => conflict.targetIds?.includes(id));
+}
+
+function plateauCardsExceptSource(projection, sourceCard, plateauIndex) {
+  return (projection.columns ?? [])
+    .map((column) => column.cards[plateauIndex])
+    .filter((card) => card && card.id !== sourceCard.id && card.instrumentId !== sourceCard.instrumentId);
+}
+
+function candidateConflictsWithPlateau(projection, candidate, sourceCard, plateauIndex) {
+  const otherCards = plateauCardsExceptSource(projection, sourceCard, plateauIndex);
+  return otherCards.some((otherCard) => Object.values(projection.conflicts ?? {}).some((conflict) => conflictAppliesToCards(conflict, candidate, otherCard)));
+}
+
 export function replacementCandidatesForCallDrawer({ projection, sourceCard, plateauIndex }) {
   const column = columnForCard(projection, sourceCard);
   if (!column) return [];
@@ -35,6 +52,7 @@ export function replacementCandidatesForCallDrawer({ projection, sourceCard, pla
       && !card.locked
       && projection.participants[card.participantId]?.status !== 'left'
       && projection.participants[card.participantId]?.status !== 'removed'
+      && !candidateConflictsWithPlateau(projection, card, sourceCard, plateauIndex)
     ))
     .slice(0, 3);
 }
@@ -117,7 +135,7 @@ export function buildSkipWithoutMusicianTransaction({ jamId, clientId, clientSeq
       appearanceMovedBetween({
         appearanceId: sourceCard.id,
         instrumentId: sourceCard.instrumentId,
-        afterTarget: toTarget(sourceCard),
+        afterTarget: { type: 'hole', id: holeId },
         beforeTarget: toTarget(sourceAdjacent.beforeCard),
         movedLinkedGroup: false,
       }),
