@@ -71,6 +71,32 @@ describe('local-first sync layer', () => {
     vi.useRealTimers();
   });
 
+  it('keeps pending transactions and requires resync after server sequence conflict', async () => {
+    vi.useFakeTimers();
+    await saveSyncState('jam_sync', { lastServerSequenceNumber: 1, status: SYNC_STATUS.SYNCED });
+    await jamStore.getState().applyLocalTransaction(transaction(1), { sync: false });
+    const sequenceConflict = new Error('HTTP 409');
+    sequenceConflict.status = 409;
+    sequenceConflict.payload = {
+      body: {
+        error: 'sequence_conflict',
+        latestServerSequenceNumber: 4,
+      },
+    };
+    const api = { pushTransaction: vi.fn().mockRejectedValue(sequenceConflict) };
+
+    const result = await pushPendingTransactions({ jamId: 'jam_sync', api, retryDelayMs: 500 });
+
+    expect(result).toMatchObject({ pushed: 0, sequenceConflict: true, latestServerSequenceNumber: 4 });
+    expect((await getPendingTransactions('jam_sync'))[0]).toMatchObject({ transactionId: 'transaction_1', status: 'pending', attemptCount: 0 });
+    expect(await getSyncState('jam_sync')).toMatchObject({ lastServerSequenceNumber: 4, status: SYNC_STATUS.ERROR, error: 'sequence_conflict' });
+    expect(getSyncStatus('jam_sync')).toMatchObject({ status: SYNC_STATUS.ERROR, pendingCount: 1 });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(api.pushTransaction).toHaveBeenCalledTimes(1);
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
   it('rebuilds projection from local transactions after reload', async () => {
     await jamStore.getState().applyLocalTransaction(transaction(1), { sync: false });
     await jamStore.getState().applyLocalTransaction(transaction(2), { sync: false });

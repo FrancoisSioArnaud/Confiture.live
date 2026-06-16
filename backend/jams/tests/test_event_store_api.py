@@ -96,6 +96,36 @@ def test_post_valid_transaction_and_get_transactions(client):
     assert transactions[0]["events"][0]["serverSequenceNumber"] == 2
 
 
+def test_rejects_transaction_without_lease_token(client):
+    create_jam(client)
+    acquire(client)
+
+    response = client.post("/api/jams/jam_test/transactions/", {
+        "clientId": "client_1",
+        "baseServerSequenceNumber": 1,
+        "transaction": transaction_payload(),
+    }, content_type="application/json")
+
+    assert response.status_code == 403
+
+
+def test_rejects_stale_base_server_sequence(client):
+    create_jam(client)
+    lease = acquire(client)
+
+    response = client.post("/api/jams/jam_test/transactions/", {
+        "clientId": "client_1",
+        "leaseToken": lease["leaseToken"],
+        "baseServerSequenceNumber": 0,
+        "transaction": transaction_payload(),
+    }, content_type="application/json")
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "sequence_conflict"
+    assert response.json()["latestServerSequenceNumber"] == 1
+    assert response.json()["clientBaseServerSequenceNumber"] == 0
+
+
 def test_transaction_idempotence_does_not_duplicate(client):
     create_jam(client)
     lease = acquire(client)
@@ -147,6 +177,24 @@ def test_snapshot_latest(client):
     latest_response = client.get("/api/jams/jam_test/snapshot/latest/")
     assert latest_response.status_code == 200
     assert latest_response.json()["snapshot"]["snapshotId"] == "snapshot_1"
+
+
+def test_rejects_snapshot_without_lease_token(client):
+    create_jam(client)
+    acquire(client)
+
+    response = client.post("/api/jams/jam_test/snapshots/", {
+        "clientId": "client_1",
+        "snapshot": {
+            "snapshotId": "snapshot_without_lease",
+            "lastServerSequenceNumber": 1,
+            "schemaVersion": 1,
+            "projectionVersion": 1,
+            "payload": {"projection": {"jamId": "jam_test"}},
+        },
+    }, content_type="application/json")
+
+    assert response.status_code == 403
 
 
 def test_acquire_heartbeat_release_and_takeover(client):

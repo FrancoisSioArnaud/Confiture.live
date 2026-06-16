@@ -1,15 +1,16 @@
 import { ArrowBack, PersonAdd, Settings, Undo } from '@mui/icons-material';
 import { Alert, Box, Button, CircularProgress, Fab, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
 import { getJam } from '../../../shared/api/jamsApi';
 import { SyncStatusIndicator } from '../../../shared/components/SyncStatusIndicator';
 import { useFeedback } from '../../../shared/feedback/FeedbackProvider';
-import { createId } from '../../../shared/utils/createId';
 import { jamStore } from '../../jam/jamStore';
 import { buildLinearUndoTransaction, getLatestUndoableTransaction } from '../../transactions/buildUndoTransaction';
 import { getSyncStatus } from '../../sync/syncStatus';
+import { getOrCreateClientId } from '../../sync/clientIdentity';
+import { startHeartbeat, stopHeartbeat } from '../../sync/clientSession';
 import { ParticipantDrawer } from '../../participants/components/ParticipantDrawer';
 import { JamTable } from '../../table/components/JamTable';
 import { JamConfigDialog } from '../components/JamConfigDialog';
@@ -17,10 +18,12 @@ import { useJamStoreState } from '../hooks/useJamStoreState';
 
 export function JamDetailPage() {
   const { jamId } = useParams();
-  const clientId = useMemo(() => createId('client'), []);
+  const clientId = useMemo(() => getOrCreateClientId(), []);
   const [configOpen, setConfigOpen] = useState(false);
   const { enqueueFeedback } = useFeedback();
   const [participantDrawer, setParticipantDrawer] = useState({ open: false, mode: 'create', participantId: null, insertionContext: null });
+  const [sessionState, setSessionState] = useState({ status: 'acquiring', message: null });
+  const clientSequenceRef = useRef(0);
   const projection = useJamStoreState((state) => state.projection);
   const transactions = useJamStoreState((state) => state.transactions);
   const syncStatus = getSyncStatus(jamId);
@@ -33,11 +36,31 @@ export function JamDetailPage() {
   }, [data, jamId]);
 
   useEffect(() => {
+    clientSequenceRef.current = Math.max(clientSequenceRef.current, transactions.at(-1)?.clientSequenceNumber ?? 0);
+  }, [transactions]);
+
+  useEffect(() => {
     let cancelled = false;
-    jamStore.getState().acquireSession({ jamId, clientId, deviceLabel: 'Navigateur' }).catch(() => null);
+    setSessionState({ status: 'acquiring', message: null });
+    jamStore.getState().acquireSession({ jamId, clientId, deviceLabel: 'Navigateur' })
+      .then((session) => {
+        if (cancelled) return;
+        setSessionState({ status: 'active', message: null });
+        const intervalMs = Math.max(1000, (session?.heartbeatIntervalSeconds ?? 10) * 1000);
+        startHeartbeat({ jamId, intervalMs });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        const locked = error?.status === 423 || error?.response?.status === 423 || error?.data?.error === 'jam_locked_by_other_client';
+        setSessionState({
+          status: locked ? 'read_only' : 'unavailable',
+          message: locked ? 'Cette jam est ouverte ailleurs : lecture seule pour éviter un conflit.' : `Session d’édition indisponible : ${error?.message ?? 'erreur inconnue'}`,
+        });
+      });
     return () => {
-      if (!cancelled) jamStore.getState().releaseSession({ jamId }).catch(() => null);
       cancelled = true;
+      stopHeartbeat(jamId);
+      jamStore.getState().releaseSession({ jamId }).catch(() => null);
     };
   }, [clientId, jamId]);
 
@@ -49,6 +72,26 @@ export function JamDetailPage() {
   }
 
   const jam = projection?.jam ?? data?.jam;
+  const canEdit = sessionState.status === 'active';
+
+  function withReservedClientSequence(transaction) {
+    const nextSequence = Math.max(clientSequenceRef.current + 1, transaction.clientSequenceNumber ?? 1);
+    clientSequenceRef.current = nextSequence;
+    return {
+      ...transaction,
+      clientSequenceNumber: nextSequence,
+      events: transaction.events.map((event) => ({ ...event, clientSequenceNumber: nextSequence })),
+    };
+  }
+
+  function applyOrganizerTransaction(transaction) {
+    if (!transaction) return null;
+    if (!canEdit) {
+      enqueueFeedback('Action impossible : cette jam est en lecture seule', 'warning');
+      return null;
+    }
+    return jamStore.getState().applyLocalTransaction(withReservedClientSequence(transaction));
+  }
 
   return (
     <Stack spacing={2}>
@@ -60,17 +103,19 @@ export function JamDetailPage() {
             <Typography variant="body2" color="text.secondary">{jam?.indicativeDate ?? 'Date à préciser'}</Typography>
           </Box>
           <SyncStatusIndicator status={syncStatus.status} />
-          <Tooltip title={undoTarget ? 'Annuler la dernière action' : 'Aucune action à annuler'}><span><IconButton aria-label="Undo" disabled={!undoTarget} onClick={() => { const transaction = buildLinearUndoTransaction({ jamId, clientId, clientSequenceNumber: nextClientSequenceNumber, transactions }); if (!transaction) { enqueueFeedback('Undo impossible : aucune action à annuler', 'warning'); return; } jamStore.getState().applyLocalTransaction(transaction); enqueueFeedback('Action annulée'); }}><Undo /></IconButton></span></Tooltip>
-          <Tooltip title="Configuration"><IconButton aria-label="Configuration" onClick={() => setConfigOpen(true)}><Settings /></IconButton></Tooltip>
+          <Tooltip title={undoTarget && canEdit ? 'Annuler la dernière action' : 'Aucune action à annuler'}><span><IconButton aria-label="Undo" disabled={!undoTarget || !canEdit} onClick={() => { const transaction = buildLinearUndoTransaction({ jamId, clientId, clientSequenceNumber: nextClientSequenceNumber, transactions }); if (!transaction) { enqueueFeedback('Undo impossible : aucune action à annuler', 'warning'); return; } applyOrganizerTransaction(transaction); enqueueFeedback('Action annulée'); }}><Undo /></IconButton></span></Tooltip>
+          <Tooltip title={canEdit ? 'Configuration' : 'Configuration indisponible en lecture seule'}><span><IconButton aria-label="Configuration" disabled={!canEdit} onClick={() => setConfigOpen(true)}><Settings /></IconButton></span></Tooltip>
         </Stack>
       </Paper>
+
+      {sessionState.message ? <Alert severity={sessionState.status === 'read_only' ? 'warning' : 'error'}>{sessionState.message}</Alert> : null}
 
       <Paper sx={{ p: { xs: 1.5, sm: 2 } }}>
         <JamTable
           projection={projection}
           clientId={clientId}
           clientSequenceNumber={nextClientSequenceNumber}
-          onTransaction={(transaction) => jamStore.getState().applyLocalTransaction(transaction)}
+          onTransaction={applyOrganizerTransaction}
           onOpenCallDrawer={(plateauIndex) => enqueueFeedback(`Appel du plateau ${plateauIndex + 1}`, 'info')}
           onFeedback={(message) => enqueueFeedback(message)}
           onCreateParticipant={(insertionContext) => setParticipantDrawer({ open: true, mode: 'create', participantId: null, insertionContext })}
@@ -86,7 +131,7 @@ export function JamDetailPage() {
         clientId={clientId}
         clientSequenceNumber={nextClientSequenceNumber}
         onClose={() => setConfigOpen(false)}
-        onTransaction={(transaction) => jamStore.getState().applyLocalTransaction(transaction)}
+        onTransaction={applyOrganizerTransaction}
         onFeedback={(message) => enqueueFeedback(message)}
       />
       <ParticipantDrawer
@@ -98,10 +143,10 @@ export function JamDetailPage() {
         clientId={clientId}
         clientSequenceNumber={nextClientSequenceNumber}
         onClose={() => setParticipantDrawer({ open: false, mode: 'create', participantId: null, insertionContext: null })}
-        onTransaction={(transaction) => jamStore.getState().applyLocalTransaction(transaction)}
+        onTransaction={applyOrganizerTransaction}
         onFeedback={(message) => enqueueFeedback(message)}
       />
-      <Fab color="primary" aria-label="Ajouter un musicien" onClick={() => setParticipantDrawer({ open: true, mode: 'create', participantId: null, insertionContext: null })} sx={{ position: 'fixed', right: 24, bottom: 24 }}><PersonAdd /></Fab>
+      <Fab color="primary" aria-label="Ajouter un musicien" disabled={!canEdit} onClick={() => setParticipantDrawer({ open: true, mode: 'create', participantId: null, insertionContext: null })} sx={{ position: 'fixed', right: 24, bottom: 24 }}><PersonAdd /></Fab>
     </Stack>
   );
 }

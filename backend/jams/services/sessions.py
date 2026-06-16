@@ -83,5 +83,7 @@ def assert_active_lease(jam, client_id, lease_token=None):
         raise PermissionDenied("No active client session for this jam.")
     if active.client_id != client_id:
         raise JamLocked("Jam is locked by another active client.")
-    if lease_token and active.lease_token != lease_token:
+    if not lease_token:
+        raise PermissionDenied("Lease token is required.")
+    if active.lease_token != lease_token:
         raise PermissionDenied("Invalid lease token.")

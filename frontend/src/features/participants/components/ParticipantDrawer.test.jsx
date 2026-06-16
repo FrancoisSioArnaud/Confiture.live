@@ -97,6 +97,30 @@ describe('ParticipantDrawer', () => {
     expect(onTransaction.mock.calls[0][0].events.map((event) => event.type)).toEqual(['participant_created', 'participation_added', 'participation_added', 'appearance_materialized', 'appearance_materialized', 'link_created']);
   });
 
+
+
+  it('disables save in edit mode until a visible editable field changes', () => {
+    const editProjection = {
+      ...projection,
+      participants: { participant_1: { participantId: 'participant_1', name: 'Nico', status: 'active' } },
+      participations: { participation_vocals: { participationId: 'participation_vocals', participantId: 'participant_1', instrumentId: 'instrument_vocals', status: 'active', startAppearanceIndex: 1, baseOrderKey: 'position_vocals' } },
+    };
+    renderDrawer({ mode: 'edit', projection: editProjection, participantId: 'participant_1' });
+    expect(screen.getByRole('button', { name: /enregistrer/i })).toBeDisabled();
+  });
+
+  it('shows a left participant warning and prevents adding new instruments', () => {
+    const editProjection = {
+      ...projection,
+      participants: { participant_1: { participantId: 'participant_1', name: 'Nico', status: 'left' } },
+      participations: { participation_vocals: { participationId: 'participation_vocals', participantId: 'participant_1', instrumentId: 'instrument_vocals', status: 'active', startAppearanceIndex: 1, baseOrderKey: 'position_vocals' } },
+    };
+    renderDrawer({ mode: 'edit', projection: editProjection, participantId: 'participant_1' });
+    expect(screen.getByText(/musicien est marqué parti/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Guitare')).toBeDisabled();
+    expect(screen.getByLabelText('Chant')).not.toBeDisabled();
+  });
+
   it('prechecks existing instruments in edit mode and emits participant update plus added/removed instruments', async () => {
     const editProjection = {
       ...projection,

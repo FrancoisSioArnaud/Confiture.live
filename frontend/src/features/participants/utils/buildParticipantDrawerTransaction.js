@@ -65,6 +65,10 @@ function hasActiveConflict(projection, leftId, rightId) {
   return Boolean(findActiveInstrumentConstraintConflict(projection, leftId, rightId));
 }
 
+function editableInstrumentIdSet(instruments) {
+  return new Set(instruments.map((instrument) => instrument.instrumentId));
+}
+
 function findActiveFirstAppearanceLink(projection, leftAppearanceId, rightAppearanceId) {
   return Object.values(projection.links ?? {}).find((link) => link.status === 'active' && link.targets?.some((target) => target.type === 'appearance' && target.id === leftAppearanceId) && link.targets?.some((target) => target.type === 'appearance' && target.id === rightAppearanceId));
 }
@@ -142,8 +146,13 @@ export function buildEditParticipantTransaction({ jamId, clientId, clientSequenc
   if (!validation.ok) return validation;
   const participant = projection.participants[participantId];
   const activeParticipations = Object.values(projection.participations ?? {}).filter((participation) => participation.participantId === participantId && participation.status === 'active');
-  const activeByInstrument = new Map(activeParticipations.map((participation) => [participation.instrumentId, participation]));
+  const editableInstrumentIds = editableInstrumentIdSet(instruments);
+  const editableActiveParticipations = activeParticipations.filter((participation) => editableInstrumentIds.has(participation.instrumentId));
+  const activeByInstrument = new Map(editableActiveParticipations.map((participation) => [participation.instrumentId, participation]));
   const selected = new Set(validation.draft.selectedInstrumentIds);
+  const addedInstrumentIds = validation.draft.selectedInstrumentIds.filter((instrumentId) => !activeByInstrument.has(instrumentId));
+  if (participant?.status === 'left' && addedInstrumentIds.length > 0) return { ok: false, error: 'Impossible d’ajouter un instrument à un musicien marqué parti.' };
+
   const events = [];
   if (participant?.name !== validation.draft.name) events.push(participantUpdated({ participantId, name: validation.draft.name }));
 
@@ -161,7 +170,7 @@ export function buildEditParticipantTransaction({ jamId, clientId, clientSequenc
     }
   });
 
-  activeParticipations.filter((participation) => !selected.has(participation.instrumentId)).forEach((participation) => {
+  editableActiveParticipations.filter((participation) => !selected.has(participation.instrumentId)).forEach((participation) => {
     events.push(participationRemoved({ participationId: participation.participationId, confirmedDespiteLinksOrLocks: confirmedRemovedParticipationIds.includes(participation.participationId) }));
   });
 
@@ -171,16 +180,18 @@ export function buildEditParticipantTransaction({ jamId, clientId, clientSequenc
     const addedEvent = events.find((event) => event.type === 'participation_added' && event.payload.instrumentId === instrumentId);
     return addedEvent?.payload;
   }).filter(Boolean);
-  const conflictsToRemove = Object.values(projection.conflicts ?? {}).filter((conflict) => conflict.status === 'active' && conflict.reason === 'instrument_constraint' && conflict.scope === 'participation' && conflict.targetIds?.some((id) => !selectedParticipations.some((participation) => participation.participationId === id)));
+  const removedEditableParticipationIds = editableActiveParticipations.filter((participation) => !selected.has(participation.instrumentId)).map((participation) => participation.participationId);
+  const conflictsToRemove = Object.values(projection.conflicts ?? {}).filter((conflict) => conflict.status === 'active' && conflict.reason === 'instrument_constraint' && conflict.scope === 'participation' && conflict.targetIds?.some((id) => removedEditableParticipationIds.includes(id)));
   conflictsToRemove.forEach((conflict) => events.push(conflictRemoved({ conflictId: conflict.conflictId })));
   addInitialPairEvents(events, { projection, participations: selectedParticipations, linkedPairKeys: new Set(validation.draft.initialLinkedInstrumentPairs), linkReorderStrategy: projection.jam?.linkReorderStrategy ?? 'move_to_last' });
   if (events.length === 0) return { ok: true, transaction: null };
   return { ok: true, transaction: createTransaction({ jamId, clientId, clientSequenceNumber, label: 'Modifier participant', events }) };
 }
 
-export function impactedRemovedParticipations({ projection, participantId, selectedInstrumentIds }) {
+export function impactedRemovedParticipations({ projection, participantId, selectedInstrumentIds, instruments = null }) {
   const selected = new Set(selectedInstrumentIds);
-  return Object.values(projection.participations ?? {}).filter((participation) => participation.participantId === participantId && participation.status === 'active' && !selected.has(participation.instrumentId)).filter((participation) => {
+  const editableInstrumentIds = instruments ? editableInstrumentIdSet(instruments) : null;
+  return Object.values(projection.participations ?? {}).filter((participation) => participation.participantId === participantId && participation.status === 'active' && !selected.has(participation.instrumentId) && (!editableInstrumentIds || editableInstrumentIds.has(participation.instrumentId))).filter((participation) => {
     const appearances = Object.values(projection.appearances ?? {}).filter((appearance) => appearance.participationId === participation.participationId && appearance.status !== 'removed');
     const hasLink = Object.values(projection.links ?? {}).some((link) => link.status === 'active' && link.targets.some((target) => appearances.some((appearance) => target.type === 'appearance' && target.id === appearance.appearanceId)));
     return appearances.length > 0 || hasLink || appearances.some((appearance) => appearance.locked || appearance.played);

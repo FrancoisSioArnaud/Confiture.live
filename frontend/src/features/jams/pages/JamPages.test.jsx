@@ -10,9 +10,10 @@ import { JamDetailPage } from './JamDetailPage';
 vi.mock('../../../shared/api/jamsApi', () => ({
   listJams: vi.fn().mockResolvedValue({ results: [{ jamId: 'jam_1', name: 'Jam du jeudi', indicativeDate: '2026-01-15', summary: { uniqueParticipantsCount: 2, playedPlateausCount: 1 } }] }),
   archiveJam: vi.fn().mockResolvedValue(null),
-  createJam: vi.fn().mockResolvedValue({ jamId: 'jam_1' }),
+  createJam: vi.fn().mockResolvedValue({ jamId: 'jam_1', latestServerSequenceNumber: 2, transactionAck: { transactionId: 'transaction_test', serverSequenceNumberStart: 1, serverSequenceNumberEnd: 2 } }),
   getJam: vi.fn().mockResolvedValue({ jam: { jamId: 'jam_1', name: 'Jam du jeudi', indicativeDate: '2026-01-15' }, snapshot: null, transactions: [{ transactionId: 'tx_1', clientSequenceNumber: 1, serverSequenceNumberStart: 1, events: [{ eventId: 'evt_1', transactionId: 'tx_1', type: 'jam_created', payload: { jamId: 'jam_1', name: 'Jam du jeudi', indicativeDate: '2026-01-15', linkReorderStrategy: 'move_to_first' }, clientSequenceNumber: 1, serverSequenceNumber: 1, eventIndexInTransaction: 0 }, { eventId: 'evt_2', transactionId: 'tx_1', type: 'instrument_added', payload: { instrumentId: 'instrument_guitar', label: 'Guitare', orderKey: 'a', visible: true, isDefault: true }, clientSequenceNumber: 1, serverSequenceNumber: 2, eventIndexInTransaction: 1 }] }] }),
-  acquireClientSession: vi.fn().mockResolvedValue({ clientId: 'client_1', leaseToken: 'lease_1' }),
+  acquireClientSession: vi.fn().mockResolvedValue({ clientId: 'client_1', leaseToken: 'lease_1', heartbeatIntervalSeconds: 10 }),
+  heartbeatClientSession: vi.fn().mockResolvedValue({ status: 'renewed' }),
   releaseClientSession: vi.fn().mockResolvedValue({ status: 'released' }),
 }));
 

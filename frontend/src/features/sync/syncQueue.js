@@ -15,6 +15,15 @@ import { setSyncStatus, SYNC_STATUS } from './syncStatus';
 
 const timers = new Map();
 
+function isSequenceConflict(error) {
+  const body = error?.payload?.body;
+  return error?.status === 409 && (body?.error === 'sequence_conflict' || body?.reason === 'sequence_mismatch');
+}
+
+function latestServerSequenceFromError(error) {
+  return error?.payload?.body?.latestServerSequenceNumber;
+}
+
 function isOffline() {
   return typeof navigator !== 'undefined' && navigator.onLine === false;
 }
@@ -65,6 +74,22 @@ export async function pushPendingTransactions({ jamId, api = jamsApi, retryDelay
       await saveSyncState(jamId, syncState);
       pushed += 1;
     } catch (error) {
+      if (isSequenceConflict(error)) {
+        const latestServerSequenceNumber = latestServerSequenceFromError(error);
+        await saveSyncState(jamId, {
+          ...syncState,
+          ...(Number.isInteger(latestServerSequenceNumber) ? { lastServerSequenceNumber: latestServerSequenceNumber } : {}),
+          status: SYNC_STATUS.ERROR,
+          error: 'sequence_conflict',
+        });
+        setSyncStatus(jamId, {
+          status: SYNC_STATUS.ERROR,
+          pendingCount: pending.length,
+          lastError: 'Le serveur possède déjà des events inconnus du client. Rechargez la jam avant de synchroniser.',
+        });
+        return { pushed, error, sequenceConflict: true, latestServerSequenceNumber };
+      }
+
       await markTransactionFailed(jamId, transaction.transactionId, error, retryDelayMs);
       setSyncStatus(jamId, { status: SYNC_STATUS.RETRYING, pendingCount: pending.length, lastError: error.message });
       scheduleSync({ jamId, api, delayMs: retryDelayMs });

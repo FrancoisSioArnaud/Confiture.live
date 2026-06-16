@@ -67,10 +67,7 @@ export function applyEvent(state, event) {
       moveTargetBetween(state, { type: 'appearance', id: payload.appearanceId }, payload);
       break;
     case 'appearance_removed':
-      if (state.appearances[payload.appearanceId]) {
-        state.appearances[payload.appearanceId].status = 'removed';
-        removeLinksTargeting(state, { type: 'appearance', id: payload.appearanceId });
-      } else addProjectionWarning(state, 'missing_appearance', 'appearance_removed targets a missing appearance.', payload);
+      removeAppearance(state, payload.appearanceId, payload);
       break;
     case 'appearance_locked':
       setLock(state, { type: 'appearance', id: payload.appearanceId }, true);
@@ -116,6 +113,7 @@ export function applyEvent(state, event) {
       break;
     case 'conflict_removed':
       removeConflict(state, payload.conflictId);
+      reapplyActiveLinks(state);
       break;
     case 'plateau_played':
       payload.targets.forEach((target) => setPlayed(state, target, true, payload.plateauIndex));
@@ -141,6 +139,44 @@ function removeLinksTargeting(state, target) {
   });
 }
 
+function parseCalculatedAppearanceId(appearanceId) {
+  const match = String(appearanceId).match(/^appearance_(.+)_(\d+)$/);
+  if (!match) return null;
+  return { participationId: match[1], appearanceIndex: Number(match[2]) };
+}
+
+function removeAppearance(state, appearanceId, payload = {}) {
+  const existing = state.appearances[appearanceId];
+  if (existing) {
+    existing.status = 'removed';
+    removeLinksTargeting(state, { type: 'appearance', id: appearanceId });
+    return;
+  }
+
+  const parsed = parseCalculatedAppearanceId(appearanceId);
+  const participation = parsed ? state.participations[parsed.participationId] : null;
+  if (!participation) {
+    addProjectionWarning(state, 'missing_appearance', 'appearance_removed targets a missing appearance.', payload);
+    return;
+  }
+
+  state.appearances[appearanceId] = {
+    id: appearanceId,
+    appearanceId,
+    type: 'appearance',
+    participationId: participation.participationId,
+    participantId: participation.participantId,
+    instrumentId: participation.instrumentId,
+    appearanceIndex: parsed.appearanceIndex,
+    status: 'removed',
+    played: false,
+    locked: false,
+    materialized: true,
+    positionKey: `${participation.baseOrderKey}:${parsed.appearanceIndex}`,
+  };
+  removeLinksTargeting(state, { type: 'appearance', id: appearanceId });
+}
+
 function markParticipant(state, participantId, status, eventId) {
   const participant = state.participants[participantId];
   if (!participant) {
@@ -154,7 +190,10 @@ function markParticipant(state, participantId, status, eventId) {
   });
   Object.values(state.appearances).forEach((appearance) => {
     if (appearance.participantId === participantId || state.participations[appearance.participationId]?.participantId === participantId) {
-      if (status === 'removed' || (!appearance.played && !appearance.materialized)) appearance.status = 'removed';
+      if (status === 'removed' || !appearance.played) {
+        appearance.status = 'removed';
+        removeLinksTargeting(state, { type: 'appearance', id: appearance.appearanceId ?? appearance.id });
+      }
     }
   });
 }

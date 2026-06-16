@@ -4,8 +4,9 @@ import { useMutation } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createJam as createJamApi } from '../../../shared/api/jamsApi';
-import { createId } from '../../../shared/utils/createId';
 import { jamStore } from '../../jam/jamStore';
+import { getOrCreateClientId } from '../../sync/clientIdentity';
+import { markTransactionSynced, saveSyncState } from '../../sync/localDb';
 import { buildCreateJamTransaction } from '../utils/createJamTransaction';
 import { DEFAULT_INSTRUMENTS } from '../utils/defaultInstruments';
 
@@ -16,7 +17,7 @@ export function NewJamPage() {
   const [selectedInstrumentIds, setSelectedInstrumentIds] = useState(() => DEFAULT_INSTRUMENTS.map((instrument) => instrument.instrumentId));
   const [customInstrument, setCustomInstrument] = useState('');
   const [customInstruments, setCustomInstruments] = useState([]);
-  const clientId = useMemo(() => createId('client'), []);
+  const clientId = useMemo(() => getOrCreateClientId(), []);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -29,7 +30,13 @@ export function NewJamPage() {
       });
       await jamStore.getState().applyLocalTransaction(transaction, { sync: false });
       try {
-        await createJamApi({ clientId, transaction });
+        const response = await createJamApi({ clientId, transaction });
+        const ack = response?.transactionAck;
+        if (ack) {
+          await markTransactionSynced(transaction.jamId, transaction.transactionId, ack);
+          await saveSyncState(transaction.jamId, { lastServerSequenceNumber: response.latestServerSequenceNumber ?? ack.serverSequenceNumberEnd, status: 'synced' });
+          await jamStore.getState().reloadFromLocalDb(transaction.jamId);
+        }
       } finally {
         navigate(`/jams/${transaction.jamId}`);
       }
