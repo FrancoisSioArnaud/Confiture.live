@@ -32,7 +32,7 @@ class Jam(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.jam_id})"
 
 
 class JamTransaction(models.Model):
@@ -52,7 +52,7 @@ class JamTransaction(models.Model):
         constraints = [models.UniqueConstraint(fields=["jam", "client_id", "client_sequence_number"], name="unique_client_transaction_sequence_per_jam")]
 
     def __str__(self):
-        return self.transaction_id
+        return f"{self.transaction_id} — {self.jam.jam_id}"
 
 
 class JamEvent(models.Model):
@@ -72,7 +72,7 @@ class JamEvent(models.Model):
         constraints = [models.UniqueConstraint(fields=["jam", "server_sequence_number"], name="unique_server_event_sequence_per_jam")]
 
     def __str__(self):
-        return f"{self.server_sequence_number}:{self.type}"
+        return f"{self.server_sequence_number} {self.type} — {self.jam.jam_id}"
 
 
 class JamSnapshot(models.Model):
@@ -111,4 +111,4 @@ class JamClientSession(models.Model):
         ordering = ["-last_heartbeat_at"]
 
     def __str__(self):
-        return f"{self.jam_id}:{self.client_id}:{self.status}"
+        return f"{self.client_id} — {self.jam.jam_id}"
