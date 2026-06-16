@@ -68,3 +68,6 @@ curl -I -H "Host: confiture.live" http://127.0.0.1/static/admin/css/base.css
 ```
 
 Le CSS admin est correctement servi si la réponse est `200 OK`.
+
+
+Docs V0 importantes : `docs/v0-round-order-and-no-between-cards.md`.

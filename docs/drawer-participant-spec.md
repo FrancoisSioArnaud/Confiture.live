@@ -25,7 +25,7 @@ Il ne sert pas à gérer les notes. Il n’y a aucune note dans l’app V0.
 Depuis :
 
 - bouton flottant bas droite `PersonAddIcon` ;
-- zone entre deux cards → “Ajouter un participant”.
+- ajout entre deux cards : hors V0, déplacé en V1.
 
 ### 2.2 Édition participant
 
@@ -230,9 +230,9 @@ Feedback après validation : snackbar.
 
 ## 7. Rounds et insertion
 
-### 7.1 Ajout standard depuis bouton flottant
+### 7.1 Ajout depuis bouton flottant ou drawer standard
 
-Si le drawer est ouvert depuis le bouton flottant :
+En V0, le drawer participant ne gère pas l’ajout entre deux cards.
 
 ```txt
 insertionMode = end_of_visible_rounds
@@ -244,36 +244,14 @@ Conséquence :
 - créer une appearance en fin de round 1 ;
 - si round 2 est déjà visible, créer une appearance en fin de round 2 ;
 - idem pour les autres rounds déjà visibles ;
-- les rounds futurs seront générés plus tard.
-
----
+- les rounds futurs seront générés plus tard ;
+- aucun ciblage de round supérieur depuis une zone entre cards.
 
 ### 7.2 Ajout depuis zone entre deux cards
 
-Si le drawer est ouvert depuis une zone d’insertion :
+Hors V0, déplacé en V1.
 
-```txt
-insertionMode = between_targets
-startAppearanceIndex = round ciblé
-```
-
-Conséquence :
-
-- insertion à l’endroit choisi dans le round ciblé ;
-- pas de création rétroactive dans les rounds précédents ;
-- les rounds suivants visibles reçoivent une appearance selon les règles de projection.
-
-Exemple :
-
-```txt
-Ajout entre deux cards du round 2.
-→ appearance round 2 insérée ici.
-→ pas d’appearance round 1.
-→ appearance round 3 ajoutée si round 3 est visible ou plus tard quand révélé.
-```
-
----
-
+La V0 ne doit pas afficher de zone “Ajouter un participant” entre deux cards et ne doit pas produire `insertionMode = between_targets`.
 ## 8. Links initiaux dans le drawer
 
 Le link principal dans l’usage courant passe par le bouton link de la card et le mode link du tableau.

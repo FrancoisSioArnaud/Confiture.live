@@ -37,8 +37,7 @@ Chaque colonne contient :
 
 ```txt
 - header instrument
-- lignes de cards appearance/hole alignées avec le rail plateau
-- zones d’ajout fines entre les lignes
+- cards appearance/hole
 - bouton afficher round suivant
 ```
 
@@ -56,48 +55,7 @@ Plateau 3 = troisième card visible de chaque colonne
 
 Le tableau ne stocke pas directement une ligne plateau comme vérité métier. Les plateaux sont une projection visuelle à partir des colonnes.
 
-## 1.3 Alignement visuel obligatoire des lignes
-
-L’alignement horizontal n’est pas seulement une règle métier : il doit être visible et stable dans l’UI.
-
-Règles strictes :
-
-```txt
-- chaque ligne plateau doit avoir une hauteur visuelle commune ;
-- la cellule du rail plateau et les cellules des colonnes instrument doivent partager cette hauteur ;
-- une appearance card, une hole card et la cellule plateau en face doivent rester alignées ;
-- les zones d’insertion entre cards doivent avoir une hauteur fine et commune ;
-- aucune colonne ne doit dériver verticalement parce qu’une card affiche plus de texte ou plus de badges.
-```
-
-La structure visuelle recommandée est une grille par lignes :
-
-```txt
-ligne insertion fine
-ligne plateau/card hauteur commune
-ligne insertion fine
-ligne plateau/card hauteur commune
-...
-```
-
-À éviter :
-
-```txt
-- des colonnes rendues comme des stacks indépendantes avec des hauteurs de cards variables ;
-- un rail plateau avec des blocs fixes sans hauteur commune avec les cards ;
-- des zones “entre les cards” visibles en permanence avec texte + plusieurs boutons.
-```
-
-Si l’implémentation garde un rendu par colonnes, elle doit tout de même garantir des constantes de hauteur partagées, par exemple :
-
-```txt
-INSERT_ZONE_HEIGHT
-TABLE_ROW_HEIGHT
-CARD_MIN_HEIGHT = TABLE_ROW_HEIGHT
-PLATEAU_CELL_MIN_HEIGHT = TABLE_ROW_HEIGHT
-```
-
-## 1.4 Mobile/tablette
+## 1.3 Mobile/tablette
 
 Le tableau doit être utilisable sur mobile/tablette.
 
@@ -250,7 +208,6 @@ Une colonne contient une liste verticale :
 ```txt
 - appearance cards
 - hole cards
-- zones d’ajout entre cards
 - séparation éventuelle entre rounds
 - bouton afficher round suivant
 ```
@@ -287,6 +244,8 @@ Le tableau peut avoir :
 
 Par défaut, chaque colonne affiche uniquement le round 1.
 
+Chaque colonne est indépendante : le nombre de cards visibles dans une colonne ne dépend pas du nombre de cards visibles dans les autres colonnes.
+
 ## 5.2 Afficher round suivant
 
 En bas de colonne :
@@ -298,8 +257,9 @@ bouton “Afficher round suivant”
 Quand cliqué :
 
 ```txt
-- reveal du round suivant pour cette colonne
-- création/projection des appearances du round visible
+- reveal du round suivant pour cette colonne uniquement
+- création/projection des appearances du round visible pour cette colonne
+- les nouvelles appearances se collent immédiatement à la suite du round précédent de cette même colonne
 - animation d’apparition
 ```
 
@@ -311,7 +271,60 @@ silent
 
 L’apparition visuelle suffit.
 
-## 5.3 Ajout après reveal de round
+### Exemple attendu
+
+État initial :
+
+| Ordre | Chant | Guitare | Batterie |
+|---:|---|---|---|
+| 1 | Anna | Noé | Sam |
+| 2 | Léo | Iris | Nina |
+| 3 | Maya | Tom | Eli |
+| 4 | Zoé | — | Lou |
+| 5 | — | — | Max |
+
+Après affichage du round 2 dans chaque colonne :
+
+| Ordre | Chant | Guitare | Batterie |
+|---:|---|---|---|
+| 1 | Anna | Noé | Sam |
+| 2 | Léo | Iris | Nina |
+| 3 | Maya | Tom | Eli |
+| 4 | Zoé | Noé' | Lou |
+| 5 | Anna' | Iris' | Max |
+| 6 | Léo' | Tom' | Sam' |
+| 7 | Maya' | — | Nina' |
+| 8 | Zoé' | — | Eli' |
+| 9 | — | — | Lou' |
+| 10 | — | — | Max' |
+
+Important : `Noé'` vient immédiatement après `Tom`, car la colonne Guitare ne contient que trois musiciens au round 1. On ne laisse pas de trou pour attendre la fin du round 1 des autres colonnes.
+
+## 5.3 Ordre de tri attendu
+
+L’ordre visuel d’une colonne doit être :
+
+```txt
+appearanceIndex ASC
+puis positionInRound ASC
+puis id ASC en fallback stable
+```
+
+Donc on affiche :
+
+```txt
+Anna, Léo, Maya, Zoé, Anna', Léo', Maya', Zoé'
+```
+
+et jamais :
+
+```txt
+Anna, Anna', Léo, Léo', Maya, Maya', Zoé, Zoé'
+```
+
+Les holes visibles dans une colonne occupent une position seulement dans cette colonne. Ils ne créent pas d’espaces artificiels dans les autres colonnes.
+
+## 5.4 Ajout après reveal de round
 
 Règle importante :
 
@@ -320,7 +333,7 @@ Si on ajoute une participation après reveal du round 2 depuis le flux standard,
 la projection ajoute une appearance à la fin du round 1 ET à la fin du round 2 visible.
 ```
 
-Pour tous les rounds déjà visibles :
+Pour tous les rounds déjà visibles de l’instrument concerné :
 
 ```txt
 la nouvelle participation reçoit une appearance positionnée à la fin du round visible concerné.
@@ -332,87 +345,59 @@ Pour les rounds non visibles :
 les appearances restent calculées plus tard.
 ```
 
-## 5.4 Ajout entre deux cards dans un round spécifique
-
-Si l’organisateur clique entre deux cards du round 2 :
+Exemple Guitare avec round 2 visible :
 
 ```txt
-la nouvelle participation démarre à partir du round 2.
+Avant : Noé, Iris, Tom, Noé', Iris', Tom'
+Ajout de Paul
+Après : Noé, Iris, Tom, Paul, Noé', Iris', Tom', Paul'
 ```
 
-Conséquence :
+Si des cards sont déjà jouées, elles doivent rester visuellement stables. Une nouvelle appearance ne doit pas déplacer une appearance déjà jouée.
+
+## 5.5 Ajout entre deux cards
+
+L’ajout entre deux cards est exclu de la V0.
+
+Décision produit :
 
 ```txt
-- pas d’appearance rétroactive en round 1
-- appearance créée à l’endroit ciblé en round 2
-- appearances futures calculées à partir de cette base
+- pas de zone “Entre les cards” ;
+- pas de bouton + entre les cards ;
+- pas de choix “Ajouter un trou” / “Ajouter un participant” depuis un gap ;
+- pas d’ajout participant ciblant un round supérieur via gap ;
+- pas d’ajout manuel de hole entre deux cards.
 ```
 
-Même logique pour round 3+.
+Cette capacité est déplacée en V1.
 
 ---
 
-# 6. Zones entre cards
+# 6. Ajout dans le tableau
 
-Entre deux cards, la zone d’action doit être très compacte.
+## 6.1 Ajouter un participant
 
-Rendu par défaut :
-
-```txt
-- une ligne fine entre deux cards ;
-- un seul bouton “+” centré ou discret ;
-- pas de label visible du type “Entre les cards” ;
-- pas de boutons “Ajouter un trou” et “Ajouter un participant” affichés directement dans le tableau.
-```
-
-Au clic/tap sur le bouton `+`, l’UI ouvre un choix compact :
-
-```txt
-- Ajouter un trou
-- Ajouter un participant
-```
-
-Le choix peut être rendu par un `Menu`, `Popover`, `BottomSheet` ou `Dialog` compact selon la taille d’écran. Sur mobile, l’action doit rester tactile et facile à viser, mais l’élément visible dans le tableau doit rester fin pour ne pas casser l’alignement des plateaux.
-
-Hauteur recommandée :
-
-```txt
-zone insertion visible : 24 à 36 px
-bouton + : petit IconButton ou Button circulaire discret
-```
-
-La zone d’insertion doit avoir la même hauteur dans le rail plateau et dans toutes les colonnes afin de préserver l’alignement horizontal des cards.
-
-## 6.1 Ajouter un participant ici
-
-Ouvre le drawer participant avec l’instrument et le round ciblés préremplis.
+En V0, l’ajout de participant se fait depuis le flux standard : bouton principal / drawer participant.
 
 Règles :
 
 ```txt
-- dans round 1 : crée une participation à partir du round 1
-- dans round 2 : crée une participation à partir du round 2
-- dans round N : crée une participation à partir du round N
+- la participation démarre au round 1 ;
+- si plusieurs rounds sont déjà visibles pour l’instrument, une appearance est créée/calculée à la fin de chaque round visible ;
+- aucun ajout entre deux cards ;
+- aucun ciblage d’un round supérieur depuis un gap.
 ```
 
-Feedback :
+## 6.2 Ajouter un trou
+
+En V0, il n’y a pas d’ajout manuel de trou entre deux cards.
+
+Les holes restent possibles via :
 
 ```txt
-- apparition animée de la card
-- snackbar seulement si ajout à participant existant / ajout d’instrument
+- “Jouer sans…” depuis le menu d’une appearance ;
+- “Plateau sans [instrument manquant]” dans le drawer d’appel.
 ```
-
-## 6.2 Ajouter un trou ici
-
-Crée un hole à la position ciblée.
-
-Feedback :
-
-```txt
-silent + apparition animée
-```
-
-Confirmation non nécessaire à la création.
 
 ---
 

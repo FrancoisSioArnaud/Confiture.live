@@ -364,7 +364,9 @@ Effet : retire toutes les appearances futures du participant, garde l’historiq
 
 ### 8.1 `participation_added`
 
-UI : drawer participant, ou insertion entre deux cards.
+UI : drawer participant, ou drawer édition participant pour ajout d’un instrument.
+
+L’insertion entre deux cards est hors V0 et déplacée en V1.
 
 Feedback : silent si nouveau participant ; snackbar si ajout d’un instrument à participant existant ou si plusieurs rounds impactés.
 
@@ -385,25 +387,19 @@ Feedback : silent si nouveau participant ; snackbar si ajout d’un instrument �
 }
 ```
 
-Modes autorisés :
+Modes autorisés en V0 :
 
 ```txt
 end_of_visible_rounds
+```
+
+Modes exclus de la V0 :
+
+```txt
 between_targets
 ```
 
-Si `between_targets` :
-
-```js
-{
-  insertionMode: "between_targets",
-  startAppearanceIndex: 2,
-  afterTarget: { type: "appearance", id: "appearance_..." },
-  beforeTarget: { type: "appearance", id: "appearance_..." }
-}
-```
-
-Effet : crée une participation et les appearances nécessaires à partir du round ciblé.
+Effet : crée une participation et les appearances nécessaires à partir du round 1. Si plusieurs rounds sont déjà visibles, la nouvelle participation reçoit une appearance à la fin de chaque round visible.
 
 ---
 
@@ -579,7 +575,7 @@ Effet : supprime uniquement cette occurrence.
 
 ### 10.1 `hole_added`
 
-UI : insertion entre cards, jouer sans, drawer d’appel “Plateau sans [instrument manquant]”.
+UI V0 : jouer sans, drawer d’appel “Plateau sans [instrument manquant]”. L’insertion entre cards est hors V0.
 
 Feedback : silent ou snackbar selon contexte.
 

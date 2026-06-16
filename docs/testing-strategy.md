@@ -272,24 +272,14 @@ Résultat attendu :
 
 ### 5.5 Ajout entre deux cards dans un round supérieur
 
-Input :
+Hors V0, déplacé en V1.
 
-```text
-Guitare round 1 visible
-Guitare round 2 visible
-participant_created Emma
-participation_added Emma/Guitare insertedBetween deux cards du round 2
-```
+Tests V0 attendus :
 
-Résultat attendu :
-
-```text
-- Emma apparaît à partir du round 2 seulement
-- aucune appearance rétroactive round 1 n'est créée
-- les appearances suivantes du round 2 sont poussées vers le bas
-```
-
----
+- aucune zone d’insertion entre cards n’est rendue ;
+- aucun bouton “Ajouter un participant ici” / “Ajouter un trou ici” n’est rendu ;
+- le drawer participant ne reçoit pas de contexte d’insertion entre targets ;
+- aucun event `participation_added` V0 n’utilise `insertionMode = between_targets`.
 
 ### 5.6 Appearance materialized
 
@@ -474,16 +464,16 @@ Résultat attendu :
 
 ### 5.14 Hole added
 
-Input :
+Input V0 :
 
 ```text
-hole_added Basse entre deux cards du round 1
+hole_added Basse via jouer sans ou drawer d’appel
 ```
 
 Résultat attendu :
 
 ```text
-- un hole apparaît à la position ciblée
+- un hole apparaît dans la colonne ciblée selon le flux métier
 - les cards suivantes de la colonne sont poussées
 - le hole ne génère pas de round futur
 - le hole peut être locké, linké, joué ou supprimé
@@ -1079,7 +1069,7 @@ Projeter tableau
 ```text
 Afficher round 2
 Ajouter participant standard
-Ajouter participant entre deux cards round 2
+V1 backlog : Ajouter participant entre deux cards round 2
 ```
 
 ### Scenario C — Link

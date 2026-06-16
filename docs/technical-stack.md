@@ -687,7 +687,7 @@ mode link
 mode conflict
 drawer participant
 drawer appel avec remplaçants
-ajout entre cards
+V1 backlog : ajout entre cards
 suppression appearance/hole avec confirmation
 sync indicator
 animations de déplacement non cassantes

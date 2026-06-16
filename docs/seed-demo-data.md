@@ -327,7 +327,7 @@ Règle importante :
 
 ```text
 Julie est ajoutée standard après reveal round 2 : elle apparaît fin round 1 et fin round 2.
-Emma est ajoutée entre deux cards du round 2 : elle démarre au round 2, sans appearance rétroactive round 1.
+Cas déplacé en V1 : ajout entre cards du round 2 supprimé de la V0.
 ```
 
 ## 6. À vérifier
@@ -336,7 +336,7 @@ Emma est ajoutée entre deux cards du round 2 : elle démarre au round 2, sans a
 - bouton afficher round suivant
 - apparition animée du round 2
 - ajout standard sur rounds visibles
-- ajout entre cards dans round 2
+- V1 backlog : ajout entre cards dans round 2
 - pas d'appearance rétroactive si insertion ciblée round 2
 ```
 

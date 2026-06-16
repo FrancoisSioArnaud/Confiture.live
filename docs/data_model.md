@@ -238,22 +238,17 @@ Les passages précis sont des appearances.
 
 ### 7.2 `startAppearanceIndex`
 
-Permet de gérer l’ajout entre deux cards dans un round supérieur.
+En V0, une participation démarre toujours à `startAppearanceIndex = 1`.
 
-Exemples :
+L’ajout entre deux cards dans un round supérieur est hors V0 et déplacé en V1.
+
+Règle V0 :
 
 ```txt
 Ajout standard → startAppearanceIndex = 1
-Ajout entre deux cards du Round 2 → startAppearanceIndex = 2
-Ajout entre deux cards du Round 3 → startAppearanceIndex = 3
 ```
 
-Règle :
-
-```txt
-La participation génère des appearances seulement à partir de startAppearanceIndex.
-```
-
+La participation génère des appearances à partir de ce round, puis pour chaque round visible de l’instrument.
 ### 7.3 `baseOrderKey`
 
 Clé d’ordre stable utilisée pour générer les appearances futures.
@@ -274,7 +269,7 @@ m0
 z0
 ```
 
-Quand on insère entre deux cards, générer une clé entre les deux.
+En V0, on n’insère pas entre deux cards. Les nouvelles participations reçoivent une clé de fin de round.
 
 ---
 

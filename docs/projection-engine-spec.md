@@ -405,11 +405,11 @@ Une appearance matérialisée doit conserver son `appearanceId` et son `appearan
 
 ### 6.4 Ajout standard d’une participation après reveal de plusieurs rounds
 
-Si `participation_added` est standard, sans insertion entre deux cards :
+En V0, l’ajout d’une participation est toujours standard : pas d’ajout entre deux cards.
 
 ```txt
 La participation démarre au round 1.
-Pour chaque round déjà visible, créer/positionner une appearance à la fin de ce round.
+Pour chaque round déjà visible de l’instrument, créer/positionner une appearance à la fin de ce round.
 Les rounds non visibles restent calculés plus tard.
 ```
 
@@ -423,25 +423,79 @@ Julie est ajoutée à la guitare.
 → Julie guitare round 3 sera générée plus tard si round 3 est affiché.
 ```
 
----
-
-### 6.5 Ajout entre deux cards dans un round ciblé
-
-Si l’organisateur clique entre deux cards d’un round précis :
+Exemple d’ordre attendu :
 
 ```txt
-La participation démarre à partir de ce round.
-Aucune appearance rétroactive n’est créée dans les rounds précédents.
+Avant : Noé, Iris, Tom, Noé', Iris', Tom'
+Ajout de Julie
+Après : Noé, Iris, Tom, Julie, Noé', Iris', Tom', Julie'
 ```
+
+---
+
+### 6.5 Ajout entre deux cards
+
+Hors V0.
+
+Décision : l’ajout entre deux cards est déplacé en V1. La V0 ne doit pas avoir :
+
+- de zone d’insertion entre cards ;
+- d’action UI “Ajouter un participant ici” ;
+- d’action UI “Ajouter un trou ici” ;
+- de création de participation avec `insertionMode = between_targets` ;
+- de participation démarrant au round 2+ via gap.
+
+La base de données de V0 n’est pas en production : il n’y a pas besoin de conserver de code legacy pour relire d’anciens events `between_targets`.
+
+---
+
+### 6.6 Tri round-first par instrument
+
+La projection doit trier les cards d’une colonne selon une logique `round-first` :
+
+```txt
+appearanceIndex ASC
+puis positionInRound ASC
+puis id ASC en fallback stable
+```
+
+La colonne est indépendante des autres colonnes.
 
 Exemple :
 
 ```txt
-L’organisateur ajoute Julie entre deux cards du round 2 guitare.
-→ Julie guitare round 2 est insérée à l’endroit choisi.
-→ Julie guitare round 1 n’existe pas.
-→ Julie guitare round 3 sera ajoutée plus tard si round 3 est affiché.
+Chant : Anna, Léo, Maya, Zoé, Anna', Léo', Maya', Zoé'
+Guitare : Noé, Iris, Tom, Noé', Iris', Tom'
+Batterie : Sam, Nina, Eli, Lou, Max, Sam', Nina', Eli', Lou', Max'
 ```
+
+`Noé'` vient immédiatement après `Tom`. Il ne doit pas y avoir de lignes vides dans la colonne Guitare pour attendre `Zoé` ou `Max` dans d’autres colonnes.
+
+Règle technique recommandée :
+
+```txt
+roundOrderKey = participation.roundOrderKey ou participation.baseOrderKey
+appearance.roundOrder = stableOrderValue(roundOrderKey)
+appearance.sortRound = appearance.appearanceIndex
+```
+
+Tri :
+
+```js
+cards.sort((a, b) =>
+  (a.appearanceIndex ?? 1) - (b.appearanceIndex ?? 1)
+  || (a.roundOrder ?? 0) - (b.roundOrder ?? 0)
+  || String(a.id).localeCompare(String(b.id))
+)
+```
+
+À ne pas faire :
+
+```txt
+stableOrderValue(baseOrderKey) * 1000 + appearanceIndex
+```
+
+Cette formule groupe chaque participant avec ses passages successifs (`Noé`, `Noé'`, `Iris`, `Iris'`) et viole la spec.
 
 ---
 
@@ -790,7 +844,7 @@ Effet :
 
 ### 13.1 Hole manuel
 
-Un hole manuel est ajouté entre deux cards ou via une action de tableau.
+En V0, un hole manuel n’est pas ajouté entre deux cards. Les holes sont créés par les flux `jouer sans` ou drawer d’appel.
 
 Il occupe une position réelle.
 

@@ -575,23 +575,27 @@ Cela permet de cibler une future appearance sans dépendre d’un ordre de créa
 
 ## 5.3 Participation ajoutée après reveal de rounds
 
-Règle validée : si un round 2, 3, etc. est déjà visible quand une participation est ajoutée, la projection doit ajouter une appearance de cette participation à la fin de chaque round déjà visible.
+Règle validée : si un round 2, 3, etc. est déjà visible quand une participation est ajoutée, la projection doit ajouter une appearance de cette participation à la fin de chaque round déjà visible de l’instrument concerné.
+
+Chaque instrument est indépendant : les appearances du round 2 se collent immédiatement à la suite du round 1 de la même colonne, sans laisser de trous artificiels pour s’aligner avec les autres colonnes.
 
 Exemple :
 
 ```txt
 La colonne guitare affiche Round 1 et Round 2.
+État avant : Noé, Iris, Tom, Noé', Iris', Tom'
 L’organisateur ajoute Paul guitare.
 
 Conséquence :
 - Paul guitare appearance 1 est ajoutée à la fin du Round 1.
 - Paul guitare appearance 2 est ajoutée à la fin du Round 2.
+- Résultat : Noé, Iris, Tom, Paul, Noé', Iris', Tom', Paul'.
 ```
 
 Si le Round 3 est affiché plus tard :
 
 ```txt
-Paul guitare appearance 3 sera générée à la fin du Round 3 selon le même baseOrder.
+Paul guitare appearance 3 sera générée à la fin du Round 3 selon le même ordre de participation.
 ```
 
 Important : cela ne nécessite pas forcément un event `appearance_materialized` pour chaque round visible. La projection peut générer ces appearances de manière déterministe à partir de :
@@ -599,7 +603,7 @@ Important : cela ne nécessite pas forcément un event `appearance_materialized`
 ```txt
 participation_added
 visibleRoundCount de l’instrument
-baseOrderKey de la participation
+baseOrderKey / roundOrderKey de la participation
 ```
 
 Si une de ces appearances reçoit ensuite une action spécifique, elle est matérialisée.
@@ -982,28 +986,46 @@ Ce musicien a des passages verrouillés à venir. Ils seront retirés si vous le
 ### Où dans l’UI
 
 - drawer ajout participant ;
-- drawer édition participant, ajout d’un instrument ;
-- option “Ajouter un participant” depuis un gap autorisé.
+- drawer édition participant, ajout d’un instrument.
 
-### Payload
+L’ajout de participant entre deux cards est hors V0 et déplacé en V1.
+
+### Payload V0
 
 ```js
 {
   participationId: "participation_nicolas_guitar",
   participantId: "participant_nicolas",
   instrumentId: "guitar",
-  insertionMode: "end_of_round_1",
-  baseOrderKey: "..."
+  insertionMode: "end_of_visible_rounds",
+  startAppearanceIndex: 1,
+  afterTarget: null,
+  beforeTarget: null,
+  baseOrderKey: "order_..."
 }
 ```
+
+Modes autorisés en V0 :
+
+```txt
+end_of_visible_rounds
+```
+
+Modes exclus de la V0 :
+
+```txt
+between_targets
+```
+
+La base de données n’étant pas en production, il n’est pas nécessaire de conserver de compatibilité legacy pour `between_targets`.
 
 ### Conséquences sur la liste
 
 - crée une participation ;
 - crée ou rend calculable `appearanceIndex 1` ;
-- ajoute l’appearance 1 selon `baseOrderKey` ;
-- si plusieurs rounds sont visibles, génère aussi les appearances correspondantes dans chaque round visible ;
-- les rounds futurs non visibles seront générés plus tard selon le même `baseOrderKey`.
+- ajoute l’appearance 1 à la fin du round 1 ;
+- si plusieurs rounds sont visibles, génère aussi les appearances correspondantes à la fin de chaque round visible ;
+- les rounds futurs non visibles seront générés plus tard selon le même `baseOrderKey` / `roundOrderKey`.
 
 ### Cas standard
 
@@ -1019,51 +1041,14 @@ Ajouter participant via CTA principal
 ```txt
 Round 1 et Round 2 sont visibles.
 Paul rejoint la colonne guitare.
+Avant : Noé, Iris, Tom, Noé', Iris', Tom'
 
 Résultat :
 - Paul guitare appearance 1 est à la fin du Round 1.
 - Paul guitare appearance 2 est à la fin du Round 2.
+- Ordre : Noé, Iris, Tom, Paul, Noé', Iris', Tom', Paul'.
 - Paul guitare appearance 3 sera générée à la fin du Round 3 quand Round 3 sera révélé.
 ```
-
-### Ajout entre cards
-
-L’ajout de participant entre cards est autorisé dans n’importe quel round visible.
-
-Règle déterministe :
-
-```txt
-Si l’organisateur ajoute une participation entre deux cards du Round N :
-- créer/afficher l’appearance N à cette position ;
-- créer/afficher les appearances des rounds visibles suivants à la fin de leur round ;
-- ne pas créer d’appearances pour les rounds précédents.
-```
-
-Exemple :
-
-```txt
-Round 1 et Round 2 sont visibles.
-L’organisateur ajoute Paul guitare entre deux cards du Round 2.
-
-Résultat :
-- Paul guitare appearance 1 n’est pas ajoutée au Round 1 ;
-- Paul guitare appearance 2 est insérée entre les deux cards ciblées ;
-- Paul guitare appearance 3 sera générée plus tard si le Round 3 est affiché.
-```
-
-Autre exemple :
-
-```txt
-Round 1, Round 2 et Round 3 sont visibles.
-L’organisateur ajoute Paul guitare entre deux cards du Round 2.
-
-Résultat :
-- pas d’appearance Round 1 ;
-- appearance 2 insérée à la position demandée ;
-- appearance 3 ajoutée à la fin du Round 3.
-```
-
-Conséquence produit : ajouter entre deux cards signifie “faire entrer ce musicien à partir de ce round”, pas “ajouter systématiquement depuis le Round 1”.
 
 ---
 
@@ -1559,8 +1544,10 @@ Il n’y a pas d’édition directe d’un conflict. Pour modifier un conflict, 
 
 ### Où dans l’UI
 
-- clic entre deux cards ;
-- action “Jouer sans…” depuis une card.
+- action “Jouer sans…” depuis une card ;
+- drawer d’appel “Plateau sans [instrument manquant]”.
+
+L’ajout manuel de hole entre deux cards est hors V0.
 
 ### Payload hole manuel
 
@@ -2427,9 +2414,9 @@ Règles :
 
 ## 15.1 Ajout participant via gap dans un round supérieur
 
-Validé : autorisé dans les rounds supérieurs visibles.
+Décision mise à jour : hors V0, déplacé en V1.
 
-Règle : ajouter entre deux cards du Round N ajoute les appearances à partir du Round N, pas dans les rounds précédents.
+Règle V0 : aucun ajout participant via gap entre cards. Toute nouvelle participation démarre au round 1 et reçoit une appearance à la fin de chaque round déjà visible de son instrument.
 
 ## 15.2 `appearance_skipped` sur une card linkée
 
