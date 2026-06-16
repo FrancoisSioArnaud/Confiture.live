@@ -96,14 +96,41 @@ La nouvelle participation reçoit une appearance à la fin de chaque round déj�
 
 ---
 
-## 5. Appearances jouées
+## 5. Appearances jouées et hiérarchie d’ordre
 
 Une appearance jouée ne doit pas être déplacée visuellement par un ajout ultérieur.
 
-Si une insertion logique en fin de round 1 entrerait en conflit avec une card déjà jouée du round 2, la priorité est :
+Si une insertion logique en fin de round 1 entrerait en conflit avec une card déjà jouée du round 2, `played` gagne contre l’ordre round-first.
+
+Exemple :
 
 ```txt
-played > locked > link > conflict > manual order > base order
+Avant : A, B, C, A', B', C'
+A, B, C et A' sont joués.
+Ajout de D.
+Après : A, B, C, A', D, B', C', D'
 ```
 
-Le code doit éviter de réordonner brutalement les cards jouées.
+À ne pas faire :
+
+```txt
+A, B, C, D, A', B', C', D'
+```
+
+La hiérarchie complète est définie dans `order-resolution-hierarchy-spec.md` :
+
+```txt
+0. removed / left / hidden
+1. played
+2. locked
+3. anchor de la dernière action utilisateur
+4. décisions d’appel : appearance_skipped / remplacement / faire sans musicien
+5. conflict
+6. link
+7. manual order existant
+8. round / appearanceIndex
+9. base order
+10. fallback stable par id
+```
+
+Le code doit éviter de réordonner brutalement les cards jouées et doit réconcilier les contraintes globalement à chaque action qui modifie l’ordre.
