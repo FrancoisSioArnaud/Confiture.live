@@ -22,7 +22,7 @@ def create_event_log():
         schema_version=1,
         payload={"source": "admin-test"},
     )
-    JamEvent.objects.create(
+    event = JamEvent.objects.create(
         jam=jam,
         transaction=transaction,
         event_id="event_admin",
@@ -33,7 +33,15 @@ def create_event_log():
         client_sequence_number=1,
         server_sequence_number=1,
     )
-    return jam
+    snapshot = JamSnapshot.objects.create(
+        jam=jam,
+        snapshot_id="snapshot_admin",
+        client_id="client_admin",
+        last_server_sequence_number=1,
+        schema_version=1,
+        payload={"projection": {"jamId": "jam_admin"}},
+    )
+    return jam, transaction, event, snapshot
 
 
 def login_superuser(client):
@@ -44,6 +52,18 @@ def login_superuser(client):
     )
     assert client.login(username="admin", password="admin-password-for-test")
     return user
+
+
+def run_admin_delete_selected(client, admin_url_name, object_id):
+    return client.post(
+        reverse(admin_url_name),
+        {
+            "action": "delete_selected",
+            "_selected_action": [str(object_id)],
+            "post": "yes",
+        },
+        follow=True,
+    )
 
 
 def test_admin_index_loads_for_superuser(client):
@@ -77,6 +97,36 @@ def test_jam_event_changelist_loads_for_superuser(client):
 
     assert response.status_code == 200
     assert b"jam_created" in response.content
+
+
+def test_event_transaction_and_snapshot_admins_allow_delete_selected(client):
+    _jam, transaction, event, snapshot = create_event_log()
+    login_superuser(client)
+
+    response = run_admin_delete_selected(client, "admin:jams_jamsnapshot_changelist", snapshot.pk)
+    assert response.status_code == 200
+    assert not JamSnapshot.objects.filter(pk=snapshot.pk).exists()
+
+    response = run_admin_delete_selected(client, "admin:jams_jamevent_changelist", event.pk)
+    assert response.status_code == 200
+    assert not JamEvent.objects.filter(pk=event.pk).exists()
+
+    response = run_admin_delete_selected(client, "admin:jams_jamtransaction_changelist", transaction.pk)
+    assert response.status_code == 200
+    assert not JamTransaction.objects.filter(pk=transaction.pk).exists()
+
+
+def test_jam_admin_delete_selected_cascades_event_store_records(client):
+    jam, transaction, event, snapshot = create_event_log()
+    login_superuser(client)
+
+    response = run_admin_delete_selected(client, "admin:jams_jam_changelist", jam.pk)
+
+    assert response.status_code == 200
+    assert not Jam.objects.filter(pk=jam.pk).exists()
+    assert not JamTransaction.objects.filter(pk=transaction.pk).exists()
+    assert not JamEvent.objects.filter(pk=event.pk).exists()
+    assert not JamSnapshot.objects.filter(pk=snapshot.pk).exists()
 
 
 def test_pretty_json_handles_dict_list_json_string_and_raw_string():

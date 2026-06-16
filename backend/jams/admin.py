@@ -23,14 +23,22 @@ def pretty_json(value):
     return format_html("<pre style='white-space: pre-wrap; margin: 0;'>{}</pre>", content)
 
 
-class EventSourcingReadOnlyAdmin(admin.ModelAdmin):
-    """Protect append-only event-sourcing records from accidental admin edits."""
+class EventSourcingRecordAdmin(admin.ModelAdmin):
+    """Expose event-sourcing records as read-only rows, but allow admin cleanup deletes.
+
+    The V0 admin is an operational tool for a non-production dataset. Records must
+    not be edited in place, because their payloads are part of the event log, but
+    superusers may delete selected snapshots, transactions and events when cleaning
+    test data.
+    """
+
+    actions = ["delete_selected"]
 
     def has_add_permission(self, request):
         return False
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        return True
 
 
 @admin.register(Jam)
@@ -52,6 +60,10 @@ class JamAdmin(admin.ModelAdmin):
     list_filter = ("status", "link_reorder_strategy", "created_at")
     readonly_fields = ("jam_id", "latest_server_sequence_number", "created_at", "updated_at", "pretty_metadata")
     ordering = ("-created_at",)
+    actions = ["delete_selected"]
+
+    def has_delete_permission(self, request, obj=None):
+        return True
 
     def get_queryset(self, request):
         return super().get_queryset(request).prefetch_related("transactions", "events")
@@ -70,7 +82,7 @@ class JamAdmin(admin.ModelAdmin):
 
 
 @admin.register(JamTransaction)
-class JamTransactionAdmin(EventSourcingReadOnlyAdmin):
+class JamTransactionAdmin(EventSourcingRecordAdmin):
     list_display = (
         "id",
         "transaction_id",
@@ -105,7 +117,7 @@ class JamTransactionAdmin(EventSourcingReadOnlyAdmin):
 
 
 @admin.register(JamEvent)
-class JamEventAdmin(EventSourcingReadOnlyAdmin):
+class JamEventAdmin(EventSourcingRecordAdmin):
     list_display = (
         "id",
         "event_id",
@@ -139,7 +151,7 @@ class JamEventAdmin(EventSourcingReadOnlyAdmin):
 
 
 @admin.register(JamSnapshot)
-class JamSnapshotAdmin(EventSourcingReadOnlyAdmin):
+class JamSnapshotAdmin(EventSourcingRecordAdmin):
     list_display = ("id", "snapshot_id", "jam", "client_id", "last_server_sequence_number", "schema_version", "created_at")
     search_fields = ("snapshot_id", "jam__jam_id", "jam__name", "client_id")
     list_filter = ("schema_version", "created_at")

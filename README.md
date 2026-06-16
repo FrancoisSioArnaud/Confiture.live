@@ -44,27 +44,25 @@ Ne modifiez jamais une migration déjà appliquée sur un environnement existant
 
 ## Fichiers statiques Django admin en production
 
-L’admin Django (`/admin/`) a besoin des static files collectés dans `backend/staticfiles`.
-Après un déploiement backend, exécuter :
+L’admin Django (`/admin/`) a besoin des static files collectés par Django puis publiés dans le dossier statique réellement servi par Nginx.
+
+Le script `./deploy` exécute désormais :
 
 ```bash
-cd backend
-source venv/bin/activate
 python manage.py collectstatic --noinput
+sudo rsync -a --delete backend/staticfiles/ /var/www/confiture.live/static/
 ```
 
-Nginx doit servir `/static/` depuis ce dossier :
+Avec la configuration Nginx actuelle (`root /var/www/confiture.live;`), l’URL `/static/admin/css/base.css` pointe donc vers :
 
-```nginx
-location /static/ {
-    alias /home/confiture/confiture.live/backend/staticfiles/;
-}
+```txt
+/var/www/confiture.live/static/admin/css/base.css
 ```
 
-Test rapide :
+Test rapide après déploiement :
 
 ```bash
-curl -I -H "Host: confiture.live" http://127.0.0.1/static/admin/css/base.css
+curl -I https://confiture.live/static/admin/css/base.css
 ```
 
 Le CSS admin est correctement servi si la réponse est `200 OK`.
