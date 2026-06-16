@@ -65,4 +65,61 @@ describe('httpClient', () => {
 
     await expect(httpClient('/jams/1/')).resolves.toBeNull();
   });
+
+  it('adds the Django CSRF token header for unsafe requests when the cookie exists', async () => {
+    document.cookie = 'csrftoken=csrf-token-123; path=/';
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(httpClient('/jams/', { method: 'POST', body: JSON.stringify({ name: 'Jam' }) })).resolves.toEqual({ ok: true });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/jams/', expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({
+        'X-CSRFToken': 'csrf-token-123',
+      }),
+    }));
+  });
+
+  it('does not add a CSRF token header for safe requests', async () => {
+    document.cookie = 'csrftoken=csrf-token-456; path=/';
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ jams: [] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(httpClient('/jams/', { method: 'GET' })).resolves.toEqual({ jams: [] });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/jams/', expect.objectContaining({
+      method: 'GET',
+      headers: expect.not.objectContaining({
+        'X-CSRFToken': expect.any(String),
+      }),
+    }));
+  });
+
+  it('keeps an explicit CSRF header when one is provided by the caller', async () => {
+    document.cookie = 'csrftoken=csrf-token-cookie; path=/';
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(httpClient('/jams/', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Jam' }),
+      headers: { 'X-CSRFToken': 'csrf-token-explicit' },
+    })).resolves.toEqual({ ok: true });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/jams/', expect.objectContaining({
+      headers: expect.objectContaining({
+        'X-CSRFToken': 'csrf-token-explicit',
+      }),
+    }));
+  });
 });

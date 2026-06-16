@@ -74,14 +74,51 @@ function parseJsonResponse(response, rawBody) {
   }
 }
 
+const CSRF_SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE']);
+
+function getCookie(name) {
+  if (typeof document === 'undefined' || !document.cookie) {
+    return null;
+  }
+
+  const encodedName = `${encodeURIComponent(name)}=`;
+  const cookie = document.cookie
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(encodedName));
+
+  return cookie ? decodeURIComponent(cookie.slice(encodedName.length)) : null;
+}
+
+function normalizeHeaderName(name) {
+  return name.toLowerCase();
+}
+
+function hasHeader(headers, name) {
+  const normalizedName = normalizeHeaderName(name);
+  return Object.keys(headers).some((headerName) => normalizeHeaderName(headerName) === normalizedName);
+}
+
+function buildHeaders(options) {
+  const headers = {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+  const method = (options.method || 'GET').toUpperCase();
+  const csrfToken = getCookie('csrftoken');
+
+  if (!CSRF_SAFE_METHODS.has(method) && csrfToken && !hasHeader(headers, 'X-CSRFToken')) {
+    headers['X-CSRFToken'] = csrfToken;
+  }
+
+  return headers;
+}
+
 export async function httpClient(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers: buildHeaders(options),
   });
   const rawBody = await response.text();
   const payload = parseJsonResponse(response, rawBody);
