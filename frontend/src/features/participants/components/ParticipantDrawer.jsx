@@ -72,6 +72,7 @@ export function ParticipantDrawer({ open, mode = 'create', projection, participa
   const [draft, setDraft] = useState({ name: '', selectedInstrumentIds: [], customInstrumentLabels: {}, initialLinkedInstrumentPairs: [] });
   const [error, setError] = useState('');
   const [pendingRemovalConfirm, setPendingRemovalConfirm] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -88,6 +89,7 @@ export function ParticipantDrawer({ open, mode = 'create', projection, participa
     });
     setError('');
     setPendingRemovalConfirm(null);
+    setIsSaving(false);
   }, [editableActiveParticipations, insertionContext, instruments, mode, open, participant, projection]);
 
   function toggleInstrument(instrumentId) {
@@ -113,7 +115,8 @@ export function ParticipantDrawer({ open, mode = 'create', projection, participa
     setDraft((current) => ({ ...current, customInstrumentLabels: { ...current.customInstrumentLabels, [instrumentId]: value } }));
   }
 
-  function save({ confirmedRemovedParticipationIds = [] } = {}) {
+  async function save({ confirmedRemovedParticipationIds = [] } = {}) {
+    if (isSaving) return;
     const validation = validateParticipantDraft({ draft, projection, participantId, instruments });
     if (!validation.ok) {
       setError(validation.error);
@@ -135,13 +138,18 @@ export function ParticipantDrawer({ open, mode = 'create', projection, participa
       setError(result.error);
       return;
     }
-    if (result.transaction) {
-      onTransaction(result.transaction);
-      const eventTypes = result.transaction.events.map((event) => event.type);
-      if (mode === 'edit' && eventTypes.includes('participation_added')) onFeedback?.('Instrument ajouté au musicien');
-      if (mode === 'edit' && eventTypes.includes('participation_removed')) onFeedback?.('Instrument retiré');
+    setIsSaving(true);
+    try {
+      if (result.transaction) {
+        await Promise.resolve(onTransaction(result.transaction));
+        const eventTypes = result.transaction.events.map((event) => event.type);
+        if (mode === 'edit' && eventTypes.includes('participation_added')) onFeedback?.('Instrument ajouté au musicien');
+        if (mode === 'edit' && eventTypes.includes('participation_removed')) onFeedback?.('Instrument retiré');
+      }
+      onClose();
+    } finally {
+      setIsSaving(false);
     }
-    onClose();
   }
 
   const selected = new Set(draft.selectedInstrumentIds);
@@ -198,8 +206,8 @@ export function ParticipantDrawer({ open, mode = 'create', projection, participa
         </Box>
         <Box sx={{ position: 'sticky', bottom: 0, p: 2, bgcolor: 'background.paper', borderTop: 1, borderColor: 'divider' }}>
           <Stack direction="row" spacing={1}>
-            <Button onClick={onClose} fullWidth>Annuler</Button>
-            <Button variant="contained" onClick={() => save()} disabled={!hasChanges} fullWidth>{mode === 'create' ? 'Ajouter le musicien' : 'Enregistrer'}</Button>
+            <Button onClick={onClose} disabled={isSaving} fullWidth>Annuler</Button>
+            <Button variant="contained" onClick={() => save()} disabled={!hasChanges || isSaving} loading={isSaving} fullWidth>{mode === 'create' ? 'Ajouter le musicien' : 'Enregistrer'}</Button>
           </Stack>
         </Box>
       </Drawer>

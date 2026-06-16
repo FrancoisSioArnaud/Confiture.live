@@ -153,6 +153,10 @@ export function buildEditParticipantTransaction({ jamId, clientId, clientSequenc
   const addedInstrumentIds = validation.draft.selectedInstrumentIds.filter((instrumentId) => !activeByInstrument.has(instrumentId));
   if (participant?.status === 'left' && addedInstrumentIds.length > 0) return { ok: false, error: 'Impossible d’ajouter un instrument à un musicien marqué parti.' };
 
+  const impactedRemovals = impactedRemovedParticipations({ projection, participantId, selectedInstrumentIds: validation.draft.selectedInstrumentIds, instruments });
+  const unconfirmedImpactedRemovals = impactedRemovals.filter((participation) => !confirmedRemovedParticipationIds.includes(participation.participationId));
+  if (unconfirmedImpactedRemovals.length > 0) return { ok: false, error: 'Confirmation requise pour retirer cet instrument.' };
+
   const events = [];
   if (participant?.name !== validation.draft.name) events.push(participantUpdated({ participantId, name: validation.draft.name }));
 
