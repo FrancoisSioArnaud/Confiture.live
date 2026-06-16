@@ -1,7 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 import { projectJamState } from '../projection/projectJamState';
 import { acquireLease, heartbeatLease, releaseLease, takeoverLease } from '../sync/clientSession';
-import { getLatestLocalSnapshot, getLocalTransactions, saveLocalJam, saveSnapshot } from '../sync/localDb';
+import { getLatestLocalSnapshot, getLocalTransactions, saveLocalJam, saveLocalTransaction, saveSnapshot, saveSyncState } from '../sync/localDb';
 import { enqueueTransaction, hydrateFromServer as hydrateTransactionsFromServer, pushPendingTransactions, scheduleSync } from '../sync/syncQueue';
 
 function flattenEvents(transactions) {
@@ -12,6 +12,24 @@ async function rebuildFromLocal(jamId) {
   const [transactions, snapshot] = await Promise.all([getLocalTransactions(jamId), getLatestLocalSnapshot(jamId)]);
   const projection = projectJamState({ snapshot, transactions });
   return { transactions, events: flattenEvents(transactions), snapshot, projection };
+}
+
+function latestServerSequenceNumberFromPayload(payload, transactions) {
+  const explicit = payload.latestServerSequenceNumber ?? payload.jam?.latestServerSequenceNumber;
+  if (Number.isInteger(explicit)) return explicit;
+  return Math.max(0, ...transactions.map((transaction) => transaction.serverSequenceNumberEnd ?? 0));
+}
+
+async function persistServerPayload(jamId, payload, transactions, snapshot) {
+  await Promise.all([
+    payload.jam ? saveLocalJam(payload.jam) : Promise.resolve(),
+    ...transactions.map((transaction) => saveLocalTransaction(jamId, transaction)),
+    snapshot ? saveSnapshot(jamId, snapshot) : Promise.resolve(),
+  ]);
+  await saveSyncState(jamId, {
+    lastServerSequenceNumber: latestServerSequenceNumberFromPayload(payload, transactions),
+    status: 'synced',
+  });
 }
 
 export const jamStore = createStore((set, get) => ({
@@ -48,10 +66,11 @@ export const jamStore = createStore((set, get) => ({
     return get().reloadFromLocalDb(jamId);
   },
 
-  hydrateFromPayload(jamId, payload) {
+  async hydrateFromPayload(jamId, payload) {
     const transactions = payload.transactions ?? [];
     const snapshot = payload.snapshot ?? null;
     const projection = projectJamState({ snapshot, transactions, events: payload.events ?? [] });
+    await persistServerPayload(jamId, payload, transactions, snapshot);
     set({ jamId, transactions, events: flattenEvents(transactions), snapshot, projection, projectionWarnings: projection.projectionWarnings, lastProjectedAt: new Date().toISOString() });
     return projection;
   },

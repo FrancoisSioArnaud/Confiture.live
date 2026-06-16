@@ -22,7 +22,7 @@ export function JamDetailPage() {
   const [configOpen, setConfigOpen] = useState(false);
   const { enqueueFeedback } = useFeedback();
   const [participantDrawer, setParticipantDrawer] = useState({ open: false, mode: 'create', participantId: null, insertionContext: null });
-  const [sessionState, setSessionState] = useState({ status: 'acquiring', message: null });
+  const [sessionState, setSessionState] = useState({ status: 'acquiring', message: null, canTakeover: false, activeClientId: null });
   const clientSequenceRef = useRef(0);
   const projection = useJamStoreState((state) => state.projection);
   const transactions = useJamStoreState((state) => state.transactions);
@@ -32,8 +32,8 @@ export function JamDetailPage() {
   const { data, isLoading, isError, error } = useQuery({ queryKey: ['jam', jamId], queryFn: () => getJam(jamId, { includeSnapshot: 'true' }) });
 
   useEffect(() => {
-    if (data) jamStore.getState().hydrateFromPayload(jamId, data);
-  }, [data, jamId]);
+    if (data) jamStore.getState().hydrateFromPayload(jamId, data).catch((error) => enqueueFeedback(`Hydratation locale impossible : ${error?.message ?? 'erreur inconnue'}`, 'warning'));
+  }, [data, enqueueFeedback, jamId]);
 
   useEffect(() => {
     clientSequenceRef.current = Math.max(clientSequenceRef.current, transactions.at(-1)?.clientSequenceNumber ?? 0);
@@ -41,20 +41,23 @@ export function JamDetailPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setSessionState({ status: 'acquiring', message: null });
+    setSessionState({ status: 'acquiring', message: null, canTakeover: false, activeClientId: null });
     jamStore.getState().acquireSession({ jamId, clientId, deviceLabel: 'Navigateur' })
       .then((session) => {
         if (cancelled) return;
-        setSessionState({ status: 'active', message: null });
+        setSessionState({ status: 'active', message: null, canTakeover: false, activeClientId: null });
         const intervalMs = Math.max(1000, (session?.heartbeatIntervalSeconds ?? 10) * 1000);
         startHeartbeat({ jamId, intervalMs });
       })
       .catch((error) => {
         if (cancelled) return;
-        const locked = error?.status === 423 || error?.response?.status === 423 || error?.data?.error === 'jam_locked_by_other_client';
+        const body = error?.payload?.body ?? error?.data ?? {};
+        const locked = error?.status === 423 || error?.response?.status === 423 || body?.error === 'jam_locked_by_other_client';
         setSessionState({
           status: locked ? 'read_only' : 'unavailable',
           message: locked ? 'Cette jam est ouverte ailleurs : lecture seule pour éviter un conflit.' : `Session d’édition indisponible : ${error?.message ?? 'erreur inconnue'}`,
+          canTakeover: Boolean(locked && body?.canForceTakeover),
+          activeClientId: body?.activeClientId ?? null,
         });
       });
     return () => {
@@ -73,6 +76,24 @@ export function JamDetailPage() {
 
   const jam = projection?.jam ?? data?.jam;
   const canEdit = sessionState.status === 'active';
+
+  async function takeoverEditingSession() {
+    setSessionState((current) => ({ ...current, status: 'taking_over', message: 'Reprise du contrôle en cours…' }));
+    try {
+      const session = await jamStore.getState().takeoverSession({ jamId, clientId, previousClientId: sessionState.activeClientId, deviceLabel: 'Navigateur' });
+      setSessionState({ status: 'active', message: null, canTakeover: false, activeClientId: null });
+      const intervalMs = Math.max(1000, (session?.heartbeatIntervalSeconds ?? 10) * 1000);
+      startHeartbeat({ jamId, intervalMs });
+      enqueueFeedback('Contrôle de la jam repris');
+    } catch (error) {
+      setSessionState({
+        status: 'read_only',
+        message: `Reprise impossible : ${error?.message ?? 'erreur inconnue'}`,
+        canTakeover: true,
+        activeClientId: sessionState.activeClientId,
+      });
+    }
+  }
 
   function withReservedClientSequence(transaction) {
     const nextSequence = Math.max(clientSequenceRef.current + 1, transaction.clientSequenceNumber ?? 1);
@@ -108,7 +129,14 @@ export function JamDetailPage() {
         </Stack>
       </Paper>
 
-      {sessionState.message ? <Alert severity={sessionState.status === 'read_only' ? 'warning' : 'error'}>{sessionState.message}</Alert> : null}
+      {sessionState.message ? (
+        <Alert
+          severity={sessionState.status === 'read_only' || sessionState.status === 'taking_over' ? 'warning' : 'error'}
+          action={sessionState.canTakeover ? <Button color="inherit" size="small" onClick={takeoverEditingSession}>Reprendre le contrôle</Button> : null}
+        >
+          {sessionState.message}
+        </Alert>
+      ) : null}
 
       <Paper sx={{ p: { xs: 1.5, sm: 2 } }}>
         <JamTable

@@ -192,6 +192,59 @@ def test_post_valid_transaction_and_get_transactions(client):
     assert transactions[0]["events"][0]["serverSequenceNumber"] == 2
 
 
+def test_post_participant_transaction_persists_expected_events(client):
+    create_jam_with_instruments(client, jam_id="jam_participant")
+    lease = acquire(client, jam_id="jam_participant")
+
+    response = client.post("/api/jams/jam_participant/transactions/", {
+        "clientId": "client_1",
+        "leaseToken": lease["leaseToken"],
+        "baseServerSequenceNumber": 3,
+        "transaction": {
+            "transactionId": "transaction_add_participant",
+            "jamId": "jam_participant",
+            "clientSequenceNumber": 2,
+            "schemaVersion": 1,
+            "events": [
+                {
+                    "eventId": "event_participant_created",
+                    "jamId": "jam_participant",
+                    "type": "participant_created",
+                    "payload": {"participantId": "participant_nico", "name": "Nico"},
+                    "schemaVersion": 1,
+                },
+                {
+                    "eventId": "event_participation_added",
+                    "jamId": "jam_participant",
+                    "type": "participation_added",
+                    "payload": {
+                        "participationId": "participation_nico_guitar",
+                        "participantId": "participant_nico",
+                        "instrumentId": "instrument_guitar",
+                        "customInstrumentLabel": None,
+                        "insertionMode": "end_of_visible_rounds",
+                        "startAppearanceIndex": 1,
+                        "afterTarget": None,
+                        "beforeTarget": None,
+                        "baseOrderKey": "position_participation_nico_guitar",
+                    },
+                    "schemaVersion": 1,
+                },
+            ],
+        },
+    }, content_type="application/json")
+
+    assert response.status_code == 201
+    assert response.json()["serverSequenceNumberStart"] == 4
+    assert response.json()["latestServerSequenceNumber"] == 5
+
+    jam = Jam.objects.get(jam_id="jam_participant")
+    events = JamEvent.objects.filter(jam=jam).order_by("server_sequence_number")
+    assert jam.latest_server_sequence_number == 5
+    assert [event.type for event in events][3:] == ["participant_created", "participation_added"]
+    assert events[4].payload["instrumentId"] == "instrument_guitar"
+
+
 def test_rejects_transaction_without_lease_token(client):
     create_jam(client)
     acquire(client)

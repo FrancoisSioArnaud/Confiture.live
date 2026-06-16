@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { jamStore } from '../jam/jamStore';
+import { buildCreateParticipantTransaction } from '../participants/utils/buildParticipantDrawerTransaction';
 import { projectJamState } from '../projection/projectJamState';
-import { getClientSession, getLocalTransactions, getPendingTransactions, getSyncState, resetLocalDbForTests, saveSyncState } from './localDb';
+import { getClientSession, getLocalTransactions, getPendingTransactions, getSyncState, resetLocalDbForTests, saveClientSession, saveSyncState } from './localDb';
 import { pushPendingTransactions } from './syncQueue';
 import { getSyncStatus, SYNC_STATUS } from './syncStatus';
 
@@ -25,6 +26,46 @@ function transaction(sequence = 1) {
       payload: sequence === 1 ? { jamId: 'jam_sync', name: 'Jam sync', indicativeDate: '2026-01-15', linkReorderStrategy: 'move_to_first' } : { name: 'Jam sync updated' },
     }],
   };
+}
+
+function createJamPayload() {
+  return {
+    jam: { jamId: 'jam_sync', name: 'Jam sync', indicativeDate: null, latestServerSequenceNumber: 2 },
+    snapshot: null,
+    transactions: [{
+      ...transaction(1),
+      serverSequenceNumberStart: 1,
+      serverSequenceNumberEnd: 2,
+      events: [
+        transaction(1).events[0],
+        {
+          eventId: 'event_instrument_guitar',
+          transactionId: 'transaction_1',
+          jamId: 'jam_sync',
+          clientId: 'client_1',
+          clientSequenceNumber: 1,
+          eventIndexInTransaction: 1,
+          serverSequenceNumber: 2,
+          schemaVersion: 1,
+          type: 'instrument_added',
+          payload: { instrumentId: 'instrument_guitar', label: 'Guitare', orderKey: 'order_0', visible: true, isDefault: true },
+        },
+      ],
+    }],
+  };
+}
+
+function buildNicoGuitarTransaction(projection) {
+  const result = buildCreateParticipantTransaction({
+    jamId: 'jam_sync',
+    clientId: 'client_1',
+    clientSequenceNumber: 2,
+    projection,
+    instruments: [{ instrumentId: 'instrument_guitar', label: 'Guitare', orderKey: 'order_0', visible: true }],
+    draft: { name: 'Nico', selectedInstrumentIds: ['instrument_guitar'], initialLinkedInstrumentPairs: [], customInstrumentLabels: {} },
+  });
+  expect(result.ok).toBe(true);
+  return result.transaction;
 }
 
 beforeEach(async () => {
@@ -115,6 +156,74 @@ describe('local-first sync layer', () => {
 
     expect(await getLocalTransactions('jam_sync')).toHaveLength(1);
     expect(await getSyncState('jam_sync')).toMatchObject({ lastServerSequenceNumber: 3, status: SYNC_STATUS.SYNCED });
+  });
+
+  it('persists full jam payload hydration so subsequent pushes use the server sequence base', async () => {
+    await jamStore.getState().hydrateFromPayload('jam_sync', {
+      jam: { jamId: 'jam_sync', name: 'Jam sync', indicativeDate: '2026-01-15', latestServerSequenceNumber: 7 },
+      snapshot: null,
+      transactions: [{
+        ...transaction(1),
+        serverSequenceNumberStart: 1,
+        serverSequenceNumberEnd: 7,
+      }],
+    });
+
+    expect(await getLocalTransactions('jam_sync')).toHaveLength(1);
+    expect(await getSyncState('jam_sync')).toMatchObject({ lastServerSequenceNumber: 7, status: SYNC_STATUS.SYNCED });
+
+    await jamStore.getState().applyLocalTransaction(transaction(2), { sync: false });
+    const api = { pushTransaction: vi.fn().mockResolvedValue({ transactionId: 'transaction_2', serverSequenceNumberStart: 8, serverSequenceNumberEnd: 8, latestServerSequenceNumber: 8 }) };
+
+    await pushPendingTransactions({ jamId: 'jam_sync', api });
+
+    expect(api.pushTransaction).toHaveBeenCalledWith('jam_sync', expect.objectContaining({ baseServerSequenceNumber: 7 }));
+  });
+
+  it('applies and syncs a first participant transaction after server hydration', async () => {
+    await jamStore.getState().hydrateFromPayload('jam_sync', createJamPayload());
+    await saveClientSession('jam_sync', { clientId: 'client_1', leaseToken: 'lease_1' });
+
+    const participantTransaction = buildNicoGuitarTransaction(jamStore.getState().projection);
+    await jamStore.getState().applyLocalTransaction(participantTransaction, { sync: false });
+    expect(jamStore.getState().projection.participants[participantTransaction.events[0].payload.participantId].name).toBe('Nico');
+
+    const api = { pushTransaction: vi.fn().mockResolvedValue({ transactionId: participantTransaction.transactionId, serverSequenceNumberStart: 3, serverSequenceNumberEnd: 4, latestServerSequenceNumber: 4 }) };
+    await pushPendingTransactions({ jamId: 'jam_sync', api });
+
+    expect(api.pushTransaction).toHaveBeenCalledWith('jam_sync', expect.objectContaining({
+      clientId: 'client_1',
+      leaseToken: 'lease_1',
+      baseServerSequenceNumber: 2,
+      transaction: expect.objectContaining({
+        events: expect.arrayContaining([
+          expect.objectContaining({ type: 'participant_created' }),
+          expect.objectContaining({ type: 'participation_added' }),
+        ]),
+      }),
+    }));
+    expect(await getPendingTransactions('jam_sync')).toEqual([]);
+    expect(await getSyncState('jam_sync')).toMatchObject({ lastServerSequenceNumber: 4, status: SYNC_STATUS.SYNCED });
+  });
+
+  it('reloads a hydrated participant from local storage after a page refresh', async () => {
+    await jamStore.getState().hydrateFromPayload('jam_sync', createJamPayload());
+    const participantTransaction = {
+      ...buildNicoGuitarTransaction(jamStore.getState().projection),
+      serverSequenceNumberStart: 3,
+      serverSequenceNumberEnd: 4,
+    };
+    await jamStore.getState().hydrateFromPayload('jam_sync', {
+      ...createJamPayload(),
+      jam: { ...createJamPayload().jam, latestServerSequenceNumber: 4 },
+      transactions: [...createJamPayload().transactions, participantTransaction],
+    });
+
+    jamStore.setState({ jamId: null, transactions: [], events: [], snapshot: null, projection: projectJamState(), projectionWarnings: [], lastProjectedAt: null });
+    const projection = await jamStore.getState().reloadFromLocalDb('jam_sync');
+
+    expect(Object.values(projection.participants).map((participant) => participant.name)).toContain('Nico');
+    expect(projection.columns[0].cards[0].participantId).toBe(participantTransaction.events[0].payload.participantId);
   });
 
   it('acquires and heartbeats a client session', async () => {

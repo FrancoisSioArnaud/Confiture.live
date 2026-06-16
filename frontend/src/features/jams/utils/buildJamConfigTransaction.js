@@ -11,8 +11,9 @@ import { createId } from '../../../shared/utils/createId';
 
 export function buildJamConfigTransaction({ jamId, clientId, clientSequenceNumber, currentJam, currentInstruments, draft }) {
   const events = [];
-  if (draft.name !== currentJam?.name || draft.indicativeDate !== currentJam?.indicativeDate) {
-    events.push(jamUpdated({ name: draft.name, indicativeDate: draft.indicativeDate }));
+  const indicativeDate = draft.indicativeDate || null;
+  if (draft.name !== currentJam?.name || indicativeDate !== (currentJam?.indicativeDate ?? null)) {
+    events.push(jamUpdated({ name: draft.name, indicativeDate }));
   }
   if (draft.linkReorderStrategy !== currentJam?.linkReorderStrategy) {
     events.push(jamLinkReorderStrategyChanged({ previousStrategy: currentJam?.linkReorderStrategy ?? 'move_to_first', nextStrategy: draft.linkReorderStrategy }));

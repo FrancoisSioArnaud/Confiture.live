@@ -321,7 +321,11 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
   const columns = projection?.columns ?? [];
   const jamId = projection?.jam?.jamId;
   if (columns.length === 0) {
-    return <Typography color="text.secondary">Aucun participant</Typography>;
+    return (
+      <Alert severity="warning">
+        Aucun instrument visible dans cette jam. Ajoute ou réactive un instrument dans la configuration pour afficher le tableau.
+      </Alert>
+    );
   }
 
   const cardById = new Map(columns.flatMap((column) => column.cards.map((card) => [card.id, { card, column }])));

@@ -93,6 +93,7 @@ describe('event factories', () => {
       type: EVENT_TYPES.JAM_CREATED,
       payload: { jamId: 'jam_1', name: 'Jam du mercredi', indicativeDate: '2026-06-17', linkReorderStrategy: 'move_to_first' },
     });
+    expect(jamCreated({ jamId: 'jam_1', name: 'Jam sans date', indicativeDate: null, linkReorderStrategy: 'move_to_first' }).payload.indicativeDate).toBeNull();
 
     expect(holeAdded({
       holeId: 'hole_drums_1',

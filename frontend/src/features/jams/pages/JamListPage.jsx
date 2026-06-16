@@ -42,7 +42,7 @@ export function JamListPage() {
 
       <Grid container spacing={2}>
         {jams.map((jam) => (
-          <Grid item xs={12} sm={6} md={4} key={jam.jamId}>
+          <Grid size={{ xs: 12, sm: 6, md: 4 }} key={jam.jamId}>
             <Card variant="outlined" sx={{ height: '100%' }}>
               <CardContent>
                 <Typography variant="h6" fontWeight={800}>{jam.name}</Typography>

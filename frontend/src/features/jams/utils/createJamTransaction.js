@@ -3,22 +3,19 @@ import { instrumentAdded, jamCreated } from '../../transactions/eventFactories';
 import { createId } from '../../../shared/utils/createId';
 import { DEFAULT_INSTRUMENTS } from './defaultInstruments';
 
-export function buildCreateJamTransaction({ name, indicativeDate, clientId, selectedInstrumentIds, customInstruments = [] }) {
+export function buildCreateJamTransaction({ name, indicativeDate = null, clientId, selectedInstrumentIds, customInstruments = [], orderedInstruments = null }) {
   const jamId = createId('jam');
   const selected = new Set(selectedInstrumentIds);
-  const defaultEvents = DEFAULT_INSTRUMENTS.filter((instrument) => selected.has(instrument.instrumentId)).map((instrument, index) => instrumentAdded({
+  const instruments = orderedInstruments ?? [
+    ...DEFAULT_INSTRUMENTS,
+    ...customInstruments.map((label) => ({ instrumentId: createId('instrument'), label, isDefault: false })),
+  ];
+  const instrumentEvents = instruments.filter((instrument) => selected.has(instrument.instrumentId) || (orderedInstruments == null && instrument.isDefault === false)).map((instrument, index) => instrumentAdded({
     instrumentId: instrument.instrumentId,
     label: instrument.label,
     orderKey: `order_${index}`,
     visible: true,
-    isDefault: true,
-  }));
-  const customEvents = customInstruments.map((label, index) => instrumentAdded({
-    instrumentId: createId('instrument'),
-    label,
-    orderKey: `custom_${index}`,
-    visible: true,
-    isDefault: false,
+    isDefault: instrument.isDefault ?? DEFAULT_INSTRUMENTS.some((defaultInstrument) => defaultInstrument.instrumentId === instrument.instrumentId),
   }));
 
   return createTransaction({
@@ -26,6 +23,6 @@ export function buildCreateJamTransaction({ name, indicativeDate, clientId, sele
     clientId,
     clientSequenceNumber: 1,
     label: `Créer ${name}`,
-    events: [jamCreated({ jamId, name, indicativeDate, linkReorderStrategy: 'move_to_first' }), ...defaultEvents, ...customEvents],
+    events: [jamCreated({ jamId, name, indicativeDate, linkReorderStrategy: 'move_to_first' }), ...instrumentEvents],
   });
 }
