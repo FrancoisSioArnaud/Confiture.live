@@ -2,49 +2,55 @@ import { createTheme } from '@mui/material/styles';
 
 export const colors = {
   brand: {
-    primary: '#7b3f00',
-    primaryLight: '#a8672b',
-    primaryDark: '#4f2800',
-    primaryContrast: '#fffaf2',
-    secondary: '#c26a00',
-    secondaryLight: '#de8730',
-    secondaryDark: '#7a3f00',
-    secondaryContrast: '#1f1200',
+    primary: '#8b5cf6',
+    primaryLight: '#a78bfa',
+    primaryDark: '#6d28d9',
+    primaryContrast: '#ffffff',
+    secondary: '#06b6d4',
+    secondaryLight: '#22d3ee',
+    secondaryDark: '#0e7490',
+    secondaryContrast: '#06131a',
   },
   semantic: {
-    success: '#2e7d32',
-    successLight: '#4caf50',
-    successDark: '#1b5e20',
-    warning: '#ed6c02',
-    warningLight: '#ff9800',
+    success: '#22c55e',
+    successLight: '#86efac',
+    successDark: '#15803d',
+    warning: '#f59e0b',
+    warningLight: '#fbbf24',
     warningDark: '#b45309',
-    error: '#d32f2f',
-    errorLight: '#ef5350',
-    errorDark: '#9a1f1f',
-    info: '#0288d1',
-    infoLight: '#03a9f4',
-    infoDark: '#01579b',
+    error: '#ef4444',
+    errorLight: '#f87171',
+    errorDark: '#b91c1c',
+    info: '#38bdf8',
+    infoLight: '#7dd3fc',
+    infoDark: '#0284c7',
   },
   surface: {
-    app: '#fff8ef',
-    paper: '#fffaf2',
-    elevated: '#ffffff',
-    hover: '#f5eadb',
-    selected: '#efe0ca',
-    divider: '#e4d3be',
-    disabledBackground: '#eadfce',
+    app: '#0b1020',
+    paper: '#111827',
+    elevated: '#182033',
+    hover: '#1f2937',
+    selected: '#24324a',
+    divider: '#334155',
+    disabledBackground: '#1e293b',
   },
   text: {
-    primary: '#1f1200',
-    secondary: '#6f5b45',
-    disabled: '#9c8c7c',
+    primary: '#f8fafc',
+    secondary: '#cbd5e1',
+    disabled: '#64748b',
   },
   state: {
-    focusOutline: '#1d4ed8',
-    locked: '#ed6c02',
-    linked: '#7b3f00',
-    conflict: '#d32f2f',
-    played: '#f5eadb',
+    focusOutline: '#facc15',
+
+    // States métier volontairement très distincts
+    locked: '#f59e0b',
+    linked: '#38bdf8',
+    conflict: '#ef4444',
+    played: '#14532d',
+    selectable: '#8b5cf6',
+    selected: '#22c55e',
+    skipped: '#fb7185',
+    hole: '#475569',
   },
 };
 
@@ -55,7 +61,7 @@ const focusVisibleStyle = {
 
 export const theme = createTheme({
   palette: {
-    mode: 'light',
+    mode: 'dark',
     primary: {
       main: colors.brand.primary,
       light: colors.brand.primaryLight,
@@ -72,13 +78,13 @@ export const theme = createTheme({
       main: colors.semantic.success,
       light: colors.semantic.successLight,
       dark: colors.semantic.successDark,
-      contrastText: '#ffffff',
+      contrastText: '#04130a',
     },
     warning: {
       main: colors.semantic.warning,
       light: colors.semantic.warningLight,
       dark: colors.semantic.warningDark,
-      contrastText: '#1f1200',
+      contrastText: '#1f1300',
     },
     error: {
       main: colors.semantic.error,
@@ -90,7 +96,7 @@ export const theme = createTheme({
       main: colors.semantic.info,
       light: colors.semantic.infoLight,
       dark: colors.semantic.infoDark,
-      contrastText: '#ffffff',
+      contrastText: '#04131c',
     },
     background: {
       default: colors.surface.app,
@@ -107,6 +113,7 @@ export const theme = createTheme({
       selected: colors.surface.selected,
       disabled: colors.text.disabled,
       disabledBackground: colors.surface.disabledBackground,
+      focus: colors.surface.selected,
     },
   },
   shape: { borderRadius: 12 },
@@ -154,6 +161,8 @@ export const theme = createTheme({
       styleOverrides: {
         paper: {
           backgroundImage: 'none',
+          backgroundColor: colors.surface.paper,
+          borderLeft: `1px solid ${colors.surface.divider}`,
         },
       },
     },
@@ -161,6 +170,9 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: 'none',
+        },
+        outlined: {
+          borderColor: colors.surface.divider,
         },
       },
     },
