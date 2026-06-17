@@ -455,22 +455,6 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
     if (linked) onFeedback?.('Le groupe lié a été déplacé');
   }
 
-  function cardPlateauIndex(card) {
-    const entry = cardById.get(card.id);
-    return entry ? entry.column.cards.findIndex((candidate) => candidate.id === card.id) : -1;
-  }
-
-  function moveForConflictTarget(anchorCard, targetCard) {
-    if (cardPlateauIndex(anchorCard) !== cardPlateauIndex(targetCard)) return null;
-    if (targetCard.played || targetCard.locked) return { error: 'Conflit impossible : la cible jouée ou verrouillée ne peut pas bouger' };
-    const entry = cardById.get(targetCard.id);
-    const targetIndex = entry.column.cards.findIndex((card) => card.id === targetCard.id);
-    const afterCard = entry.column.cards[targetIndex + 1] ?? null;
-    const beforeCard = entry.column.cards[targetIndex + 2] ?? null;
-    if (!afterCard) return { error: 'Conflit impossible : aucun slot libre pour déplacer la cible' };
-    return { moveTarget: { card: targetCard, afterCard, beforeCard } };
-  }
-
   function selectConflictTarget(card) {
     if (!conflictMode.active) return;
     if (card.type !== 'appearance') {
@@ -495,16 +479,10 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
   function validateConflictMode(scope) {
     const { anchor, target } = conflictMode;
     if (!anchor || !target) return;
-    const existing = activeConflictsBetween(anchor, target, projection.conflicts);
-    const move = existing.length > 0 ? null : moveForConflictTarget(anchor, target);
-    if (move?.error) {
-      onFeedback?.(move.error);
-      return;
-    }
-    const transaction = buildConflictModeTransaction({ jamId, clientId, clientSequenceNumber, projection, anchorCard: anchor, targetCard: target, scope, moveTarget: move?.moveTarget ?? null });
+    const transaction = buildConflictModeTransaction({ jamId, clientId, clientSequenceNumber, projection, anchorCard: anchor, targetCard: target, scope });
     if (transaction) {
       dispatch(transaction);
-      if (transaction.events.some((event) => event.type === 'conflict_created')) onFeedback?.(move?.moveTarget ? 'Conflit créé, passage déplacé' : 'Conflit créé');
+      if (transaction.events.some((event) => event.type === 'conflict_created')) onFeedback?.('Conflit créé');
       if (transaction.events.some((event) => event.type === 'conflict_removed')) onFeedback?.('Conflit supprimé');
     }
     cancelConflictMode();

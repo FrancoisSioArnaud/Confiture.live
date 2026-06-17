@@ -1,8 +1,8 @@
 import { addConflict, removeConflict } from './conflicts';
 import { addHole, getTargetEntity } from './holes';
-import { addLink, removeLink, reapplyActiveLinks } from './links';
+import { addLink, removeLink } from './links';
 import { setLock } from './locks';
-import { getPositionInRound, orderBetween, stableOrderValue } from './ordering';
+import { stableOrderValue } from './ordering';
 import { setPlayed } from './played';
 import { addProjectionWarning } from './projectionWarnings';
 import { ensureVisibleRoundCount } from './rounds';
@@ -64,7 +64,7 @@ export function applyEvent(state, event) {
       state.appearances[payload.appearanceId] = { id: payload.appearanceId, type: 'appearance', ...state.appearances[payload.appearanceId], ...payload, status: 'active', played: false, locked: false, materialized: true, positionInRound: state.appearances[payload.appearanceId]?.positionInRound ?? stableOrderValue(payload.positionKey), roundOrder: state.appearances[payload.appearanceId]?.roundOrder ?? stableOrderValue(payload.positionKey), orderScore: state.appearances[payload.appearanceId]?.orderScore ?? (payload.appearanceIndex * 1_000_000 + stableOrderValue(payload.positionKey)) };
       break;
     case 'appearance_moved_between':
-      moveTargetBetween(state, { type: 'appearance', id: payload.appearanceId }, payload);
+      recordManualMoveIntent(state, event, { type: 'appearance', id: payload.appearanceId }, payload);
       break;
     case 'appearance_removed':
       removeAppearance(state, payload.appearanceId, payload);
@@ -91,7 +91,7 @@ export function applyEvent(state, event) {
       } else addProjectionWarning(state, 'missing_hole', 'hole_removed targets a missing hole.', payload);
       break;
     case 'hole_moved_between':
-      moveTargetBetween(state, { type: 'hole', id: payload.holeId }, payload);
+      recordManualMoveIntent(state, event, { type: 'hole', id: payload.holeId }, payload);
       break;
     case 'hole_locked':
       setLock(state, { type: 'hole', id: payload.holeId }, true);
@@ -109,11 +109,9 @@ export function applyEvent(state, event) {
       break;
     case 'conflict_created':
       addConflict(state, payload);
-      reapplyActiveLinks(state);
       break;
     case 'conflict_removed':
       removeConflict(state, payload.conflictId);
-      reapplyActiveLinks(state);
       break;
     case 'plateau_played':
       payload.targets.forEach((target) => setPlayed(state, target, true, payload.plateauIndex));
@@ -139,6 +137,15 @@ function removeLinksTargeting(state, target) {
   });
 }
 
+
+function removeConflictsTargeting(state, targetIds) {
+  Object.values(state.conflicts).forEach((conflict) => {
+    if (conflict.status === 'active' && conflict.targetIds.some((targetId) => targetIds.includes(targetId))) {
+      conflict.status = 'removed';
+    }
+  });
+}
+
 function parseCalculatedAppearanceId(appearanceId) {
   const match = String(appearanceId).match(/^appearance_(.+)_(\d+)$/);
   if (!match) return null;
@@ -150,6 +157,7 @@ function removeAppearance(state, appearanceId, payload = {}) {
   if (existing) {
     existing.status = 'removed';
     removeLinksTargeting(state, { type: 'appearance', id: appearanceId });
+    removeConflictsTargeting(state, [appearanceId, existing.participationId].filter(Boolean));
     return;
   }
 
@@ -177,6 +185,7 @@ function removeAppearance(state, appearanceId, payload = {}) {
     roundOrder: stableOrderValue(participation.baseOrderKey),
   };
   removeLinksTargeting(state, { type: 'appearance', id: appearanceId });
+  removeConflictsTargeting(state, [appearanceId, participation.participationId].filter(Boolean));
 }
 
 function markParticipant(state, participantId, status, eventId) {
@@ -195,23 +204,24 @@ function markParticipant(state, participantId, status, eventId) {
       if (status === 'removed' || !appearance.played) {
         appearance.status = 'removed';
         removeLinksTargeting(state, { type: 'appearance', id: appearance.appearanceId ?? appearance.id });
+        removeConflictsTargeting(state, [appearance.appearanceId ?? appearance.id, appearance.participationId].filter(Boolean));
       }
     }
   });
 }
 
-function moveTargetBetween(state, target, payload) {
+function recordManualMoveIntent(state, event, target, payload) {
   const entity = getTargetEntity(state, target);
   if (!entity) {
     addProjectionWarning(state, 'missing_target', 'move targets a missing card.', { target, payload });
     return;
   }
-  if (entity.locked || entity.played) {
-    addProjectionWarning(state, 'immobile_target', 'move ignored because target is locked or played.', { target });
-    return;
-  }
-  entity.positionInRound = orderBetween(getTargetEntity(state, payload.afterTarget), getTargetEntity(state, payload.beforeTarget), entity.positionInRound ?? getPositionInRound(entity));
-  entity.roundOrder = entity.positionInRound;
-  entity.manualRoundOrder = entity.positionInRound;
-  entity.orderScore = (entity.appearanceIndex ?? 1) * 1_000_000 + entity.positionInRound;
+  entity.manualOrderHint = {
+    target: { ...target },
+    afterTarget: payload.afterTarget ? { ...payload.afterTarget } : null,
+    beforeTarget: payload.beforeTarget ? { ...payload.beforeTarget } : null,
+    transactionId: event.transactionId ?? null,
+    eventId: event.eventId ?? null,
+    eventIndexInTransaction: event.eventIndexInTransaction ?? 0,
+  };
 }

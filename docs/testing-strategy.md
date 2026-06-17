@@ -115,3 +115,22 @@ Cas minimaux :
 13. replay après undo linéaire produisant un état stable.
 
 Ces tests doivent être indépendants de React et tester le moteur de projection comme une fonction pure.
+
+
+### Pipeline locale UX → replay
+
+Ajouter des tests d'intégration frontend qui traversent le chemin local-first réaliste :
+
+```txt
+builder ou transaction déterministe
+→ applyLocalTransaction
+→ IndexedDB locale
+→ projection
+→ columns affichables
+→ reloadFromLocalDb
+→ même columns
+```
+
+Ces tests doivent vérifier les cards visibles (`projection.columns[*].cards`) plutôt que seulement des champs internes comme `positionInRound`, `orderScore` ou `manualOrderKey`.
+
+Scénarios prioritaires : link créé, drag linké, played/locked + ajout participation, conflict + drag, play without / hole, link_removed, conflict_removed, participant left/removed, et undo.

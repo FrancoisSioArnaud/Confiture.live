@@ -8,7 +8,6 @@ export function addConflict(state, payload) {
     anchorTargetId: payload.anchorTargetId,
     status: 'active',
   };
-  separateConflictTargets(state, state.conflicts[payload.conflictId]);
 }
 
 export function removeConflict(state, conflictId) {
@@ -23,18 +22,8 @@ export function hasConflictBetweenTargets(state, targets) {
   return Object.values(state.conflicts).some((conflict) => conflict.status === 'active' && conflict.targetIds.every((id) => ids.includes(id)));
 }
 
-function separateConflictTargets(state, conflict) {
-  const targetEntities = conflict.targetIds.map((id) => resolveConflictTarget(state, conflict.scope, id)).filter(Boolean);
-  if (targetEntities.length < 2) return;
-  const anchor = resolveConflictTarget(state, conflict.scope, conflict.anchorTargetId) ?? targetEntities[0];
-  targetEntities.forEach((entity) => {
-    if (entity.id === anchor.id || entity.locked || entity.played) return;
-    if (entity.orderScore === anchor.orderScore) entity.orderScore += 1;
-  });
-}
-
-function resolveConflictTarget(state, scope, id) {
-  if (scope === 'appearance') return state.appearances[id];
+export function resolveConflictTarget(state, scope, id) {
+  if (scope === 'appearance') return state.appearances[id] ?? state.holes[id] ?? null;
   const participation = state.participations[id];
   if (!participation) return null;
   return Object.values(state.appearances).find((appearance) => appearance.participationId === participation.participationId && appearance.status !== 'removed') ?? null;

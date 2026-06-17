@@ -72,8 +72,20 @@ export async function saveLocalTransaction(jamId, transaction) {
 
 export async function getLocalTransactions(jamId) {
   const transactions = (await values('localTransactions')).filter((transaction) => transaction.jamId === jamId);
-  return transactions.sort((a, b) => (a.clientSequenceNumber ?? 0) - (b.clientSequenceNumber ?? 0));
+  return transactions.sort(compareLocalTransactions);
 }
+
+function compareLocalTransactions(a, b) {
+  const aServer = a.serverSequenceNumberStart ?? Number.MAX_SAFE_INTEGER;
+  const bServer = b.serverSequenceNumberStart ?? Number.MAX_SAFE_INTEGER;
+  if (aServer !== bServer) return aServer - bServer;
+
+  const client = (a.clientSequenceNumber ?? 0) - (b.clientSequenceNumber ?? 0);
+  if (client !== 0) return client;
+
+  return String(a.transactionId ?? '').localeCompare(String(b.transactionId ?? ''));
+}
+
 
 export async function markTransactionPending(jamId, transactionId) {
   const now = new Date().toISOString();
