@@ -7,9 +7,9 @@ const anchor = { type: 'appearance', id: 'appearance_a', participationId: 'parti
 const target = { type: 'appearance', id: 'appearance_b', participationId: 'participation_b', instrumentId: 'instrument_b' };
 
 describe('buildConflictModeTransaction', () => {
-  it('creates manual appearance conflicts and optional target move events', () => {
-    const transaction = buildConflictModeTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 5, projection: { conflicts: {} }, anchorCard: anchor, targetCard: target, scope: 'appearance', moveTarget: { card: target, afterCard: { type: 'appearance', id: 'appearance_c' }, beforeCard: null } });
-    expect(transaction.events.map((event) => event.type)).toEqual(['conflict_created', 'appearance_moved_between']);
+  it('creates manual appearance conflict intents without pre-resolving target movement', () => {
+    const transaction = buildConflictModeTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 5, projection: { conflicts: {} }, anchorCard: anchor, targetCard: target, scope: 'appearance' });
+    expect(transaction.events.map((event) => event.type)).toEqual(['conflict_created']);
     expect(transaction.events[0].payload).toMatchObject({ scope: 'appearance', reason: 'manual', targetIds: ['appearance_a', 'appearance_b'] });
   });
 

@@ -15,10 +15,14 @@ La V0 ne contient pas de client sessions, pas de lease, pas de heartbeat et pas 
 Au chargement d'une page jam :
 
 1. récupérer la jam depuis le backend ;
-2. récupérer snapshot éventuel + transactions/events ;
-3. reconstruire la projection ;
-4. hydrater le store local ;
-5. afficher la jam en mode éditable.
+2. persister le snapshot éventuel + les transactions/events serveur en IndexedDB ;
+3. marquer comme `synced` les transactions locales pending revenues du serveur avec le même `transactionId` ;
+4. recharger les transactions depuis IndexedDB, en conservant les pending locales non ackées ;
+5. reconstruire une projection unique depuis `transactions serveur connues + transactions locales pending` ;
+6. hydrater Zustand avec cette projection ;
+7. afficher la jam en mode éditable.
+
+Important : `hydrateFromPayload()` ne doit pas projeter durablement `payload.transactions` seules. Après persistance du payload serveur, la projection affichée doit provenir de la base locale pour éviter de masquer une action pending après refresh.
 
 Il ne faut plus appeler :
 
@@ -37,11 +41,10 @@ Pour chaque action :
 
 1. construire une transaction avec `clientId` ;
 2. réserver/incrémenter `clientSequenceNumber` localement ;
-3. appliquer la transaction dans la projection locale ;
-4. relancer le resolver d’ordre déterministe après la transaction ;
-5. sauvegarder la transaction dans IndexedDB ;
-6. la marquer pending ;
-7. planifier la sync.
+3. sauvegarder la transaction dans IndexedDB ;
+4. la marquer pending ;
+5. relire IndexedDB et relancer le replay de projection, avec resolver d’ordre déterministe après chaque transaction ;
+6. planifier la sync.
 
 Aucun `leaseToken` n'est demandé ou envoyé.
 

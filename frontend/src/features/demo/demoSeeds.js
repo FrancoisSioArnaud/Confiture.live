@@ -124,6 +124,7 @@ export function buildDemoSeedTransactions(seed) {
       tx(seed, 14, jamId, 'Verrouiller Sarah', [['appearance_locked', { appearanceId: 'appearance_participation_complex_sarah_vocals_1' }]]),
       tx(seed, 15, jamId, 'Plateau joué', [['plateau_played', { plateauIndex: 0, targets: [{ type: 'appearance', id: 'appearance_participation_complex_sarah_vocals_1' }, { type: 'appearance', id: 'appearance_participation_complex_nicolas_guitar_1' }, { type: 'appearance', id: 'appearance_participation_complex_tom_bass_1' }, { type: 'hole', id: 'hole_demo_complex_drums_1' }], playedAt: '2026-01-17T21:00:00.000Z' }]]),
       tx(seed, 16, jamId, 'Paul parti', [['participant_marked_left', { participantId: 'participant_complex_paul', confirmedDespiteFutureLockedAppearances: true }]]),
+      tx(seed, 17, jamId, 'Conflit actif démo', [['conflict_created', { conflictId: 'conflict_demo_complex_active', scope: 'appearance', targetIds: ['appearance_participation_complex_sarah_vocals_1', 'appearance_participation_complex_tom_bass_1'], reason: 'manual', anchorTargetId: 'appearance_participation_complex_sarah_vocals_1' }]]),
     ];
   }
   if (seed === 'sync') {

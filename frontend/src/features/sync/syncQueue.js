@@ -101,7 +101,13 @@ export async function pushPendingTransactions({ jamId, api = jamsApi, retryDelay
 
 export async function hydrateFromServer({ jamId, api = jamsApi, fromServerSequenceNumber = 0 } = {}) {
   const payload = await api.getTransactions(jamId, fromServerSequenceNumber);
-  await Promise.all((payload.transactions ?? []).map((transaction) => saveLocalTransaction(jamId, transaction)));
+  const transactions = payload.transactions ?? [];
+  await Promise.all(transactions.map((transaction) => saveLocalTransaction(jamId, transaction)));
+  await Promise.all(transactions.map((transaction) => markTransactionSynced(jamId, transaction.transactionId, {
+    serverSequenceNumberStart: transaction.serverSequenceNumberStart,
+    serverSequenceNumberEnd: transaction.serverSequenceNumberEnd,
+    latestServerSequenceNumber: payload.latestServerSequenceNumber ?? fromServerSequenceNumber,
+  })));
   await saveSyncState(jamId, { lastServerSequenceNumber: payload.latestServerSequenceNumber ?? fromServerSequenceNumber, status: SYNC_STATUS.SYNCED });
   return payload;
 }

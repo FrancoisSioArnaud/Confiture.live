@@ -3,7 +3,7 @@ import { createInitialProjectionState } from './initialState';
 import { buildActiveTransactions } from './undo';
 import { materializeCalculatedAppearances } from './rounds';
 import { buildCallDrawerSelectors, buildColumns, buildCountersByInstrument } from './selectors';
-import { reapplyActiveLinks } from './links';
+import { resolveOrderAfterTransaction } from './orderResolution';
 
 export function projectJamState({ snapshot = null, transactions = [], events = [] } = {}) {
   const state = createInitialProjectionState(snapshot);
@@ -16,7 +16,7 @@ export function projectJamState({ snapshot = null, transactions = [], events = [
   activeTransactions.forEach((transaction) => {
     applyTransaction(state, transaction);
     materializeCalculatedAppearances(state);
-    reapplyActiveLinks(state);
+    resolveOrderAfterTransaction(state, { transaction });
   });
   materializeCalculatedAppearances(state);
   state.columns = buildColumns(state);

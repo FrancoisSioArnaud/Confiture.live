@@ -1,6 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 import { projectJamState } from '../projection/projectJamState';
-import { getLatestLocalSnapshot, getLocalTransactions, saveLocalJam, saveLocalTransaction, saveSnapshot, saveSyncState } from '../sync/localDb';
+import { getLatestLocalSnapshot, getLocalTransactions, markTransactionSynced, saveLocalJam, saveLocalTransaction, saveSnapshot, saveSyncState } from '../sync/localDb';
 import { enqueueTransaction, hydrateFromServer as hydrateTransactionsFromServer, pushPendingTransactions, scheduleSync } from '../sync/syncQueue';
 
 function flattenEvents(transactions) {
@@ -25,11 +25,17 @@ async function persistServerPayload(jamId, payload, transactions, snapshot) {
     ...transactions.map((transaction) => saveLocalTransaction(jamId, transaction)),
     snapshot ? saveSnapshot(jamId, snapshot) : Promise.resolve(),
   ]);
+  await Promise.all(transactions.map((transaction) => markTransactionSynced(jamId, transaction.transactionId, {
+    serverSequenceNumberStart: transaction.serverSequenceNumberStart,
+    serverSequenceNumberEnd: transaction.serverSequenceNumberEnd,
+    latestServerSequenceNumber: latestServerSequenceNumberFromPayload(payload, transactions),
+  })));
   await saveSyncState(jamId, {
     lastServerSequenceNumber: latestServerSequenceNumberFromPayload(payload, transactions),
     status: 'synced',
   });
 }
+
 
 export const jamStore = createStore((set, get) => ({
   jamId: null,
@@ -68,10 +74,8 @@ export const jamStore = createStore((set, get) => ({
   async hydrateFromPayload(jamId, payload) {
     const transactions = payload.transactions ?? [];
     const snapshot = payload.snapshot ?? null;
-    const projection = projectJamState({ snapshot, transactions, events: payload.events ?? [] });
     await persistServerPayload(jamId, payload, transactions, snapshot);
-    set({ jamId, transactions, events: flattenEvents(transactions), snapshot, projection, projectionWarnings: projection.projectionWarnings, lastProjectedAt: new Date().toISOString() });
-    return projection;
+    return get().reloadFromLocalDb(jamId);
   },
 
   rebuildProjection() {

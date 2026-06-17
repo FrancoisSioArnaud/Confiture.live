@@ -32,6 +32,9 @@ export function orderBetween(afterEntity, beforeEntity, fallback) {
 }
 
 export function sortByColumnOrder(a, b) {
+  const resolvedOrder = (a.resolvedColumnOrder ?? Number.MAX_SAFE_INTEGER) - (b.resolvedColumnOrder ?? Number.MAX_SAFE_INTEGER);
+  if (resolvedOrder !== 0) return resolvedOrder;
+
   const roundOrder = getCardRoundIndex(a) - getCardRoundIndex(b);
   if (roundOrder !== 0) return roundOrder;
 
