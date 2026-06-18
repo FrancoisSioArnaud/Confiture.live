@@ -627,6 +627,7 @@ Reasons :
 manual
 play_without
 call_drawer_without_musician
+played_empty_slot
 ```
 
 ---
@@ -827,7 +828,7 @@ Feedback : silent ou snackbar optionnelle. Cards grisées.
 }
 ```
 
-Effet : targets immobiles et jouées.
+Effet : targets immobiles et jouées. Avant de créer `plateau_played`, le frontend doit ajouter un `hole_added` `reason: played_empty_slot` dans chaque colonne visible qui n’a aucune card sur ce plateau. Le `plateau_played.targets` doit inclure ces holes. Ainsi, un instrument vide au moment où le plateau est joué conserve une trace jouée et aucune nouvelle participation future ne peut venir occuper rétroactivement cette ligne.
 
 ---
 

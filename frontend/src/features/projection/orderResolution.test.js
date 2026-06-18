@@ -599,4 +599,111 @@ describe('orderResolution', () => {
     expect(getCardPlateauIndex(state, 'instrument_guitar', guitarD2)).toBe(3);
   });
 
+
+  it('keeps a manually moved conflicting card as the conflict anchor and moves the other card away', () => {
+    const vocalA = 'appearance_participation_a_instrument_vocals_1';
+    const vocalB = 'appearance_participation_b_instrument_vocals_1';
+    const guitarC = 'appearance_participation_c_instrument_guitar_1';
+    const state = projectJamState({ transactions: [
+      tx(1, [{ type: 'jam_created', payload: { jamId: 'jam_1', name: 'Jam', indicativeDate: '2026-06-17', linkReorderStrategy: 'move_to_first' } }]),
+      instrument(2, 'instrument_vocals', 'Chant', 'a'),
+      instrument(3, 'instrument_guitar', 'Guitare', 'b'),
+      participantForInstrument(4, 'b', 'instrument_vocals', 'order_0'),
+      participantForInstrument(5, 'a', 'instrument_vocals', 'order_1'),
+      participantForInstrument(6, 'c', 'instrument_guitar', 'order_0'),
+      participantForInstrument(7, 'd', 'instrument_guitar', 'order_1'),
+      tx(8, [{ type: 'conflict_created', payload: {
+        conflictId: 'conflict_a_c',
+        scope: 'appearance',
+        targetIds: [vocalA, guitarC],
+        reason: 'manual',
+        anchorTargetId: vocalA,
+      } }]),
+      tx(9, [{ type: 'appearance_moved_between', payload: {
+        appearanceId: vocalA,
+        instrumentId: 'instrument_vocals',
+        afterTarget: null,
+        beforeTarget: { type: 'appearance', id: vocalB },
+        movedLinkedGroup: false,
+      } }]),
+    ] });
+
+    expect(getCardPlateauIndex(state, 'instrument_vocals', vocalA)).toBe(0);
+    expect(getCardPlateauIndex(state, 'instrument_guitar', guitarC)).not.toBe(0);
+  });
+
+  it('turns empty instrument slots into played holes so future additions cannot occupy an already played plateau', () => {
+    const vocalA = 'appearance_participation_a_instrument_vocals_1';
+    const state = projectJamState({ transactions: [
+      tx(1, [{ type: 'jam_created', payload: { jamId: 'jam_1', name: 'Jam', indicativeDate: '2026-06-17', linkReorderStrategy: 'move_to_first' } }]),
+      instrument(2, 'instrument_vocals', 'Chant', 'a'),
+      instrument(3, 'instrument_guitar', 'Guitare', 'b'),
+      participantForInstrument(4, 'a', 'instrument_vocals', 'order_0'),
+      tx(5, [
+        { type: 'hole_added', payload: {
+          holeId: 'hole_empty_guitar_plateau_1',
+          instrumentId: 'instrument_guitar',
+          appearanceIndex: 1,
+          reason: 'played_empty_slot',
+          afterTarget: null,
+          beforeTarget: null,
+          positionKey: 'played_empty_slot_0_hole_empty_guitar_plateau_1',
+        } },
+        { type: 'plateau_played', payload: {
+          plateauIndex: 0,
+          targets: [
+            { type: 'appearance', id: vocalA },
+            { type: 'hole', id: 'hole_empty_guitar_plateau_1' },
+          ],
+          playedAt: '2026-06-17T20:00:00.000Z',
+        } },
+      ]),
+      participantForInstrument(6, 'c', 'instrument_guitar', 'order_0'),
+    ] });
+
+    expect(getCardPlateauIndex(state, 'instrument_guitar', 'hole_empty_guitar_plateau_1')).toBe(0);
+    expect(state.holes.hole_empty_guitar_plateau_1.played).toBe(true);
+    expect(getCardPlateauIndex(state, 'instrument_guitar', 'appearance_participation_c_instrument_guitar_1')).toBeGreaterThan(0);
+  });
+
+  it('applies same-participant instrument constraints through the normal conflict resolver', () => {
+    const vocalA = 'appearance_participation_a_vocals_1';
+    const guitarA = 'appearance_participation_a_guitar_1';
+    const state = projectJamState({ transactions: [
+      tx(1, [{ type: 'jam_created', payload: { jamId: 'jam_1', name: 'Jam', indicativeDate: '2026-06-17', linkReorderStrategy: 'move_to_first' } }]),
+      instrument(2, 'instrument_vocals', 'Chant', 'a'),
+      instrument(3, 'instrument_guitar', 'Guitare', 'b'),
+      tx(4, [
+        { type: 'participant_created', payload: { participantId: 'participant_a', name: 'A' } },
+        { type: 'participation_added', payload: { participationId: 'participation_a_vocals', participantId: 'participant_a', instrumentId: 'instrument_vocals', customInstrumentLabel: null, insertionMode: 'end_of_visible_rounds', startAppearanceIndex: 1, afterTarget: null, beforeTarget: null, baseOrderKey: 'order_0' } },
+        { type: 'participation_added', payload: { participationId: 'participation_a_guitar', participantId: 'participant_a', instrumentId: 'instrument_guitar', customInstrumentLabel: null, insertionMode: 'end_of_visible_rounds', startAppearanceIndex: 1, afterTarget: null, beforeTarget: null, baseOrderKey: 'order_0' } },
+        { type: 'conflict_created', payload: { conflictId: 'conflict_same_participant', scope: 'participation', targetIds: ['participation_a_vocals', 'participation_a_guitar'], reason: 'instrument_constraint', anchorTargetId: 'participation_a_vocals' } },
+      ]),
+      participantForInstrument(5, 'b', 'instrument_guitar', 'order_1'),
+    ] });
+
+    expect(getCardPlateauIndex(state, 'instrument_vocals', vocalA)).toBe(0);
+    expect(getCardPlateauIndex(state, 'instrument_guitar', guitarA)).not.toBe(0);
+  });
+
+  it('hydrates explicitly materialized linked appearances with their participant name data', () => {
+    const state = projectJamState({ transactions: [
+      tx(1, [{ type: 'jam_created', payload: { jamId: 'jam_1', name: 'Jam', indicativeDate: '2026-06-17', linkReorderStrategy: 'move_to_first' } }]),
+      instrument(2, 'instrument_vocals', 'Chant', 'a'),
+      instrument(3, 'instrument_guitar', 'Guitare', 'b'),
+      tx(4, [
+        { type: 'participant_created', payload: { participantId: 'participant_nico', name: 'Nico' } },
+        { type: 'participation_added', payload: { participationId: 'participation_nico_vocals', participantId: 'participant_nico', instrumentId: 'instrument_vocals', customInstrumentLabel: null, insertionMode: 'end_of_visible_rounds', startAppearanceIndex: 1, afterTarget: null, beforeTarget: null, baseOrderKey: 'order_0' } },
+        { type: 'participation_added', payload: { participationId: 'participation_nico_guitar', participantId: 'participant_nico', instrumentId: 'instrument_guitar', customInstrumentLabel: null, insertionMode: 'end_of_visible_rounds', startAppearanceIndex: 1, afterTarget: null, beforeTarget: null, baseOrderKey: 'order_0' } },
+        { type: 'appearance_materialized', payload: { appearanceId: 'appearance_participation_nico_vocals_1', participationId: 'participation_nico_vocals', instrumentId: 'instrument_vocals', appearanceIndex: 1, positionKey: 'order_0:1' } },
+        { type: 'appearance_materialized', payload: { appearanceId: 'appearance_participation_nico_guitar_1', participationId: 'participation_nico_guitar', instrumentId: 'instrument_guitar', appearanceIndex: 1, positionKey: 'order_0:1' } },
+        { type: 'link_created', payload: { linkId: 'link_nico', targets: [{ type: 'appearance', id: 'appearance_participation_nico_vocals_1' }, { type: 'appearance', id: 'appearance_participation_nico_guitar_1' }], anchorTarget: { type: 'appearance', id: 'appearance_participation_nico_vocals_1' }, reorderStrategy: 'move_to_first' } },
+      ]),
+    ] });
+
+    expect(state.appearances.appearance_participation_nico_vocals_1.participantId).toBe('participant_nico');
+    expect(state.appearances.appearance_participation_nico_guitar_1.participantId).toBe('participant_nico');
+    expect(state.participants[state.appearances.appearance_participation_nico_guitar_1.participantId].name).toBe('Nico');
+  });
+
 });

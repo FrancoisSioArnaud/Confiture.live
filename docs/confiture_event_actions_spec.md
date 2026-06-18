@@ -1817,7 +1817,8 @@ Masquer un round : non.
 - elles restent visibles ;
 - elles ne peuvent plus bouger ;
 - elles ne sont plus candidates pour les prochains plateaux ;
-- ne déplace pas automatiquement les cards.
+- ne déplace pas automatiquement les cards ;
+- si une colonne visible est vide sur ce plateau au moment du marquage joué, le frontend crée d’abord un `hole_added` avec `reason: played_empty_slot`, puis inclut ce hole dans `plateau_played.targets`. Ce trou joué fige la ligne vide et empêche toute participation ajoutée plus tard sur cet instrument de se placer sur un plateau déjà joué.
 
 Si une appearance du plateau vient d’être skipped, elle ne peut pas être marquée jouée sur ce plateau.
 
@@ -2516,3 +2517,12 @@ Cette section renforce la règle de résolution d’ordre définie dans `order-r
 - Après un drag, le resolver applique les conséquences : les cards linkées suivent la card déplacée si possible ; les conflicts qui deviennent actifs sur la nouvelle ligne déplacent la card non-anchor vers le slot valide le plus proche.
 - Si la card non-anchor conflictuelle ne peut pas descendre, le resolver peut chercher un slot valide au-dessus afin de résoudre immédiatement le conflict sans attendre l’ajout d’une autre participation.
 - Aucune résolution induite ne peut déplacer une card `played` ou `locked`.
+
+
+## Règles de correction validées — resolver et UI cards
+
+- Lors d’un déplacement manuel qui active un conflict, la card déplacée devient l’anchor de la résolution : si A et C sont en conflict et que l’organisateur déplace A sur la ligne de C, C doit être déplacé si C est mobile.
+- Les conflicts automatiques `reason: instrument_constraint` entre deux participations d’un même participant suivent exactement le même flow de résolution que les conflicts manuels : contrainte inter-colonnes, bidirectionnelle, résolue par le moteur d’ordre.
+- Marquer un plateau joué doit figer toutes les colonnes visibles sur cette ligne. Les instruments sans card reçoivent un hole joué `played_empty_slot` avant `plateau_played`.
+- Dans le menu secondaire d’une card appearance, l’UI affiche une seule action participant : `Supprimer participant` si le participant n’a jamais joué, sinon `Musicien parti`.
+- Les appearances explicitement matérialisées par une création de link multi-instruments doivent hériter du `participantId` de leur participation afin d’afficher le vrai nom du musicien, jamais le fallback “Musicien”.

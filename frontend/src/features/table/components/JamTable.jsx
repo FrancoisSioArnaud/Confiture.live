@@ -200,7 +200,7 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
   }
 
   function markPlayed() {
-    onTransaction?.(buildTogglePlateauPlayedTransaction({ jamId, clientId, clientSequenceNumber, plateauIndex, targets, played: false }));
+    onTransaction?.(buildTogglePlateauPlayedTransaction({ jamId, clientId, clientSequenceNumber, plateauIndex, targets, played: false, projection }));
     close();
   }
 
@@ -370,7 +370,7 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
       setConfirmState({ kind: 'plateau-unplayed', plateauIndex, targets, title: 'Remettre ce plateau à venir ?', description: 'Seul le dernier plateau joué peut être remis à venir. Les positions des cards seront conservées.', confirmLabel: 'Remettre à venir' });
       return;
     }
-    dispatch(buildTogglePlateauPlayedTransaction({ jamId, clientId, clientSequenceNumber, plateauIndex, targets, played }));
+    dispatch(buildTogglePlateauPlayedTransaction({ jamId, clientId, clientSequenceNumber, plateauIndex, targets, played, projection }));
   }
 
   function toggleLock(card) {
@@ -435,7 +435,7 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
       onFeedback?.('Participant supprimé');
     }
     if (kind === 'plateau-unplayed') {
-      dispatch(buildTogglePlateauPlayedTransaction({ jamId, clientId, clientSequenceNumber, plateauIndex: confirmState.plateauIndex, targets: confirmState.targets, played: true }));
+      dispatch(buildTogglePlateauPlayedTransaction({ jamId, clientId, clientSequenceNumber, plateauIndex: confirmState.plateauIndex, targets: confirmState.targets, played: true, projection }));
       onFeedback?.('Plateau remis à venir');
     }
     setConfirmState(null);
@@ -670,13 +670,13 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
           <ListItemIcon><Delete fontSize="small" /></ListItemIcon>
           <ListItemText>{menuCard?.type === 'hole' ? 'Supprimer le trou' : 'Supprimer ce passage'}</ListItemText>
         </MenuItem>
-        {menuCard?.type === 'appearance' ? (
+        {menuCard?.type === 'appearance' && participantHasPlayed(projection, menuCard.participantId) ? (
           <MenuItem onClick={() => requestParticipantLeft(menuCard)}>
             <ListItemIcon><PersonOff fontSize="small" /></ListItemIcon>
             <ListItemText>Musicien parti</ListItemText>
           </MenuItem>
         ) : null}
-        {menuCard?.type === 'appearance' ? (
+        {menuCard?.type === 'appearance' && !participantHasPlayed(projection, menuCard.participantId) ? (
           <MenuItem onClick={() => requestRemoveParticipant(menuCard)}>
             <ListItemIcon><PersonOff fontSize="small" /></ListItemIcon>
             <ListItemText>Supprimer participant</ListItemText>

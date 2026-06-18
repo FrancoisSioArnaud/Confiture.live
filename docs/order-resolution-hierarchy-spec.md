@@ -673,3 +673,18 @@ car `A'` et `C'` seraient sur le même plateau.
 
 Avec `scope: appearance`, seul le passage ciblé est concerné. Dans le même setup, un conflict `A-C` scope appearance peut déplacer `C` sous `D`, mais il ne doit pas imposer automatiquement `C'` sous `D'`.
 
+
+
+### 8.7 Plateau joué avec colonnes vides
+
+Quand un plateau est marqué joué, toute la ligne devient historique. Si un instrument visible n’avait aucune card sur cette ligne au moment du jeu, le frontend doit créer un hole `reason: played_empty_slot` avant de créer `plateau_played`. Ce hole est inclus dans les targets jouées.
+
+Conséquence : une participation ajoutée plus tard dans cet instrument ne peut pas se placer sur une ligne déjà jouée ; elle doit être insérée après le trou joué, selon la hiérarchie `played > locked > anchor > ...`.
+
+### 8.8 Anchor de déplacement manuel avec conflict
+
+Lorsqu’un manual reorder crée ou active un conflict, la card déplacée est l’anchor prioritaire. Si A et C sont en conflict et que l’organisateur déplace A sur la ligne de C, le resolver doit essayer de déplacer C. Il ne doit déplacer A qu’en dernier recours si C est impossible à déplacer, et jamais si A est played ou locked.
+
+### 8.9 Conflicts instrument_constraint
+
+Les conflicts `reason: instrument_constraint` créés entre deux participations d’un même participant utilisent exactement le même resolver que les conflicts manuels. Ils ne sont pas un cas spécial : inter-colonnes uniquement, bidirectionnels, scope participation, appliqués aux rounds visibles et futurs.

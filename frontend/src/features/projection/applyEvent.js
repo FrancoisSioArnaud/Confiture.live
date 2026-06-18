@@ -60,9 +60,25 @@ export function applyEvent(state, event) {
       if (state.participations[payload.participationId]) state.participations[payload.participationId].status = 'removed';
       else addProjectionWarning(state, 'missing_participation', 'participation_removed targets a missing participation.', payload);
       break;
-    case 'appearance_materialized':
-      state.appearances[payload.appearanceId] = { id: payload.appearanceId, type: 'appearance', ...state.appearances[payload.appearanceId], ...payload, status: 'active', played: false, locked: false, materialized: true, positionInRound: state.appearances[payload.appearanceId]?.positionInRound ?? stableOrderValue(payload.positionKey), roundOrder: state.appearances[payload.appearanceId]?.roundOrder ?? stableOrderValue(payload.positionKey), orderScore: state.appearances[payload.appearanceId]?.orderScore ?? (payload.appearanceIndex * 1_000_000 + stableOrderValue(payload.positionKey)) };
+    case 'appearance_materialized': {
+      const participation = state.participations[payload.participationId];
+      state.appearances[payload.appearanceId] = {
+        id: payload.appearanceId,
+        type: 'appearance',
+        ...state.appearances[payload.appearanceId],
+        ...payload,
+        participantId: state.appearances[payload.appearanceId]?.participantId ?? participation?.participantId,
+        customInstrumentLabel: state.appearances[payload.appearanceId]?.customInstrumentLabel ?? participation?.customInstrumentLabel ?? null,
+        status: 'active',
+        played: state.appearances[payload.appearanceId]?.played ?? false,
+        locked: state.appearances[payload.appearanceId]?.locked ?? false,
+        materialized: true,
+        positionInRound: state.appearances[payload.appearanceId]?.positionInRound ?? stableOrderValue(payload.positionKey),
+        roundOrder: state.appearances[payload.appearanceId]?.roundOrder ?? stableOrderValue(payload.positionKey),
+        orderScore: state.appearances[payload.appearanceId]?.orderScore ?? (payload.appearanceIndex * 1_000_000 + stableOrderValue(payload.positionKey)),
+      };
       break;
+    }
     case 'appearance_moved_between':
       recordManualMoveIntent(state, event, { type: 'appearance', id: payload.appearanceId }, payload);
       break;

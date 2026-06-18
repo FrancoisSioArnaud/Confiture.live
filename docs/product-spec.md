@@ -412,7 +412,8 @@ Nom participant :
 Suppression participant :
 
 - seulement si le participant n’a jamais joué ;
-- si le participant a déjà joué, proposer uniquement `Marquer comme parti`.
+- si le participant a déjà joué, proposer uniquement `Marquer comme parti` ;
+- le menu secondaire d’une card ne doit jamais afficher simultanément `Supprimer participant` et `Musicien parti`.
 
 Marquer comme parti :
 
@@ -737,3 +738,8 @@ La V0 utilise une iconographie MUI stable pour les actions principales du tablea
 
 Ces icônes doivent être utilisées dans les actions directes, les menus secondaires des cards et le rail de plateau quand l’action correspondante est présente.
 
+
+
+## Plateau joué et instruments vides
+
+Quand un plateau est marqué joué, chaque colonne visible doit être figée sur cette ligne. Si une colonne est vide, l’app crée un trou joué `played_empty_slot` avant de marquer le plateau joué. Les participations ajoutées plus tard ne peuvent pas venir occuper cette ligne historique.

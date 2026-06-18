@@ -43,7 +43,7 @@ ENUM_FIELDS = {
     "jam_link_reorder_strategy_changed.previousStrategy": {"move_to_first", "move_to_last", "average_position"},
     "jam_link_reorder_strategy_changed.nextStrategy": {"move_to_first", "move_to_last", "average_position"},
     "participation_added.insertionMode": {"end_of_visible_rounds", "between_targets"},
-    "hole_added.reason": {"manual", "play_without", "call_drawer_without_musician"},
+    "hole_added.reason": {"manual", "play_without", "call_drawer_without_musician", "played_empty_slot"},
     "link_created.reorderStrategy": {"move_to_first", "move_to_last", "average_position"},
     "conflict_created.scope": {"participation", "appearance"},
     "conflict_created.reason": {"instrument_constraint", "manual"},

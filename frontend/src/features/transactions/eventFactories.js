@@ -129,7 +129,7 @@ export function holeAdded(payload) {
     holeId: id,
     instrumentId: id,
     appearanceIndex: z.number().int().positive(),
-    reason: z.enum(['manual', 'play_without', 'call_drawer_without_musician']),
+    reason: z.enum(['manual', 'play_without', 'call_drawer_without_musician', 'played_empty_slot']),
     afterTarget: nullableTarget,
     beforeTarget: nullableTarget,
     positionKey: orderKey,

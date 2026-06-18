@@ -652,11 +652,11 @@ Feedback :
 
 Visible uniquement si le participant n’a jamais joué.
 
-Si le participant a déjà joué :
+Le menu secondaire ne doit jamais afficher simultanément `Supprimer participant` et `Musicien parti` :
 
 ```txt
-ne pas afficher l’action
-ou afficher désactivée avec suggestion “Marquer comme parti”
+participant jamais joué → afficher uniquement “Supprimer participant”
+participant déjà joué → afficher uniquement “Musicien parti”
 ```
 
 Règles :
