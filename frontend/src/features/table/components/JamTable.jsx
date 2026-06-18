@@ -1,7 +1,7 @@
-import { Campaign, CheckCircle, Delete, DisabledByDefault, DragHandle as DragHandleIcon, Edit, Link as LinkIcon, Lock, LockOpen, MoreVert, PersonOff, Swords } from '@mui/icons-material';
+import { Campaign, CheckCircle, Delete, DisabledByDefault, DragHandle as DragHandleIcon, Edit, Link as LinkIcon, Lock, LockOpen, MoreVert, PersonOff } from '@mui/icons-material';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { Alert, Box, Button, Card, CardContent, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Drawer, FormControlLabel, FormGroup, IconButton, List, ListItem, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Stack, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Drawer, FormControlLabel, FormGroup, IconButton, List, ListItem, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Stack, SvgIcon, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { useState } from 'react';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import {
@@ -20,6 +20,15 @@ import { buildLinkModeTransaction, hasContradictoryConflict, linkModeInitialSele
 import { activeConflictsBetween, buildConflictModeTransaction } from '../utils/buildConflictModeTransaction';
 import { buildPlayWithoutTransaction } from '../utils/buildPlayWithoutTransaction';
 import { buildSkipWithReplacementTransaction, buildSkipWithoutMusicianTransaction, replacementCandidatePresentation, replacementCandidatesForCallDrawer } from '../utils/buildCallDrawerTransaction';
+
+
+function SwordsIcon(props) {
+  return (
+    <SvgIcon {...props} viewBox="0 0 24 24">
+      <path d="M6.92 5H5V3h5v5H8V6.41L6.41 8 9 10.59 7.59 12 5 9.41l-2.29 2.3-1.42-1.42L6.92 5zm10.16 0L15.49 6.59 17.08 8l2.29-2.29 1.42 1.42L18.5 9.42l3.29 3.29-1.42 1.42-3.29-3.3-1.59 1.59L14.08 11l2.59-2.59-1.59-1.59-1.41 1.41-1.42-1.42L16.06 3H21v5h-2V6.41L17.08 5zM3.71 20.29l6.88-6.88 1.41 1.42-6.88 6.88H3v-2.12l.71-.7zm16.58 0 .71.7V23h-2.12L12 16.12l1.41-1.41 6.88 6.88z" />
+    </SvgIcon>
+  );
+}
 
 const TABLE_HEADER_HEIGHT = 48;
 const TABLE_ROW_HEIGHT = 96;
@@ -84,7 +93,7 @@ function AppearanceCard({ card, projection, linkModeActive, selectedForLink, sel
             <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
               <Typography fontWeight={800} noWrap>{cardTitle(card, projection)}</Typography>
               {card.appearanceIndex > 1 ? <Chip size="small" label={`R${card.appearanceIndex}`} sx={{ height: 20 }} /> : null}
-              {(selectedForConflict || conflicted) ? <Chip size="small" icon={<Swords />} label="Conflit" color="error" variant="outlined" sx={{ height: 20 }} /> : null}
+              {(selectedForConflict || conflicted) ? <Chip size="small" icon={<SwordsIcon />} label="Conflit" color="error" variant="outlined" sx={{ height: 20 }} /> : null}
               {card.played ? <Chip size="small" label="Joué" color="success" sx={{ height: 20 }} /> : null}
             </Stack>
             <CardActions card={card} linked={linked} linkModeActive={linkModeActive} onToggleLink={onToggleLink} onToggleLock={onToggleLock} onOpenMenu={onOpenMenu} />
@@ -653,7 +662,7 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
         ) : null}
         {menuCard?.type === 'appearance' ? (
           <MenuItem onClick={() => { const anchor = menuCard; closeMenu(); setLinkMode({ active: false, anchor: null, selectedIds: new Set() }); setConflictMode({ active: true, anchor, target: null }); }}>
-            <ListItemIcon><Swords fontSize="small" /></ListItemIcon>
+            <ListItemIcon><SwordsIcon fontSize="small" /></ListItemIcon>
             <ListItemText>Créer / retirer un conflit</ListItemText>
           </MenuItem>
         ) : null}

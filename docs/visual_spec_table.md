@@ -886,7 +886,7 @@ Utiliser les icônes MUI suivantes de manière homogène dans toute l’interfac
 | Link | `link` / `Link` |
 | Modifier le musicien | `edit` / `Edit` |
 | Jouer sans | `disabled_by_default` / `DisabledByDefault` |
-| Conflits | `swords` / `Swords` |
+| Conflits | `swords` / `SwordsIcon` local basé sur MUI `SvgIcon` |
 | Supprimer ce passage / supprimer un trou | `delete` / `Delete` |
 | Musicien parti | `person_off` / `PersonOff` |
 | Supprimer participant | `person_off` / `PersonOff` |
