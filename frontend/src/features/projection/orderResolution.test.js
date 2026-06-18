@@ -44,6 +44,33 @@ function participant(sequence, id, baseOrderKey) {
   ]);
 }
 
+
+function instrument(sequence, instrumentId, label, orderKey) {
+  return tx(sequence, [{ type: 'instrument_added', payload: { instrumentId, label, orderKey, visible: true, isDefault: false } }]);
+}
+
+function participantForInstrument(sequence, id, instrumentId, baseOrderKey) {
+  return tx(sequence, [
+    { type: 'participant_created', payload: { participantId: `participant_${id}`, name: id.toUpperCase() } },
+    { type: 'participation_added', payload: {
+      participationId: `participation_${id}_${instrumentId}`,
+      participantId: `participant_${id}`,
+      instrumentId,
+      customInstrumentLabel: null,
+      insertionMode: 'end_of_visible_rounds',
+      startAppearanceIndex: 1,
+      afterTarget: null,
+      beforeTarget: null,
+      baseOrderKey,
+    } },
+  ]);
+}
+
+function getCardPlateauIndex(state, instrumentId, cardId) {
+  const column = state.columns.find((candidate) => candidate.instrument.instrumentId === instrumentId);
+  return column.cards.findIndex((card) => card.id === cardId);
+}
+
 function columnIds(state) {
   return state.columns.map((column) => column.cards.map((card) => card.id));
 }
@@ -308,6 +335,33 @@ describe('orderResolution', () => {
 
     expect(state.appearances.appearance_participation_b_guitar_1.playedAtPlateauIndex).toBe(2);
     expect(state.projectionWarnings.map((warning) => warning.code)).toContain('link_target_pinned');
+  });
+
+
+
+  it('moves the linked target to the first linked plateau even when the anchor is lower in its column', () => {
+    const vocalAppearance = 'appearance_participation_a_instrument_vocals_1';
+    const guitarB = 'appearance_participation_b_instrument_guitar_1';
+    const guitarC = 'appearance_participation_c_instrument_guitar_1';
+    const state = projectJamState({ transactions: [
+      tx(1, [{ type: 'jam_created', payload: { jamId: 'jam_1', name: 'Jam', indicativeDate: '2026-06-17', linkReorderStrategy: 'move_to_first' } }]),
+      instrument(2, 'instrument_vocals', 'Chant', 'a'),
+      instrument(3, 'instrument_guitar', 'Guitare', 'b'),
+      participantForInstrument(4, 'a', 'instrument_vocals', 'order_0'),
+      participantForInstrument(5, 'b', 'instrument_guitar', 'order_0'),
+      participantForInstrument(6, 'c', 'instrument_guitar', 'order_1'),
+      tx(7, [{ type: 'link_created', payload: {
+        linkId: 'link_a_c',
+        targets: [{ type: 'appearance', id: vocalAppearance }, { type: 'appearance', id: guitarC }],
+        anchorTarget: { type: 'appearance', id: guitarC },
+        reorderStrategy: 'move_to_first',
+      } }]),
+    ] });
+
+    expect(getCardPlateauIndex(state, 'instrument_vocals', vocalAppearance)).toBe(0);
+    expect(getCardPlateauIndex(state, 'instrument_guitar', guitarC)).toBe(0);
+    expect(getCardPlateauIndex(state, 'instrument_guitar', guitarB)).toBe(1);
+    expect(state.links.link_a_c.suppressedByConflict).toBe(false);
   });
 
   it("preserves round/base order as A, B, C, A', B', C' without constraints", () => {

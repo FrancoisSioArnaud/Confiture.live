@@ -85,9 +85,7 @@ function applyLinkConstraint(state, link, transactionAnchor) {
   }
 
   link.suppressedByConflict = false;
-  const anchorTarget = link.anchorTarget ?? transactionAnchor;
-  const anchorEntry = targets.find(({ target }) => targetKey(target) === targetKey(anchorTarget)) ?? targets[0];
-  const order = linkedOrder(targets.map(({ entity }) => entity), link.reorderStrategy, anchorEntry.entity);
+  const order = linkedOrder(targets.map(({ entity }) => entity), link.reorderStrategy);
   targets.forEach(({ target, entity }) => {
     if (isCardPlayed(entity) || isCardLocked(entity)) {
       if (getPositionInRound(entity) !== order) {
@@ -125,11 +123,11 @@ function applyConflictConstraint(state, conflict, transactionAnchor) {
     });
 }
 
-function linkedOrder(entities, strategy, anchorEntity) {
+function linkedOrder(entities, strategy) {
   const values = entities.map(getPositionInRound);
   if (strategy === 'move_to_last') return Math.max(...values);
   if (strategy === 'average_position') return values.reduce((sum, value) => sum + value, 0) / values.length;
-  return getPositionInRound(anchorEntity) ?? Math.min(...values);
+  return Math.min(...values);
 }
 
 function sameColumn(a, b) {
@@ -160,20 +158,34 @@ function alignLinkResolvedPlateaux(state, link) {
     .map((target) => ({ target, entity: getTargetEntity(state, target) }))
     .filter(({ entity }) => isCardActive(entity));
   if (targetEntries.length < 2) return;
-  const anchorEntry = targetEntries.find(({ target }) => targetKey(target) === targetKey(link.anchorTarget)) ?? targetEntries[0];
-  const desiredIndex = (anchorEntry.entity.resolvedPlateauIndex ?? 1) - 1;
 
-  targetEntries.forEach(({ target, entity }) => {
-    if (entity.id === anchorEntry.entity.id) return;
-    if (isCardPlayed(entity) || isCardLocked(entity)) {
-      if ((entity.resolvedPlateauIndex ?? 1) - 1 !== desiredIndex) {
-        addProjectionWarning(state, 'link_target_pinned', 'link could not align a played or locked target.', { linkId: link.linkId, target });
+  const desiredIndex = linkedResolvedIndex(targetEntries, link.reorderStrategy);
+  if (!Number.isFinite(desiredIndex)) return;
+
+  targetEntries
+    .sort((a, b) => targetKey(a.target).localeCompare(targetKey(b.target)))
+    .forEach(({ target, entity }) => {
+      if (isCardPlayed(entity) || isCardLocked(entity)) {
+        if ((entity.resolvedPlateauIndex ?? 1) - 1 !== desiredIndex) {
+          addProjectionWarning(state, 'link_target_pinned', 'link could not align a played or locked target.', { linkId: link.linkId, target });
+        }
+        return;
       }
-      return;
-    }
-    const targetIndex = sameColumn(entity, anchorEntry.entity) ? desiredIndex + 1 : desiredIndex;
-    moveCardToResolvedIndex(state, entity, targetIndex);
-  });
+      moveCardToResolvedIndex(state, entity, desiredIndex);
+    });
+}
+
+function linkedResolvedIndex(targetEntries, strategy) {
+  const indexes = targetEntries
+    .map(({ entity }) => (entity.resolvedPlateauIndex ?? 1) - 1)
+    .filter(Number.isFinite);
+  if (indexes.length === 0) return null;
+  if (strategy === 'move_to_last') return Math.max(...indexes);
+  if (strategy === 'average_position') {
+    const average = indexes.reduce((sum, index) => sum + index, 0) / indexes.length;
+    return Math.round(average);
+  }
+  return Math.min(...indexes);
 }
 
 function moveCardToResolvedIndex(state, card, desiredIndex) {
