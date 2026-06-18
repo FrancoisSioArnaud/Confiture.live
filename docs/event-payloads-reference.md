@@ -723,7 +723,7 @@ Feedback : snackbar si déplacement + animation.
 }
 ```
 
-Effet : crée la contrainte de link. Le resolver global aligne les targets selon la stratégie sans violer played, locked ou conflict. Les targets doivent appartenir à des colonnes / instruments différents ; un link entre deux cards de la même colonne est invalide et doit être refusé côté UI/builder, puis ignoré défensivement par le resolver si un ancien event invalide existe.
+Effet : crée la contrainte de link. Le resolver global aligne les targets selon la stratégie sans violer played, locked ou conflict.
 
 ---
 
@@ -783,8 +783,6 @@ Pour conflict appearance :
 ```
 
 ---
-
-Effet : crée une contrainte négative entre deux targets situées dans des colonnes / instruments différents. Un conflict entre deux cards de la même colonne est invalide : il doit être refusé côté UI/builder, puis ignoré défensivement par le resolver si un ancien event invalide existe.
 
 ### 12.2 `conflict_removed`
 
@@ -941,3 +939,16 @@ hole_added reason: call_drawer_without_musician
 éventuel link_removed pour l’appearance skippée
 appearance_skipped
 ```
+
+
+## Addendum V0 — contraintes inter-colonnes et résolution post-action
+
+Cette section renforce la règle de résolution d’ordre définie dans `order-resolution-hierarchy-spec.md`.
+
+- Les `links` et les `conflicts` sont uniquement **inter-colonnes** en V0. Ils ne peuvent pas être créés entre deux cards du même instrument.
+- Un `conflict` est une contrainte **bidirectionnelle** : le sens `A → C` ou `C → A` ne change pas l’interdiction de cohabitation. Le sens sert seulement à définir l’anchor préférée de la transaction.
+- À chaque transaction, le resolver doit vérifier les conflicts actifs dans les deux sens, quelle que soit la colonne touchée par l’action.
+- Une card ayant un link ou un conflict reste draggable tant qu’elle n’est ni `played` ni `locked`.
+- Après un drag, le resolver applique les conséquences : les cards linkées suivent la card déplacée si possible ; les conflicts qui deviennent actifs sur la nouvelle ligne déplacent la card non-anchor vers le slot valide le plus proche.
+- Si la card non-anchor conflictuelle ne peut pas descendre, le resolver peut chercher un slot valide au-dessus afin de résoudre immédiatement le conflict sans attendre l’ajout d’une autre participation.
+- Aucune résolution induite ne peut déplacer une card `played` ou `locked`.

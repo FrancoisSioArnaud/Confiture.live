@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { activeConflictsBetween, buildConflictModeTransaction, isSameInstrumentConflict } from './buildConflictModeTransaction';
+import { activeConflictsBetween, buildConflictModeTransaction } from './buildConflictModeTransaction';
 
 vi.mock('../../../shared/utils/createId', () => ({ createId: (prefix) => `${prefix}_test` }));
 
@@ -13,22 +13,6 @@ describe('buildConflictModeTransaction', () => {
     expect(transaction.events[0].payload).toMatchObject({ scope: 'appearance', reason: 'manual', targetIds: ['appearance_a', 'appearance_b'] });
   });
 
-
-
-  it('refuses to create a conflict between two cards in the same column', () => {
-    const sameColumnTarget = { type: 'appearance', id: 'appearance_c', participationId: 'participation_c', instrumentId: 'instrument_a' };
-    expect(isSameInstrumentConflict(anchor, sameColumnTarget)).toBe(true);
-    expect(buildConflictModeTransaction({
-      jamId: 'jam_1',
-      clientId: 'client_1',
-      clientSequenceNumber: 7,
-      projection: { conflicts: {} },
-      anchorCard: anchor,
-      targetCard: sameColumnTarget,
-      scope: 'appearance',
-    })).toBeNull();
-  });
-
   it('removes existing conflicts without conflict_updated', () => {
     const projection = { conflicts: { conflict_1: { conflictId: 'conflict_1', status: 'active', scope: 'participation', targetIds: ['participation_a', 'participation_b'] } } };
     expect(activeConflictsBetween(anchor, target, projection.conflicts)).toHaveLength(1);
@@ -36,4 +20,11 @@ describe('buildConflictModeTransaction', () => {
     expect(transaction.events).toEqual([expect.objectContaining({ type: 'conflict_removed', payload: { conflictId: 'conflict_1' } })]);
     expect(transaction.events).not.toContainEqual(expect.objectContaining({ type: 'conflict_updated' }));
   });
+
+  it('refuses same-column conflicts because conflicts are inter-column only in V0', () => {
+    const sameColumnTarget = { ...target, instrumentId: anchor.instrumentId };
+    const transaction = buildConflictModeTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 7, projection: { conflicts: {} }, anchorCard: anchor, targetCard: sameColumnTarget, scope: 'appearance' });
+    expect(transaction).toBeNull();
+  });
+
 });

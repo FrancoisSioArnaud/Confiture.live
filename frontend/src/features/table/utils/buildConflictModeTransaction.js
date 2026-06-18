@@ -2,20 +2,24 @@ import { conflictCreated, conflictRemoved } from '../../transactions/eventFactor
 import { createTransaction } from '../../transactions/createTransaction';
 import { createId } from '../../../shared/utils/createId';
 
-export function isSameInstrumentConflict(anchorCard, targetCard) {
+function isUsableActiveConflict(conflict) {
+  return conflict.status === 'active' && conflict.suppressedBySameColumn !== true;
+}
+
+function sameColumn(anchorCard, targetCard) {
   return Boolean(anchorCard?.instrumentId && targetCard?.instrumentId && anchorCard.instrumentId === targetCard.instrumentId);
 }
 
 export function activeConflictsBetween(anchorCard, targetCard, conflicts) {
   return Object.values(conflicts ?? {}).filter((conflict) => {
-    if (conflict.status !== 'active' || conflict.suppressedBySameColumn) return false;
+    if (!isUsableActiveConflict(conflict)) return false;
     const ids = conflict.scope === 'participation' ? [anchorCard.participationId, targetCard.participationId] : [anchorCard.id, targetCard.id];
     return ids.every((id) => conflict.targetIds.includes(id));
   });
 }
 
 export function buildConflictModeTransaction({ jamId, clientId, clientSequenceNumber, projection, anchorCard, targetCard, scope }) {
-  if (isSameInstrumentConflict(anchorCard, targetCard)) return null;
+  if (!anchorCard || !targetCard || sameColumn(anchorCard, targetCard)) return null;
   const existing = activeConflictsBetween(anchorCard, targetCard, projection.conflicts);
   const events = existing.map((conflict) => conflictRemoved({ conflictId: conflict.conflictId }));
   if (existing.length === 0) {

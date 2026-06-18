@@ -17,7 +17,7 @@ import {
 } from '../utils/buildCardActionTransaction';
 import { canDragCard, cardConflicts, cardLinks, participantHasPlayed } from '../utils/cardState';
 import { buildLinkModeTransaction, hasContradictoryConflict, linkModeInitialSelection, selectedCardsWillMove } from '../utils/buildLinkModeTransaction';
-import { activeConflictsBetween, buildConflictModeTransaction, isSameInstrumentConflict } from '../utils/buildConflictModeTransaction';
+import { activeConflictsBetween, buildConflictModeTransaction } from '../utils/buildConflictModeTransaction';
 import { buildPlayWithoutTransaction } from '../utils/buildPlayWithoutTransaction';
 import { buildSkipWithReplacementTransaction, buildSkipWithoutMusicianTransaction, replacementCandidatePresentation, replacementCandidatesForCallDrawer } from '../utils/buildCallDrawerTransaction';
 
@@ -441,7 +441,7 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
       return;
     }
     if (!canDragCard(active.card, projection)) {
-      onFeedback?.('Déplacement impossible : passage joué, verrouillé ou en conflit');
+      onFeedback?.('Déplacement impossible : passage joué ou verrouillé');
       return;
     }
     const linked = linkedCount(active.card) > 0;
@@ -465,7 +465,7 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
       setConflictMode({ active: false, anchor: null, target: null });
       return;
     }
-    if (isSameInstrumentConflict(conflictMode.anchor, card)) {
+    if (card.instrumentId === conflictMode.anchor.instrumentId) {
       onFeedback?.('Conflit impossible : choisis une autre colonne');
       return;
     }
@@ -483,10 +483,6 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
   function validateConflictMode(scope) {
     const { anchor, target } = conflictMode;
     if (!anchor || !target) return;
-    if (isSameInstrumentConflict(anchor, target)) {
-      onFeedback?.('Conflit impossible : choisis une autre colonne');
-      return;
-    }
     const transaction = buildConflictModeTransaction({ jamId, clientId, clientSequenceNumber, projection, anchorCard: anchor, targetCard: target, scope });
     if (transaction) {
       dispatch(transaction);
@@ -548,11 +544,6 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
     if (selectedCards.length < 1) return;
     if (selectedCards.some((card) => card.played || card.locked)) {
       onFeedback?.('Link impossible : passage joué ou verrouillé');
-      return;
-    }
-    const selectedInstrumentIds = selectedCards.map((card) => card.instrumentId).filter(Boolean);
-    if (new Set(selectedInstrumentIds).size !== selectedInstrumentIds.length) {
-      onFeedback?.('Link impossible : une seule cible par colonne');
       return;
     }
     if (hasContradictoryConflict(selectedCards, projection)) {
@@ -631,7 +622,7 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
                       <Stack spacing={1}>
                         {column.cards.map((card) => (
                           <Box key={card.id} sx={{ height: TABLE_ROW_HEIGHT, display: 'flex', alignItems: 'stretch' }}>
-                            <SortableProjectedCard card={card} projection={projection} instrument={column.instrument} linkMode={linkMode} conflictMode={conflictMode} onToggleLink={selectCardForLink} onSelectConflict={selectConflictTarget} onToggleLock={toggleLock} onOpenMenu={openMenu} onBlockedDrag={() => onFeedback?.('Déplacement impossible : passage joué, verrouillé ou en conflit')} />
+                            <SortableProjectedCard card={card} projection={projection} instrument={column.instrument} linkMode={linkMode} conflictMode={conflictMode} onToggleLink={selectCardForLink} onSelectConflict={selectConflictTarget} onToggleLock={toggleLock} onOpenMenu={openMenu} onBlockedDrag={() => onFeedback?.('Déplacement impossible : passage joué ou verrouillé')} />
                           </Box>
                         ))}
                       </Stack>

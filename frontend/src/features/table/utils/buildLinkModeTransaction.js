@@ -10,8 +10,13 @@ function targetMatchesCard(target, card) {
   return target.type === card.type && target.id === card.id;
 }
 
-export function isUsableActiveLink(link) {
-  return link?.status === 'active' && link.suppressedByConflict !== true && link.suppressedBySameColumn !== true;
+function isUsableActiveLink(link) {
+  return link.status === 'active' && link.suppressedByConflict !== true && link.suppressedBySameColumn !== true;
+}
+
+function hasDuplicateInstrument(cards) {
+  const instruments = cards.map((card) => card.instrumentId).filter(Boolean);
+  return new Set(instruments).size !== instruments.length;
 }
 
 export function activeLinksForCards(cards, links) {
@@ -23,14 +28,9 @@ export function linkModeInitialSelection(anchorCard, links, cardsById) {
   return linkedCards.length > 0 ? linkedCards : [anchorCard];
 }
 
-export function hasDuplicateInstrument(cards) {
-  const instrumentIds = cards.map((card) => card?.instrumentId).filter(Boolean);
-  return new Set(instrumentIds).size !== instrumentIds.length;
-}
-
 export function hasContradictoryConflict(cards, projection) {
   return Object.values(projection.conflicts ?? {}).some((conflict) => {
-    if (conflict.status !== 'active' || conflict.suppressedBySameColumn) return false;
+    if (conflict.status !== 'active' || conflict.suppressedBySameColumn === true) return false;
     const ids = cards.map((card) => card.id);
     const participationIds = cards.filter((card) => card.type === 'appearance').map((card) => card.participationId);
     const targetSet = conflict.scope === 'participation' ? participationIds : ids;
@@ -39,20 +39,21 @@ export function hasContradictoryConflict(cards, projection) {
 }
 
 export function buildLinkModeTransaction({ jamId, clientId, clientSequenceNumber, projection, anchorCard, selectedCards }) {
-  if (hasDuplicateInstrument(selectedCards)) return null;
   const events = [];
-  const linksToRemove = activeLinksForCards([anchorCard, ...selectedCards], projection.links);
+  const uniqueSelectedCards = [...new Map(selectedCards.map((card) => [card.id, card])).values()];
+  if (hasDuplicateInstrument(uniqueSelectedCards)) return null;
+  const linksToRemove = activeLinksForCards([anchorCard, ...uniqueSelectedCards], projection.links);
   linksToRemove.forEach((link) => events.push(linkRemoved({ linkId: link.linkId })));
-  if (selectedCards.length >= 2) {
+  if (uniqueSelectedCards.length >= 2) {
     events.push(linkCreated({
       linkId: createId('link'),
-      targets: selectedCards.map(toTarget),
+      targets: uniqueSelectedCards.map(toTarget),
       anchorTarget: toTarget(anchorCard),
       reorderStrategy: projection.jam?.linkReorderStrategy ?? 'move_to_first',
     }));
   }
   if (events.length === 0) return null;
-  return createTransaction({ jamId, clientId, clientSequenceNumber, label: selectedCards.length >= 2 ? 'Créer link' : 'Retirer link', events });
+  return createTransaction({ jamId, clientId, clientSequenceNumber, label: uniqueSelectedCards.length >= 2 ? 'Créer link' : 'Retirer link', events });
 }
 
 export function selectedCardsWillMove(cards) {

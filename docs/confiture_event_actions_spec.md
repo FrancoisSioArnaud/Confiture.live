@@ -270,8 +270,6 @@ Payload recommandé :
 
 Un link est une contrainte relationnelle. Il ne fige pas toute la composition du plateau.
 
-Un link est toujours inter-colonnes : deux targets d'un même link ne peuvent pas appartenir au même instrument / à la même colonne. L'UI doit empêcher cette sélection, le builder doit refuser la transaction, et le resolver doit ignorer défensivement tout ancien event invalide.
-
 Il n’y a pas de drawer de link en V0. Toute création/suppression de link se fait via le **mode link du tableau**.
 
 ---
@@ -295,8 +293,6 @@ manual
 ```
 
 Un conflict ne cible pas de hole en V0.
-
-Un conflict manuel est toujours inter-colonnes : deux targets d'un même conflict ne peuvent pas appartenir au même instrument / à la même colonne. L'UI doit empêcher cette sélection, le builder doit refuser la transaction, et le resolver doit ignorer défensivement tout ancien event invalide.
 
 ### Conflict sur participation
 
@@ -1195,8 +1191,10 @@ Pas de drag horizontal.
 - ne change pas son `appearanceIndex` ;
 - refuse le drop si l’appearance est jouée ;
 - refuse le drop si l’appearance est lockée ;
-- refuse le drop si le résultat viole un conflict ;
-- refuse le drop si le résultat casserait un link impossible à réparer.
+- accepte le drop d’une card conflictuelle si elle n’est ni jouée ni lockée ;
+- accepte le drop d’une card linkée si elle n’est ni jouée ni lockée ;
+- après le drop, le resolver réorganise les cards linkées/conflictuelles ;
+- produit un warning déterministe seulement si le resolver ne peut pas réparer le link/conflict sans déplacer du played ou du locked.
 
 ### Cas card linkée
 
@@ -1229,7 +1227,7 @@ Icône lock/unlock sur la card.
 - fige l’appearance à sa position actuelle ;
 - interdit les déplacements automatiques ;
 - interdit les déplacements manuels ;
-- interdit les déplacements induits par link/conflict ;
+- autorise les déplacements induits par link/conflict quand ils sont produits par le resolver et qu’ils ne déplacent pas de played/locked ;
 - n’impacte pas les autres cards.
 
 ---
@@ -1528,11 +1526,10 @@ En général → scope: participation
 
 ### Conséquences sur la liste
 
-- refuse l’action si deux targets sont dans la même colonne / le même instrument ;
 - empêche les targets d’être sur le même plateau ;
 - si les targets sont déjà sur le même plateau, l’algo doit les séparer ;
 - l’origin card du mode conflict est l’anchor ;
-- la target non-anchor est déplacée au premier slot suivant valide ;
+- la target non-anchor est déplacée vers le slot valide le plus proche : le resolver essaye d’abord les slots suivants, puis les slots précédents si nécessaire ;
 - si l’anchor est jouée ou lockée, elle ne bouge jamais ;
 - si la target non-anchor ne peut pas bouger, l’action est refusée.
 
@@ -1924,7 +1921,6 @@ En général → scope participation
 Règles :
 
 - pas de conflict sur hole en V0 ;
-- pas de conflict entre deux cards de la même colonne / du même instrument ;
 - pas de `conflict_updated` ;
 - modifier = supprimer puis recréer ;
 - suppression de conflict ne réorganise pas immédiatement.
@@ -2031,7 +2027,7 @@ La résolution est faite par le resolver global après application de la transac
 1. Ne jamais bouger played.
 2. Ne jamais bouger locked.
 3. Garder l’origin card / anchor si possible.
-4. Déplacer l’autre target au premier slot suivant valide.
+4. Déplacer l’autre target vers le slot valide le plus proche, en essayant d’abord les slots suivants puis les slots précédents si aucun slot suivant n’est disponible.
 5. Respecter les links actifs si cela ne viole pas le conflict.
 6. Refuser si aucun ordre valide n’existe.
 ```
@@ -2501,3 +2497,16 @@ average_position choisit la position entière la plus proche de la moyenne, tie 
 ```
 
 À confirmer : est-ce que tu préfères tie vers le bas / plus tard pour éviter de trop remonter les gens ?
+
+
+## Addendum V0 — contraintes inter-colonnes et résolution post-action
+
+Cette section renforce la règle de résolution d’ordre définie dans `order-resolution-hierarchy-spec.md`.
+
+- Les `links` et les `conflicts` sont uniquement **inter-colonnes** en V0. Ils ne peuvent pas être créés entre deux cards du même instrument.
+- Un `conflict` est une contrainte **bidirectionnelle** : le sens `A → C` ou `C → A` ne change pas l’interdiction de cohabitation. Le sens sert seulement à définir l’anchor préférée de la transaction.
+- À chaque transaction, le resolver doit vérifier les conflicts actifs dans les deux sens, quelle que soit la colonne touchée par l’action.
+- Une card ayant un link ou un conflict reste draggable tant qu’elle n’est ni `played` ni `locked`.
+- Après un drag, le resolver applique les conséquences : les cards linkées suivent la card déplacée si possible ; les conflicts qui deviennent actifs sur la nouvelle ligne déplacent la card non-anchor vers le slot valide le plus proche.
+- Si la card non-anchor conflictuelle ne peut pas descendre, le resolver peut chercher un slot valide au-dessus afin de résoudre immédiatement le conflict sans attendre l’ajout d’une autre participation.
+- Aucune résolution induite ne peut déplacer une card `played` ou `locked`.

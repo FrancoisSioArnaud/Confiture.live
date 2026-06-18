@@ -20,25 +20,30 @@ const ANCHOR_EXTRACTORS = {
 
 export function resolveOrderAfterTransaction(state, context = {}) {
   const anchor = extractTransactionAnchor(context.transaction);
+  const anchorMode = extractTransactionAnchorMode(context.transaction);
   state.orderResolution = {
     lastTransactionId: context.transaction?.transactionId ?? null,
     anchor,
+    anchorMode,
   };
 
   applyManualOrderHints(state);
 
-  applyActiveLinks(state, { anchor });
+  applyActiveLinks(state, { anchor, anchorMode });
+  assignAllResolvedColumnOrders(state);
+  applyResolvedLinkAlignment(state, { anchor, anchorMode });
   applyActiveConflicts(state, { anchor });
-
-  getCardsByInstrument(state).forEach((cards) => {
-    freezePinnedCards(cards);
-    assignResolvedColumnOrder(cards);
-  });
-  applyResolvedLinkAlignment(state);
+  assignAllResolvedColumnOrders(state);
 
   return state;
 }
 
+function assignAllResolvedColumnOrders(state) {
+  getCardsByInstrument(state).forEach((cards) => {
+    freezePinnedCards(cards);
+    assignResolvedColumnOrder(cards);
+  });
+}
 
 export function applyManualOrderHints(state) {
   getSortedCardsWithManualHints(state).forEach((card) => {
@@ -57,21 +62,31 @@ export function applyManualOrderHints(state) {
   });
 }
 
-export function applyActiveLinks(state, { anchor = null } = {}) {
+export function applyActiveLinks(state, { anchor = null, anchorMode = null } = {}) {
   Object.values(state.links)
     .filter((link) => link.status === 'active')
     .sort((a, b) => String(a.linkId ?? a.id).localeCompare(String(b.linkId ?? b.id)))
-    .forEach((link) => applyLinkConstraint(state, link, anchor));
+    .forEach((link) => applyLinkConstraint(state, link, { anchor, anchorMode }));
 }
 
 export function applyActiveConflicts(state, { anchor = null } = {}) {
-  Object.values(state.conflicts)
+  const conflicts = Object.values(state.conflicts)
     .filter((conflict) => conflict.status === 'active')
-    .sort((a, b) => String(a.conflictId ?? a.id).localeCompare(String(b.conflictId ?? b.id)))
-    .forEach((conflict) => applyConflictConstraint(state, conflict, anchor));
+    .sort((a, b) => String(a.conflictId ?? a.id).localeCompare(String(b.conflictId ?? b.id)));
+
+  // Re-run a bounded number of passes because moving one card can reveal another
+  // conflict on the next plateau. The result stays deterministic because both the
+  // conflict order and candidate indexes are stable.
+  for (let pass = 0; pass < 20; pass += 1) {
+    let moved = false;
+    conflicts.forEach((conflict) => {
+      if (applyConflictConstraint(state, conflict, anchor)) moved = true;
+    });
+    if (!moved) break;
+  }
 }
 
-function applyLinkConstraint(state, link, transactionAnchor) {
+function applyLinkConstraint(state, link, { anchor = null, anchorMode = null } = {}) {
   const targets = link.targets.map((target) => ({ target, entity: getTargetEntity(state, target) })).filter(({ entity }) => isCardActive(entity));
   if (targets.length < 2) {
     link.suppressedByConflict = true;
@@ -91,7 +106,8 @@ function applyLinkConstraint(state, link, transactionAnchor) {
   }
 
   link.suppressedByConflict = false;
-  const order = linkedOrder(targets.map(({ entity }) => entity), link.reorderStrategy);
+  const anchorEntity = targets.find(({ target }) => targetKey(target) === targetKey(anchor))?.entity ?? null;
+  const order = linkedOrder(targets.map(({ entity }) => entity), link.reorderStrategy, anchorEntity, anchorMode);
   targets.forEach(({ target, entity }) => {
     if (isCardPlayed(entity) || isCardLocked(entity)) {
       if (getPositionInRound(entity) !== order) {
@@ -109,33 +125,42 @@ function applyConflictConstraint(state, conflict, transactionAnchor) {
     .filter((entity) => isCardActive(entity));
   if (entries.length < 2) {
     addProjectionWarning(state, 'conflict_target_missing', 'conflict ignored because at least one target is missing.', { conflictId: conflict.conflictId });
-    return;
+    return false;
   }
 
-  if (hasDuplicateInstrumentEntries(entries.map((entity) => ({ entity })))) {
+  if (hasDuplicateInstrumentEntities(entries)) {
     conflict.suppressedBySameColumn = true;
     addProjectionWarning(state, 'conflict_suppressed_by_same_column', 'conflict ignored because two targets are in the same column.', { conflictId: conflict.conflictId });
-    return;
+    return false;
   }
   conflict.suppressedBySameColumn = false;
 
-  const anchorEntity = resolveConflictTarget(state, conflict.scope, conflict.anchorTargetId)
-    ?? entries.find((entity) => targetKey(cardTarget(entity)) === targetKey(transactionAnchor))
+  const anchorEntity = entries.find((entity) => targetKey(cardTarget(entity)) === targetKey(transactionAnchor))
+    ?? resolveConflictTarget(state, conflict.scope, conflict.anchorTargetId)
     ?? entries[0];
-  entries
+
+  const conflictingEntries = entries
     .filter((entity) => entity.id !== anchorEntity.id)
-    .sort(compareBaseColumnOrder)
-    .forEach((entity, index) => {
-      if (!samePlateau(entity, anchorEntity) && getPositionInRound(entity) !== getPositionInRound(anchorEntity)) return;
-      if (isCardPlayed(entity) || isCardLocked(entity)) {
-        addProjectionWarning(state, 'conflict_target_pinned', 'conflict could not move a played or locked target.', { conflictId: conflict.conflictId, target: cardTarget(entity) });
-        return;
-      }
-      setCardOrder(entity, getPositionInRound(anchorEntity) + index + 1);
-    });
+    .filter((entity) => samePlateau(entity, anchorEntity))
+    .sort(compareBaseColumnOrder);
+
+  for (const entity of conflictingEntries) {
+    if (moveConflictTargetAwayFromPlateau(state, entity, conflict)) return true;
+  }
+
+  // If the preferred non-anchor target cannot move because it is pinned or has no
+  // valid slot, try the anchor as a last resort when it is mobile. This keeps the
+  // conflict symmetric while still preferring the latest user anchor.
+  if (conflictingEntries.length > 0 && moveConflictTargetAwayFromPlateau(state, anchorEntity, conflict)) return true;
+
+  if (conflictingEntries.length > 0) {
+    addProjectionWarning(state, 'conflict_unresolved', 'conflict could not be resolved without moving a played or locked target.', { conflictId: conflict.conflictId });
+  }
+  return false;
 }
 
-function linkedOrder(entities, strategy) {
+function linkedOrder(entities, strategy, anchorEntity = null, anchorMode = null) {
+  if (anchorMode === 'manual_move' && anchorEntity) return getPositionInRound(anchorEntity);
   const values = entities.map(getPositionInRound);
   if (strategy === 'move_to_last') return Math.max(...values);
   if (strategy === 'average_position') return values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -143,12 +168,99 @@ function linkedOrder(entities, strategy) {
 }
 
 function hasDuplicateInstrumentEntries(entries) {
-  const instrumentIds = entries.map((entry) => entry.entity?.instrumentId).filter(Boolean);
+  return hasDuplicateInstrumentEntities(entries.map((entry) => entry.entity));
+}
+
+function hasDuplicateInstrumentEntities(entities) {
+  const instrumentIds = entities.map((entity) => entity?.instrumentId).filter(Boolean);
   return new Set(instrumentIds).size !== instrumentIds.length;
 }
 
 function samePlateau(a, b) {
-  return Number.isFinite(a?.resolvedPlateauIndex) && a.resolvedPlateauIndex === b?.resolvedPlateauIndex;
+  const aIndex = getCardPlateauIndex(a);
+  const bIndex = getCardPlateauIndex(b);
+  return Number.isFinite(aIndex) && Number.isFinite(bIndex) && aIndex === bIndex;
+}
+
+function getCardPlateauIndex(card) {
+  if (Number.isFinite(card?.resolvedPlateauIndex)) return card.resolvedPlateauIndex;
+  if (Number.isFinite(card?.positionInRound)) return card.positionInRound;
+  return null;
+}
+
+function moveConflictTargetAwayFromPlateau(state, card, conflict) {
+  if (isCardPlayed(card) || isCardLocked(card)) {
+    addProjectionWarning(state, 'conflict_target_pinned', 'conflict could not move a played or locked target.', { conflictId: conflict.conflictId, target: cardTarget(card) });
+    return false;
+  }
+
+  const cards = getCardsByInstrument(state).get(card.instrumentId) ?? [];
+  const ordered = sortCardsByCurrentResolvedOrder(cards);
+  const currentIndex = ordered.findIndex((candidate) => candidate.id === card.id);
+  if (currentIndex < 0) return false;
+
+  const candidateIndexes = conflictCandidateIndexes(currentIndex, ordered.length);
+  for (const candidateIndex of candidateIndexes) {
+    const candidateOrder = moveItemToIndex(ordered, currentIndex, candidateIndex);
+    if (pinnedCardsWouldMove(ordered, candidateOrder)) continue;
+    if (!columnOrderRespectsConflicts(state, candidateOrder)) continue;
+    applyResolvedOrderToColumn(candidateOrder);
+    return true;
+  }
+
+  addProjectionWarning(state, 'conflict_no_valid_slot', 'conflict could not find another valid slot for a mobile target.', { conflictId: conflict.conflictId, target: cardTarget(card) });
+  return false;
+}
+
+function conflictCandidateIndexes(currentIndex, length) {
+  const indexes = [];
+  for (let index = currentIndex + 1; index < length; index += 1) indexes.push(index);
+  for (let index = currentIndex - 1; index >= 0; index -= 1) indexes.push(index);
+  return indexes;
+}
+
+function moveItemToIndex(items, fromIndex, toIndex) {
+  const next = [...items];
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(Math.max(0, Math.min(toIndex, next.length)), 0, moved);
+  return next;
+}
+
+function pinnedCardsWouldMove(before, after) {
+  return before.some((card, index) => {
+    if (!isCardPlayed(card) && !isCardLocked(card)) return false;
+    return after[index]?.id !== card.id;
+  });
+}
+
+function columnOrderRespectsConflicts(state, ordered) {
+  return ordered.every((card, index) => !hasActiveConflictAtPlateau(state, card, index + 1));
+}
+
+function hasActiveConflictAtPlateau(state, card, plateauIndex) {
+  return Object.values(state.conflicts).some((conflict) => {
+    if (conflict.status !== 'active' || conflict.suppressedBySameColumn) return false;
+    if (!conflictTargetsCard(conflict, card)) return false;
+    return conflict.targetIds.some((targetId) => {
+      const other = resolveConflictTarget(state, conflict.scope, targetId);
+      if (!other || other.id === card.id || other.instrumentId === card.instrumentId) return false;
+      return getCardPlateauIndex(other) === plateauIndex;
+    });
+  });
+}
+
+function conflictTargetsCard(conflict, card) {
+  const ids = [card.id, card.appearanceId, card.holeId, card.participationId].filter(Boolean);
+  return conflict.targetIds.some((targetId) => ids.includes(targetId));
+}
+
+function applyResolvedOrderToColumn(ordered) {
+  ordered.forEach((candidate, index) => {
+    if (!isCardPlayed(candidate) && !isCardLocked(candidate)) setCardOrder(candidate, index + 1);
+    candidate.resolvedPlateauIndex = index + 1;
+    candidate.resolvedColumnOrder = index + 1;
+    candidate.resolvedOrderKey = buildResolvedOrderKey(candidate, index);
+  });
 }
 
 function setCardOrder(card, order) {
@@ -158,15 +270,14 @@ function setCardOrder(card, order) {
   card.orderScore = (card.appearanceIndex ?? 1) * 1_000_000 + order;
 }
 
-
-export function applyResolvedLinkAlignment(state) {
+export function applyResolvedLinkAlignment(state, { anchor = null, anchorMode = null } = {}) {
   Object.values(state.links)
     .filter((link) => link.status === 'active' && !link.suppressedByConflict && !link.suppressedBySameColumn)
     .sort((a, b) => String(a.linkId ?? a.id).localeCompare(String(b.linkId ?? b.id)))
-    .forEach((link) => alignLinkResolvedPlateaux(state, link));
+    .forEach((link) => alignLinkResolvedPlateaux(state, link, { anchor, anchorMode }));
 }
 
-function alignLinkResolvedPlateaux(state, link) {
+function alignLinkResolvedPlateaux(state, link, { anchor = null, anchorMode = null } = {}) {
   const targetEntries = link.targets
     .map((target) => ({ target, entity: getTargetEntity(state, target) }))
     .filter(({ entity }) => isCardActive(entity));
@@ -177,7 +288,7 @@ function alignLinkResolvedPlateaux(state, link) {
     return;
   }
 
-  const desiredIndex = linkedResolvedIndex(targetEntries, link.reorderStrategy);
+  const desiredIndex = linkedResolvedIndex(targetEntries, link.reorderStrategy, anchor, anchorMode);
   if (!Number.isFinite(desiredIndex)) return;
 
   targetEntries
@@ -193,7 +304,11 @@ function alignLinkResolvedPlateaux(state, link) {
     });
 }
 
-function linkedResolvedIndex(targetEntries, strategy) {
+function linkedResolvedIndex(targetEntries, strategy, anchor = null, anchorMode = null) {
+  if (anchorMode === 'manual_move') {
+    const anchorEntry = targetEntries.find(({ target }) => targetKey(target) === targetKey(anchor));
+    if (anchorEntry) return (anchorEntry.entity.resolvedPlateauIndex ?? 1) - 1;
+  }
   const indexes = targetEntries
     .map(({ entity }) => (entity.resolvedPlateauIndex ?? 1) - 1)
     .filter(Number.isFinite);
@@ -215,6 +330,7 @@ function moveCardToResolvedIndex(state, card, desiredIndex) {
   const boundedIndex = Math.max(0, Math.min(desiredIndex, ordered.length));
   ordered.splice(boundedIndex, 0, moved);
   ordered.forEach((candidate, index) => {
+    if (!isCardPlayed(candidate) && !isCardLocked(candidate)) setCardOrder(candidate, index + 1);
     candidate.resolvedPlateauIndex = index + 1;
     candidate.resolvedColumnOrder = index + 1;
     candidate.resolvedOrderKey = buildResolvedOrderKey(candidate, index);
@@ -387,6 +503,15 @@ export function extractTransactionAnchor(transaction) {
     const anchor = extractEventAnchor(events[index]);
     if (anchor) return anchor;
   }
+  return null;
+}
+
+function extractTransactionAnchorMode(transaction) {
+  const events = transaction?.events ?? [];
+  if (events.some((event) => event.type === 'appearance_moved_between' || event.type === 'hole_moved_between')) return 'manual_move';
+  if (events.some((event) => event.type === 'link_created')) return 'link_created';
+  if (events.some((event) => event.type === 'conflict_created')) return 'conflict_created';
+  if (events.some((event) => event.type === 'participation_added')) return 'participation_added';
   return null;
 }
 

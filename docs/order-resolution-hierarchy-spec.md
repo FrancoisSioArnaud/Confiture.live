@@ -261,7 +261,7 @@ Résultat attendu si B est mobile :
 
 ```txt
 A reste plateau 3.
-B est déplacé au premier slot suivant valide.
+B est déplacé vers le slot valide le plus proche.
 ```
 
 Si B est joué ou locké, le déplacement de A est refusé ou clampé avec warning en replay.
@@ -288,11 +288,14 @@ Un conflict est une interdiction de cohabitation.
 
 Règles :
 
-- deux cards en conflict ne peuvent pas rester sur le même plateau ;
+- un conflict est uniquement inter-colonnes en V0 : il ne peut pas cibler deux cards du même instrument ;
+- deux cards en conflict ne peuvent pas rester sur le même plateau, quel que soit le sens de création du conflict ;
+- le conflict est une contrainte bidirectionnelle : `A → C` et `C → A` créent la même interdiction de cohabitation ;
+- le sens de création sert seulement à définir l’anchor préférée au moment de la résolution ;
 - un conflict gagne contre un link ;
-- un conflict peut déplacer des cards non jouées, non lockées et non anchor ;
 - si le conflict concerne l’anchor et une autre card mobile, l’autre card bouge ;
-- si aucune résolution valide n’existe, l’action est refusée.
+- si la card à déplacer ne peut pas descendre, le resolver peut chercher un slot valide au-dessus ;
+- si aucune résolution valide n’existe sans déplacer du `played` ou du `locked`, l’action est refusée ou produit un warning déterministe.
 
 ### 6. `link`
 
@@ -300,6 +303,7 @@ Un link est une contrainte positive : jouer ensemble.
 
 Règles :
 
+- un link est uniquement inter-colonnes en V0 : il ne peut pas cibler deux cards du même instrument ;
 - un link essaye d’aligner ses targets sur le même plateau ;
 - si une card linkée est déplacée, le groupe linké doit suivre ;
 - aucun déplacement partiel du groupe linké n’est autorisé via drag ;
@@ -349,22 +353,6 @@ Ajout D
 Dernier recours pour garantir une projection déterministe.
 
 ---
-
-
-### 5.1 Contraintes inter-colonnes uniquement
-
-En V0, `link` et `conflict` sont des contraintes de plateau entre colonnes différentes.
-
-Règles officielles :
-
-- un `link` ne peut jamais relier deux cards de la même colonne / du même instrument ;
-- un `conflict` ne peut jamais relier deux cards de la même colonne / du même instrument ;
-- l'UI doit refuser la sélection dès que les deux targets sont dans la même colonne ;
-- les builders de transactions doivent retourner `null` ou refuser la transaction si cette règle est violée ;
-- le resolver doit rester défensif : si un ancien event invalide existe malgré tout dans l'event log, il doit ignorer/supprimer la contrainte pour le calcul visible, ajouter un `projectionWarning` déterministe, et ne pas réorganiser la colonne ;
-- le backend peut valider la forme du payload, mais la validation métier complète dépend de la projection car le payload ne contient pas forcément l'instrument de chaque target.
-
-Raison produit : dans une même colonne, deux cards sont déjà ordonnées verticalement. Un link ou conflict a du sens uniquement pour aligner ou séparer des cards situées dans des colonnes différentes sur un même plateau visuel.
 
 ## 5. Quand lancer la résolution
 
@@ -502,10 +490,13 @@ Résultat :
 
 ```txt
 A reste à la position demandée.
-B est déplacé au premier slot suivant valide.
+B est déplacé vers le slot valide le plus proche.
+Le resolver essaye d’abord les slots suivants, puis les slots précédents si aucun slot suivant n’existe.
 ```
 
-Si B est `played` ou `locked`, le déplacement de A est refusé.
+Une card qui a déjà un conflict reste draggable tant qu’elle n’est ni `played` ni `locked`. Le drag exprime une nouvelle intention ; le resolver réorganise ensuite le tableau si le conflict s’active sur la nouvelle ligne.
+
+Si B est `played` ou `locked`, le déplacement de A est refusé ou clampé avec warning déterministe.
 
 ### 8.3 Drag d’une card linkée
 
@@ -521,7 +512,9 @@ A bouge.
 C suit A pour rester sur le même plateau.
 ```
 
-Si C ne peut pas suivre à cause de `played`, `locked` ou conflict non résoluble, le déplacement est refusé.
+Une card qui a déjà un link reste draggable tant qu’elle n’est ni `played` ni `locked`. Le drag exprime une nouvelle intention ; le resolver déplace ensuite toutes les cards liées qui peuvent suivre.
+
+Si C ne peut pas suivre à cause de `played`, `locked` ou conflict non résoluble, le déplacement est refusé ou clampé avec warning déterministe.
 
 ### 8.4 Drag d’une card linkée avec conflict externe
 
@@ -538,10 +531,10 @@ Résultat :
 
 ```txt
 A et C sont positionnés ensemble.
-B est déplacé au premier slot suivant valide.
+B est déplacé vers le slot valide le plus proche.
 ```
 
-Si B est `played` ou `locked`, le déplacement est refusé.
+Si B est `played` ou `locked`, le déplacement est refusé ou clampé avec warning déterministe.
 
 ### 8.5 Création de link contradictoire
 
@@ -582,3 +575,44 @@ Le moteur doit avoir des tests couvrant au minimum :
 11. suppression de link ne provoquant pas un retour magique à l’ordre ancien ;
 12. `round_revealed` respectant played/locked/manual/link/conflict ;
 13. replay après undo linéaire produisant un état cohérent.
+
+
+### 8.8 Exemple conflict bidirectionnel minimal
+
+Setup :
+
+```txt
+Chant   : A, B
+Guitare : C, D
+```
+
+Si l’organisateur crée un conflict `A → C`, A est l’anchor de cette action et C doit se déplacer car A et C sont sur le même plateau. Résultat attendu :
+
+```txt
+Chant   : A, B
+Guitare : D, C
+```
+
+Si l’organisateur crée le même conflict dans l’autre sens `C → A`, C est l’anchor de cette action et A doit se déplacer. Résultat attendu :
+
+```txt
+Chant   : B, A
+Guitare : C, D
+```
+
+Dans les deux cas, le conflict est bidirectionnel et actif immédiatement. Le sens de création ne décide pas si le conflict existe ; il sert seulement à savoir quelle card préserver en priorité pour cette transaction.
+
+Cas sans slot suivant :
+
+```txt
+Chant   : A, B
+Guitare : C, D
+Conflict B → D
+```
+
+D ne peut pas descendre car il est déjà en bas de sa colonne. Le resolver doit donc chercher le slot valide le plus proche au-dessus et produire :
+
+```txt
+Chant   : A, B
+Guitare : D, C
+```
