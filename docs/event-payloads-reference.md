@@ -494,7 +494,7 @@ Feedback : silent si simple ; snackbar si groupe linké déplacé. Animation obl
 }
 ```
 
-Effet : exprime l’intention de déplacer l’appearance. Le resolver global déplace aussi le groupe linké ou les cards conflictuelles si nécessaire.
+Effet : exprime l’intention de déplacer l’appearance. Le resolver global déplace aussi le groupe linké ou les cards conflictuelles si nécessaire. Si l’appearance déplacée n’est pas linkée mais décale une target linkée via `beforeTarget` ou `afterTarget`, le resolver conserve le déplacement et réaligne le groupe autour de la target linkée décalée.
 
 ---
 
@@ -670,7 +670,7 @@ Feedback : silent ou snackbar si hole linké. Animation obligatoire.
 }
 ```
 
-Effet : exprime l’intention de déplacer le hole si non played et non locked. Le resolver global déplace aussi le groupe linké ou les cards conflictuelles si nécessaire.
+Effet : exprime l’intention de déplacer le hole si non played et non locked. Le resolver global déplace aussi le groupe linké ou les cards conflictuelles si nécessaire. Si le hole déplacé décale une target linkée via `beforeTarget` ou `afterTarget`, le resolver conserve le déplacement et réaligne le groupe autour de la target linkée décalée.
 
 ---
 
@@ -723,7 +723,7 @@ Feedback : snackbar si déplacement + animation.
 }
 ```
 
-Effet : crée la contrainte de link. Le resolver global aligne les targets selon la stratégie sans violer played, locked ou conflict.
+Effet : crée la contrainte de link. Le resolver global aligne les targets selon la stratégie sans violer played, locked ou conflict. Les drags ultérieurs restent autorisés autour d’une target linkée : si une autre card décale cette target, le groupe linké suit la target décalée plutôt que d’annuler le déplacement manuel.
 
 ---
 

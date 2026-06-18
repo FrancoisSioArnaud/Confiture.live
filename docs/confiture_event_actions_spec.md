@@ -83,6 +83,8 @@ removed / left / hidden
 
 Les déplacements induits par un link ou un conflict peuvent être des résultats de projection déterministes : ils ne nécessitent pas forcément des events supplémentaires tant que le replay reproduit exactement le même ordre.
 
+Un drag n’est pas refusé uniquement parce qu’il touche une card linkée ou conflictuelle. Si la card déplacée n’est ni `played` ni `locked`, la transaction est créée, puis le resolver réajuste le tableau : groupe linké qui suit, conflicts séparés, et pins `played`/`locked` conservés.
+
 ---
 
 # 1. Lexique métier

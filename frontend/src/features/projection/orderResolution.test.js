@@ -364,6 +364,41 @@ describe('orderResolution', () => {
     expect(state.links.link_a_c.suppressedByConflict).toBe(false);
   });
 
+
+  it('lets an unrelated manual move displace a linked target and makes the other linked card follow it', () => {
+    const vocalA = 'appearance_participation_a_instrument_vocals_1';
+    const vocalB = 'appearance_participation_b_instrument_vocals_1';
+    const guitarC = 'appearance_participation_c_instrument_guitar_1';
+    const guitarD = 'appearance_participation_d_instrument_guitar_1';
+    const state = projectJamState({ transactions: [
+      tx(1, [{ type: 'jam_created', payload: { jamId: 'jam_1', name: 'Jam', indicativeDate: '2026-06-17', linkReorderStrategy: 'move_to_first' } }]),
+      instrument(2, 'instrument_vocals', 'Chant', 'a'),
+      instrument(3, 'instrument_guitar', 'Guitare', 'b'),
+      participantForInstrument(4, 'a', 'instrument_vocals', 'order_0'),
+      participantForInstrument(5, 'b', 'instrument_vocals', 'order_1'),
+      participantForInstrument(6, 'c', 'instrument_guitar', 'order_0'),
+      participantForInstrument(7, 'd', 'instrument_guitar', 'order_1'),
+      tx(8, [{ type: 'link_created', payload: {
+        linkId: 'link_a_c',
+        targets: [{ type: 'appearance', id: vocalA }, { type: 'appearance', id: guitarC }],
+        anchorTarget: { type: 'appearance', id: vocalA },
+        reorderStrategy: 'move_to_first',
+      } }]),
+      tx(9, [{ type: 'appearance_moved_between', payload: {
+        appearanceId: guitarD,
+        instrumentId: 'instrument_guitar',
+        afterTarget: null,
+        beforeTarget: { type: 'appearance', id: guitarC },
+        movedLinkedGroup: false,
+      } }]),
+    ] });
+
+    expect(getCardPlateauIndex(state, 'instrument_guitar', guitarD)).toBe(0);
+    expect(getCardPlateauIndex(state, 'instrument_guitar', guitarC)).toBe(1);
+    expect(getCardPlateauIndex(state, 'instrument_vocals', vocalB)).toBe(0);
+    expect(getCardPlateauIndex(state, 'instrument_vocals', vocalA)).toBe(1);
+  });
+
   it("preserves round/base order as A, B, C, A', B', C' without constraints", () => {
     const state = projectJamState({ transactions: [
       ...baseJam(),

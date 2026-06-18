@@ -84,6 +84,21 @@ C suit A à cause du link.
 B est poussé à cause du conflict.
 ```
 
+Autre cas important :
+
+```txt
+A est linké à C.
+D est déplacé devant C dans la colonne de C.
+```
+
+La transaction peut seulement exprimer :
+
+```txt
+appearance_moved_between(D, beforeTarget=C)
+```
+
+Le resolver doit conserver ce déplacement de D, constater que C a été décalé, puis déplacer A pour rester aligné avec C. Le déplacement de D ne doit pas être refusé ni annulé simplement parce que C a un link.
+
 Ces déplacements induits sont des **résultats de projection**, pas nécessairement des events supplémentaires.
 
 ### 2.2 La projection peut stocker des champs dérivés
@@ -309,12 +324,15 @@ Règles :
 
 - un link est uniquement inter-colonnes en V0 : il ne peut pas cibler deux cards du même instrument ;
 - un link essaye d’aligner ses targets sur le même plateau ;
+- une card linkée reste déplaçable tant qu’elle n’est ni `played` ni `locked` ;
 - si une card linkée est déplacée, le groupe linké doit suivre ;
-- aucun déplacement partiel du groupe linké n’est autorisé via drag ;
+- si une card non linkée est déplacée avant/après une card linkée et décale cette card linkée, les autres targets du link doivent suivre la card linkée déplacée ;
+- aucun déplacement manuel ne doit être refusé uniquement parce qu’il touche une zone contenant un link ;
+- aucun déplacement partiel durable du groupe linké n’est autorisé dans l’ordre résolu final ;
 - le link ne peut pas violer un conflict ;
 - le link ne peut pas déplacer du `played` ou du `locked`.
 
-Si un déplacement manuel d’une card linkée crée un conflict avec une autre card, le moteur essaye d’abord de déplacer l’autre card conflictuelle. Si c’est impossible, le déplacement est refusé.
+Si un déplacement manuel d’une card linkée crée un conflict avec une autre card, le moteur essaye d’abord de déplacer l’autre card conflictuelle. Si une card non-linkée décale une target linkée, le resolver conserve le déplacement manuel et réaligne le reste du groupe linké autour de la target décalée.
 
 ### 7. `manual order` existant
 
@@ -414,8 +432,8 @@ Pour chaque transaction active, dans l’ordre déterministe :
 7. Construire les groupes linkés.
 8. Placer l’anchor ou son groupe au plus proche de l’intention demandée.
 9. Résoudre les conflicts en déplaçant la card la moins prioritaire.
-10. Réconcilier les links restants sans violer les conflicts.
-11. Préserver le manual order existant quand il ne contredit pas les contraintes fortes.
+10. Réconcilier les links restants sans violer les conflicts, en tenant compte des link targets éventuellement déplacées par une card non linkée.
+11. Préserver le manual order existant quand il ne contredit pas `played`, `locked` ou un conflict impossible à résoudre.
 12. Compléter avec round / appearanceIndex, puis base order, puis id.
 13. Répéter jusqu’à stabilisation ou impossibilité explicite.
 ```

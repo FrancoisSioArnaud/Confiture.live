@@ -21,17 +21,21 @@ const ANCHOR_EXTRACTORS = {
 export function resolveOrderAfterTransaction(state, context = {}) {
   const anchor = extractTransactionAnchor(context.transaction);
   const anchorMode = extractTransactionAnchorMode(context.transaction);
+  const manualMoveContext = extractManualMoveContext(context.transaction);
   state.orderResolution = {
     lastTransactionId: context.transaction?.transactionId ?? null,
     anchor,
     anchorMode,
+    manualMoveContext,
   };
 
   applyManualOrderHints(state);
 
   applyActiveLinks(state, { anchor, anchorMode });
   assignAllResolvedColumnOrders(state);
-  applyResolvedLinkAlignment(state, { anchor, anchorMode });
+  applyResolvedLinkAlignment(state, { anchor, anchorMode, manualMoveContext });
+  applyActiveConflicts(state, { anchor });
+  applyResolvedLinkAlignment(state, { anchor, anchorMode, manualMoveContext });
   applyActiveConflicts(state, { anchor });
   assignAllResolvedColumnOrders(state);
 
@@ -321,14 +325,14 @@ function setCardOrder(card, order) {
   card.orderScore = (card.appearanceIndex ?? 1) * 1_000_000 + order;
 }
 
-export function applyResolvedLinkAlignment(state, { anchor = null, anchorMode = null } = {}) {
+export function applyResolvedLinkAlignment(state, { anchor = null, anchorMode = null, manualMoveContext = null } = {}) {
   Object.values(state.links)
     .filter((link) => link.status === 'active' && !link.suppressedByConflict && !link.suppressedBySameColumn)
     .sort((a, b) => String(a.linkId ?? a.id).localeCompare(String(b.linkId ?? b.id)))
-    .forEach((link) => alignLinkResolvedPlateaux(state, link, { anchor, anchorMode }));
+    .forEach((link) => alignLinkResolvedPlateaux(state, link, { anchor, anchorMode, manualMoveContext }));
 }
 
-function alignLinkResolvedPlateaux(state, link, { anchor = null, anchorMode = null } = {}) {
+function alignLinkResolvedPlateaux(state, link, { anchor = null, anchorMode = null, manualMoveContext = null } = {}) {
   const targetEntries = link.targets
     .map((target) => ({ target, entity: getTargetEntity(state, target) }))
     .filter(({ entity }) => isCardActive(entity));
@@ -339,7 +343,7 @@ function alignLinkResolvedPlateaux(state, link, { anchor = null, anchorMode = nu
     return;
   }
 
-  const desiredIndex = linkedResolvedIndex(targetEntries, link.reorderStrategy, anchor, anchorMode);
+  const desiredIndex = linkedResolvedIndex(targetEntries, link.reorderStrategy, anchor, anchorMode, manualMoveContext);
   if (!Number.isFinite(desiredIndex)) return;
 
   targetEntries
@@ -355,10 +359,15 @@ function alignLinkResolvedPlateaux(state, link, { anchor = null, anchorMode = nu
     });
 }
 
-function linkedResolvedIndex(targetEntries, strategy, anchor = null, anchorMode = null) {
+function linkedResolvedIndex(targetEntries, strategy, anchor = null, anchorMode = null, manualMoveContext = null) {
   if (anchorMode === 'manual_move') {
     const anchorEntry = targetEntries.find(({ target }) => targetKey(target) === targetKey(anchor));
     if (anchorEntry) return (anchorEntry.entity.resolvedPlateauIndex ?? 1) - 1;
+
+    const displacedEntry = manualMoveContext
+      ? linkedEntryTouchedByManualMove(targetEntries, manualMoveContext)
+      : null;
+    if (displacedEntry) return (displacedEntry.entity.resolvedPlateauIndex ?? 1) - 1;
   }
   const indexes = targetEntries
     .map(({ entity }) => (entity.resolvedPlateauIndex ?? 1) - 1)
@@ -370,6 +379,22 @@ function linkedResolvedIndex(targetEntries, strategy, anchor = null, anchorMode 
     return Math.round(average);
   }
   return Math.min(...indexes);
+}
+
+function linkedEntryTouchedByManualMove(targetEntries, manualMoveContext) {
+  const beforeKey = targetKey(manualMoveContext.beforeTarget);
+  if (beforeKey) {
+    const beforeEntry = targetEntries.find(({ target }) => targetKey(target) === beforeKey);
+    if (beforeEntry) return beforeEntry;
+  }
+
+  const afterKey = targetKey(manualMoveContext.afterTarget);
+  if (afterKey) {
+    const afterEntry = targetEntries.find(({ target }) => targetKey(target) === afterKey);
+    if (afterEntry) return afterEntry;
+  }
+
+  return null;
 }
 
 function moveCardToResolvedIndex(state, card, desiredIndex) {
@@ -564,6 +589,21 @@ function extractTransactionAnchorMode(transaction) {
   if (events.some((event) => event.type === 'conflict_created')) return 'conflict_created';
   if (events.some((event) => event.type === 'participation_added')) return 'participation_added';
   return null;
+}
+
+function extractManualMoveContext(transaction) {
+  const events = [...(transaction?.events ?? [])].sort((a, b) => {
+    const index = (a.eventIndexInTransaction ?? 0) - (b.eventIndexInTransaction ?? 0);
+    if (index !== 0) return index;
+    return String(a.eventId ?? '').localeCompare(String(b.eventId ?? ''));
+  });
+  const moveEvent = [...events].reverse().find((event) => event.type === 'appearance_moved_between' || event.type === 'hole_moved_between');
+  if (!moveEvent) return null;
+  return {
+    target: extractEventAnchor(moveEvent),
+    afterTarget: moveEvent.payload?.afterTarget ? { ...moveEvent.payload.afterTarget } : null,
+    beforeTarget: moveEvent.payload?.beforeTarget ? { ...moveEvent.payload.beforeTarget } : null,
+  };
 }
 
 export function extractEventAnchor(event) {

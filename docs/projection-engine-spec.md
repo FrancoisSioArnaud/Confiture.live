@@ -636,7 +636,8 @@ Règles clés :
 - un conflict gagne contre un link ;
 - un link peut déplacer un groupe mobile, mais jamais du played/locked ;
 - un manual reorder existant prime sur l’ordre automatique, mais pas sur les contraintes fortes ;
-- si une action demande un déplacement impossible, elle doit être refusée avant création de l’event, ou ignorée/clampée par projection avec warning si l’event existe déjà.
+- une action de drag ne doit pas être refusée uniquement parce que la zone contient un link ou un conflict ; elle est acceptée si la card déplacée n’est ni played ni locked, puis le resolver réconcilie le tableau ;
+- si une action demande un déplacement réellement impossible à cause de played/locked, elle doit être refusée avant création de l’event, ou ignorée/clampée par projection avec warning si l’event existe déjà.
 
 ### 8.3 Recalcul global après modification d’ordre
 
@@ -744,10 +745,12 @@ Un link est refusé si :
 - deux targets sont dans le même instrument ;
 - une target est played et devrait bouger ;
 - une target est locked et devrait bouger ;
-- un conflict existe entre deux targets ;
-- l’alignement créerait un conflict ;
+- un conflict existe directement entre deux targets du link ;
+- l’alignement créerait un conflict impossible à résoudre ;
 - l’alignement nécessiterait de déplacer une autre card played/locked ;
 - une target n’existe plus.
+
+Un drag manuel dans une zone contenant un link n’est pas refusé pour cette seule raison. Si le drag déplace une autre card devant une target linkée, cette target linkée peut changer de plateau et les autres targets du link doivent suivre.
 
 En cas de refus par conflict, l’UI doit afficher une snackbar explicative.
 
@@ -757,9 +760,17 @@ En cas de refus par conflict, l’UI doit afficher une snackbar explicative.
 
 Si une card linkée est déplacée manuellement :
 
-- le groupe linké doit se déplacer ensemble ;
-- si le déplacement du groupe est impossible, l’action est refusée ;
-- aucun déplacement partiel du groupe linké n’est autorisé via drag.
+- l’action est autorisée si la card n’est ni `played` ni `locked` ;
+- le groupe linké doit se déplacer ensemble dans l’ordre résolu final ;
+- si le déplacement du groupe est impossible à cause d’une card `played` ou `locked`, le resolver garde les pins et produit un warning déterministe ;
+- aucun déplacement partiel durable du groupe linké n’est autorisé dans la projection finale.
+
+Si une card non-linkée est déplacée avant/après une target linkée :
+
+- l’action est autorisée si la card déplacée n’est ni `played` ni `locked` ;
+- le resolver garde le déplacement manuel demandé ;
+- la target linkée décalée devient la référence de son groupe pour cette transaction ;
+- les autres targets du link suivent cette target décalée.
 
 Exception : `appearance_skipped` depuis le drawer d’appel délinke puis déplace seulement l’appearance indisponible.
 
@@ -1072,6 +1083,7 @@ Cette section renforce la règle de résolution d’ordre définie dans `order-r
 - Un `conflict` est une contrainte **bidirectionnelle** : le sens `A → C` ou `C → A` ne change pas l’interdiction de cohabitation. Le sens sert seulement à définir l’anchor préférée de la transaction.
 - À chaque transaction, le resolver doit vérifier les conflicts actifs dans les deux sens, quelle que soit la colonne touchée par l’action.
 - Une card ayant un link ou un conflict reste draggable tant qu’elle n’est ni `played` ni `locked`.
-- Après un drag, le resolver applique les conséquences : les cards linkées suivent la card déplacée si possible ; les conflicts qui deviennent actifs sur la nouvelle ligne déplacent la card non-anchor vers le slot valide le plus proche.
+- Un drag qui déplace une card non-linkée dans une zone contenant une target linkée est autorisé : le manual reorder est conservé, puis le groupe linké suit la target linkée décalée.
+- Après un drag, le resolver applique les conséquences : les cards linkées suivent la card déplacée ou la target linkée décalée si possible ; les conflicts qui deviennent actifs sur la nouvelle ligne déplacent la card non-anchor vers le slot valide le plus proche.
 - Si la card non-anchor conflictuelle ne peut pas descendre, le resolver peut chercher un slot valide au-dessus afin de résoudre immédiatement le conflict sans attendre l’ajout d’une autre participation.
 - Aucune résolution induite ne peut déplacer une card `played` ou `locked`.
