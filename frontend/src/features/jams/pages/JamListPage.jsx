@@ -1,4 +1,4 @@
-import { Add, DeleteOutline, OpenInNew } from '@mui/icons-material';
+import { Add, Delete, OpenInNew } from '@mui/icons-material';
 import { Alert, Box, Button, Card, CardActions, CardContent, CircularProgress, Grid, Stack, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -54,7 +54,7 @@ export function JamListPage() {
               </CardContent>
               <CardActions sx={{ justifyContent: 'space-between' }}>
                 <Button startIcon={<OpenInNew />} onClick={() => navigate(`/jams/${jam.jamId}`)}>Ouvrir</Button>
-                <Button color="error" startIcon={<DeleteOutline />} onClick={() => setJamToDelete(jam)}>Supprimer</Button>
+                <Button color="error" startIcon={<Delete />} onClick={() => setJamToDelete(jam)}>Supprimer</Button>
               </CardActions>
             </Card>
           </Grid>

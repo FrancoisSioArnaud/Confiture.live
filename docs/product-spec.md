@@ -717,3 +717,23 @@ Ne pas développer en V0 :
 - Les instruments d’un participant se modifient dans le drawer participant.
 - Les rounds visibles et appearances matérialisées doivent respecter `data_model.md`.
 - Les règles d’ordre doivent respecter `confiture_event_actions_spec.md`.
+
+
+## Iconographie des actions de jam
+
+La V0 utilise une iconographie MUI stable pour les actions principales du tableau :
+
+| Action | Icône MUI |
+|---|---|
+| Déplacer une card | `drag_handle` |
+| Créer / visualiser un link | `link` |
+| Modifier le musicien | `edit` |
+| Jouer sans | `disabled_by_default` |
+| Créer / retirer un conflit | `swords` |
+| Supprimer ce passage | `delete` |
+| Musicien parti / supprimer participant | `person_off` |
+| Appeler plateau | `campaign` |
+| Marquer comme joué | `check_circle` |
+
+Ces icônes doivent être utilisées dans les actions directes, les menus secondaires des cards et le rail de plateau quand l’action correspondante est présente.
+

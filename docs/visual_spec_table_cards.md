@@ -464,18 +464,50 @@ Durée recommandée :
 
 ---
 
+
+---
+
+# Iconographie officielle des cards
+
+Les icônes MUI doivent être cohérentes dans toute l’app. Pour les cards, le plateau rail et les actions secondaires, utiliser uniquement les icônes suivantes :
+
+| Usage | Icône MUI |
+|---|---|
+| Drag vertical | `drag_handle` / `DragHandle` |
+| Link | `link` / `Link` |
+| Modifier le musicien | `edit` / `Edit` |
+| Jouer sans | `disabled_by_default` / `DisabledByDefault` |
+| Conflits | `swords` / `Swords` |
+| Supprimer ce passage / supprimer un trou | `delete` / `Delete` |
+| Musicien parti | `person_off` / `PersonOff` |
+| Supprimer participant | `person_off` / `PersonOff` |
+| Appeler plateau | `campaign` / `Campaign` |
+| Marquer comme joué / plateau joué | `check_circle` / `CheckCircle` |
+
+Règles :
+
+```txt
+- les actions directes d’une card affichent l’icône prévue ;
+- les actions secondaires dans le menu trois-points affichent une icône à gauche du libellé ;
+- un même concept ne doit pas utiliser plusieurs icônes différentes selon les écrans ;
+- un état conflict visible sur une card peut utiliser l’icône `swords` en complément du label “Conflit” ;
+- l’icône ne remplace jamais le label accessible.
+```
+
 # 6. Appearance card — Menu trois-points
 
 Menu recommandé :
 
 ```txt
-- Modifier le musicien
-- Jouer sans...
-- Créer / retirer un conflit
-- Supprimer ce passage
-- Musicien parti
-- Supprimer le participant
+- edit — Modifier le musicien
+- disabled_by_default — Jouer sans...
+- swords — Créer / retirer un conflit
+- delete — Supprimer ce passage / supprimer le trou
+- person_off — Musicien parti
+- person_off — Supprimer le participant
 ```
+
+Chaque entrée du menu secondaire doit utiliser un `ListItemIcon` MUI à gauche du libellé.
 
 ## 6.1 Modifier le musicien
 
@@ -958,21 +990,21 @@ Chaque état doit avoir au moins :
 Actions directes :
 
 ```txt
-- link
+- link — link
 - lock/unlock
 - menu trois-points
-- drag desktop/mobile
+- drag_handle — drag desktop/mobile
 ```
 
 Menu :
 
 ```txt
-- Modifier le musicien
-- Jouer sans...
-- Créer / retirer un conflit
-- Supprimer ce passage
-- Musicien parti
-- Supprimer le participant si jamais joué
+- edit — Modifier le musicien
+- disabled_by_default — Jouer sans...
+- swords — Créer / retirer un conflit
+- delete — Supprimer ce passage
+- person_off — Musicien parti
+- person_off — Supprimer le participant si jamais joué
 ```
 
 Pas dans le menu :

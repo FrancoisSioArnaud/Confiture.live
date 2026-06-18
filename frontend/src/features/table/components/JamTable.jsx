@@ -1,7 +1,7 @@
-import { Call, CheckCircle, DragIndicator, Link as LinkIcon, Lock, LockOpen, MoreVert, RadioButtonUnchecked } from '@mui/icons-material';
+import { Campaign, CheckCircle, Delete, DisabledByDefault, DragHandle as DragHandleIcon, Edit, Link as LinkIcon, Lock, LockOpen, MoreVert, PersonOff, Swords } from '@mui/icons-material';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { Alert, Box, Button, Card, CardContent, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Drawer, FormControlLabel, FormGroup, IconButton, List, ListItem, ListItemText, Menu, MenuItem, Paper, Stack, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Drawer, FormControlLabel, FormGroup, IconButton, List, ListItem, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Stack, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { useState } from 'react';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import {
@@ -55,7 +55,7 @@ function DragHandle({ onBlockedDrag, dragListeners, dragAttributes, dragDisabled
           {...(!dragDisabled ? dragAttributes : {})}
           {...(!dragDisabled ? dragListeners : {})}
         >
-          <DragIndicator fontSize="small" />
+          <DragHandleIcon fontSize="small" />
         </IconButton>
       </span>
     </Tooltip>
@@ -84,7 +84,7 @@ function AppearanceCard({ card, projection, linkModeActive, selectedForLink, sel
             <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
               <Typography fontWeight={800} noWrap>{cardTitle(card, projection)}</Typography>
               {card.appearanceIndex > 1 ? <Chip size="small" label={`R${card.appearanceIndex}`} sx={{ height: 20 }} /> : null}
-              {(selectedForConflict || conflicted) ? <Chip size="small" label="Conflit" color="error" variant="outlined" sx={{ height: 20 }} /> : null}
+              {(selectedForConflict || conflicted) ? <Chip size="small" icon={<Swords />} label="Conflit" color="error" variant="outlined" sx={{ height: 20 }} /> : null}
               {card.played ? <Chip size="small" label="Joué" color="success" sx={{ height: 20 }} /> : null}
             </Stack>
             <CardActions card={card} linked={linked} linkModeActive={linkModeActive} onToggleLink={onToggleLink} onToggleLock={onToggleLock} onOpenMenu={onOpenMenu} />
@@ -146,10 +146,10 @@ function PlateauRail({ rows, projection, onOpenCallDrawer, onTogglePlateauPlayed
                 <Stack spacing={0.5}>
                   <Tooltip title={played ? 'Ce plateau est déjà joué.' : 'Appeler ce plateau'}>
                     <span>
-                      <Button size="small" variant="outlined" startIcon={<Call />} onClick={() => onOpenCallDrawer?.(row.plateauIndex)} disabled={played}>Appeler</Button>
+                      <Button size="small" variant="outlined" startIcon={<Campaign />} onClick={() => onOpenCallDrawer?.(row.plateauIndex)} disabled={played}>Appeler</Button>
                     </span>
                   </Tooltip>
-                  <Button size="small" color={played ? 'success' : 'primary'} variant={played ? 'contained' : 'outlined'} startIcon={played ? <CheckCircle /> : <RadioButtonUnchecked />} onClick={() => onTogglePlateauPlayed(row.plateauIndex, row.targets, played)} disabled={row.targets.length === 0}>
+                  <Button size="small" color={played ? 'success' : 'primary'} variant={played ? 'contained' : 'outlined'} startIcon={<CheckCircle />} onClick={() => onTogglePlateauPlayed(row.plateauIndex, row.targets, played)} disabled={row.targets.length === 0}>
                     {played ? 'Joué' : 'Marquer joué'}
                   </Button>
                 </Stack>
@@ -639,12 +639,40 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
       </DndContext>
 
       <Menu anchorEl={menuState.anchorEl} open={Boolean(menuState.anchorEl)} onClose={closeMenu}>
-        {menuCard?.type === 'appearance' ? <MenuItem onClick={() => { const participantId = menuCard.participantId; closeMenu(); onEditParticipant?.(participantId); }}>Modifier le musicien</MenuItem> : null}
-        {menuCard?.type === 'appearance' ? <MenuItem onClick={() => openPlayWithout(menuCard)}>Jouer sans…</MenuItem> : null}
-        {menuCard?.type === 'appearance' ? <MenuItem onClick={() => { const anchor = menuCard; closeMenu(); setLinkMode({ active: false, anchor: null, selectedIds: new Set() }); setConflictMode({ active: true, anchor, target: null }); }}>Créer / retirer un conflit</MenuItem> : null}
-        <MenuItem onClick={() => requestRemoveCard(menuCard)}>{menuCard?.type === 'hole' ? 'Supprimer le trou' : 'Supprimer ce passage'}</MenuItem>
-        {menuCard?.type === 'appearance' ? <MenuItem onClick={() => requestParticipantLeft(menuCard)}>Musicien parti</MenuItem> : null}
-        {menuCard?.type === 'appearance' ? <MenuItem onClick={() => requestRemoveParticipant(menuCard)}>Supprimer participant</MenuItem> : null}
+        {menuCard?.type === 'appearance' ? (
+          <MenuItem onClick={() => { const participantId = menuCard.participantId; closeMenu(); onEditParticipant?.(participantId); }}>
+            <ListItemIcon><Edit fontSize="small" /></ListItemIcon>
+            <ListItemText>Modifier le musicien</ListItemText>
+          </MenuItem>
+        ) : null}
+        {menuCard?.type === 'appearance' ? (
+          <MenuItem onClick={() => openPlayWithout(menuCard)}>
+            <ListItemIcon><DisabledByDefault fontSize="small" /></ListItemIcon>
+            <ListItemText>Jouer sans…</ListItemText>
+          </MenuItem>
+        ) : null}
+        {menuCard?.type === 'appearance' ? (
+          <MenuItem onClick={() => { const anchor = menuCard; closeMenu(); setLinkMode({ active: false, anchor: null, selectedIds: new Set() }); setConflictMode({ active: true, anchor, target: null }); }}>
+            <ListItemIcon><Swords fontSize="small" /></ListItemIcon>
+            <ListItemText>Créer / retirer un conflit</ListItemText>
+          </MenuItem>
+        ) : null}
+        <MenuItem onClick={() => requestRemoveCard(menuCard)}>
+          <ListItemIcon><Delete fontSize="small" /></ListItemIcon>
+          <ListItemText>{menuCard?.type === 'hole' ? 'Supprimer le trou' : 'Supprimer ce passage'}</ListItemText>
+        </MenuItem>
+        {menuCard?.type === 'appearance' ? (
+          <MenuItem onClick={() => requestParticipantLeft(menuCard)}>
+            <ListItemIcon><PersonOff fontSize="small" /></ListItemIcon>
+            <ListItemText>Musicien parti</ListItemText>
+          </MenuItem>
+        ) : null}
+        {menuCard?.type === 'appearance' ? (
+          <MenuItem onClick={() => requestRemoveParticipant(menuCard)}>
+            <ListItemIcon><PersonOff fontSize="small" /></ListItemIcon>
+            <ListItemText>Supprimer participant</ListItemText>
+          </MenuItem>
+        ) : null}
       </Menu>
 
       <CallDrawer

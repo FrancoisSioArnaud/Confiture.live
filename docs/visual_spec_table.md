@@ -873,6 +873,28 @@ snackbar
 
 ---
 
+
+---
+
+# Iconographie officielle V0
+
+Utiliser les icônes MUI suivantes de manière homogène dans toute l’interface de jam :
+
+| Usage | Icône MUI |
+|---|---|
+| Drag vertical des cards | `drag_handle` / `DragHandle` |
+| Link | `link` / `Link` |
+| Modifier le musicien | `edit` / `Edit` |
+| Jouer sans | `disabled_by_default` / `DisabledByDefault` |
+| Conflits | `swords` / `Swords` |
+| Supprimer ce passage / supprimer un trou | `delete` / `Delete` |
+| Musicien parti | `person_off` / `PersonOff` |
+| Supprimer participant | `person_off` / `PersonOff` |
+| Appeler plateau | `campaign` / `Campaign` |
+| Marquer comme joué / plateau joué | `check_circle` / `CheckCircle` |
+
+Les entrées de menus secondaires des cards doivent afficher l’icône à gauche du texte. Les boutons d’action de plateau doivent utiliser `campaign` pour l’appel et `check_circle` pour l’état/action joué.
+
 # 13. Floating action button
 
 ## 13.1 Ajouter participant
