@@ -23,8 +23,20 @@ export function hasConflictBetweenTargets(state, targets) {
 }
 
 export function resolveConflictTarget(state, scope, id) {
-  if (scope === 'appearance') return state.appearances[id] ?? state.holes[id] ?? null;
+  return resolveConflictTargets(state, scope, id)[0] ?? null;
+}
+
+export function resolveConflictTargets(state, scope, id) {
+  if (scope === 'appearance') {
+    return [state.appearances[id] ?? state.holes[id] ?? null].filter(Boolean);
+  }
   const participation = state.participations[id];
-  if (!participation) return null;
-  return Object.values(state.appearances).find((appearance) => appearance.participationId === participation.participationId && appearance.status !== 'removed') ?? null;
+  if (!participation) return [];
+  return Object.values(state.appearances)
+    .filter((appearance) => appearance.participationId === participation.participationId && appearance.status !== 'removed')
+    .sort((a, b) => {
+      const round = (a.appearanceIndex ?? 1) - (b.appearanceIndex ?? 1);
+      if (round !== 0) return round;
+      return String(a.id).localeCompare(String(b.id));
+    });
 }

@@ -1527,6 +1527,10 @@ En général → scope: participation
 ### Conséquences sur la liste
 
 - empêche les targets d’être sur le même plateau ;
+- `scope: appearance` s’applique uniquement aux appearances ciblées ;
+- `scope: participation` s’applique à toute la soirée : toutes les appearances actuelles et futures des participations ciblées héritent du conflict ;
+- après un reveal de round, les nouvelles appearances matérialisées doivent être réévaluées par le resolver ;
+- exemple : un conflict participation `A-C` doit aussi séparer `A'` et `C'` dès que le round suivant est affiché ;
 - si les targets sont déjà sur le même plateau, l’algo doit les séparer ;
 - l’origin card du mode conflict est l’anchor ;
 - la target non-anchor est déplacée vers le slot valide le plus proche : le resolver essaye d’abord les slots suivants, puis les slots précédents si nécessaire ;

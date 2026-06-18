@@ -1,4 +1,4 @@
-import { hasConflictBetweenTargets, resolveConflictTarget } from './conflicts';
+import { hasConflictBetweenTargets, resolveConflictTargets } from './conflicts';
 import { getTargetEntity } from './holes';
 import { getCardRoundIndex, getPositionInRound, orderBetween, targetKey as formatTargetKey } from './ordering';
 import { addProjectionWarning } from './projectionWarnings';
@@ -8,7 +8,7 @@ const ANCHOR_EXTRACTORS = {
   hole_moved_between: (event) => cardTarget('hole', event.payload?.holeId),
   hole_added: (event) => cardTarget('hole', event.payload?.holeId),
   link_created: (event) => event.payload?.anchorTarget ?? null,
-  conflict_created: (event) => targetFromAnchorTargetId(event.payload?.anchorTargetId),
+  conflict_created: (event) => conflictAnchorTarget(event.payload),
   participation_added: (event) => participationAnchorTarget(event.payload),
   appearance_skipped: (event) => cardTarget('appearance', event.payload?.appearanceId),
   plateau_played: (event) => firstTarget(event.payload?.targets),
@@ -120,43 +120,98 @@ function applyLinkConstraint(state, link, { anchor = null, anchorMode = null } =
 }
 
 function applyConflictConstraint(state, conflict, transactionAnchor) {
-  const entries = conflict.targetIds
-    .map((id) => resolveConflictTarget(state, conflict.scope, id))
-    .filter((entity) => isCardActive(entity));
-  if (entries.length < 2) {
+  const groups = buildConflictTargetGroups(state, conflict);
+  const entries = groups.flatMap((group) => group.entities);
+  if (groups.length < 2 || groups.some((group) => group.entities.length === 0)) {
     addProjectionWarning(state, 'conflict_target_missing', 'conflict ignored because at least one target is missing.', { conflictId: conflict.conflictId });
     return false;
   }
 
-  if (hasDuplicateInstrumentEntities(entries)) {
+  if (conflictTargetGroupsShareInstrument(groups)) {
     conflict.suppressedBySameColumn = true;
     addProjectionWarning(state, 'conflict_suppressed_by_same_column', 'conflict ignored because two targets are in the same column.', { conflictId: conflict.conflictId });
     return false;
   }
   conflict.suppressedBySameColumn = false;
 
-  const anchorEntity = entries.find((entity) => targetKey(cardTarget(entity)) === targetKey(transactionAnchor))
-    ?? resolveConflictTarget(state, conflict.scope, conflict.anchorTargetId)
-    ?? entries[0];
+  const conflictingPairs = conflictEntityPairs(groups)
+    .filter(([a, b]) => samePlateau(a, b))
+    .sort(([a1, b1], [a2, b2]) => {
+      const index = getCardPlateauIndex(a1) - getCardPlateauIndex(a2);
+      if (index !== 0) return index;
+      const aOrder = compareBaseColumnOrder(a1, a2);
+      if (aOrder !== 0) return aOrder;
+      return compareBaseColumnOrder(b1, b2);
+    });
 
-  const conflictingEntries = entries
-    .filter((entity) => entity.id !== anchorEntity.id)
-    .filter((entity) => samePlateau(entity, anchorEntity))
-    .sort(compareBaseColumnOrder);
+  for (const [first, second] of conflictingPairs) {
+    const anchorEntity = chooseConflictAnchor(conflict, transactionAnchor, first, second);
+    const preferredTarget = anchorEntity?.id === first.id ? second : first;
 
-  for (const entity of conflictingEntries) {
-    if (moveConflictTargetAwayFromPlateau(state, entity, conflict)) return true;
-  }
+    if (moveConflictTargetAwayFromPlateau(state, preferredTarget, conflict)) return true;
 
-  // If the preferred non-anchor target cannot move because it is pinned or has no
-  // valid slot, try the anchor as a last resort when it is mobile. This keeps the
-  // conflict symmetric while still preferring the latest user anchor.
-  if (conflictingEntries.length > 0 && moveConflictTargetAwayFromPlateau(state, anchorEntity, conflict)) return true;
+    // If the preferred non-anchor target cannot move because it is pinned or has
+    // no valid slot, try the anchor as a last resort when it is mobile. This
+    // keeps participation-scope conflicts symmetric across all rounds while
+    // still preserving the latest user anchor when possible.
+    if (anchorEntity && moveConflictTargetAwayFromPlateau(state, anchorEntity, conflict)) return true;
 
-  if (conflictingEntries.length > 0) {
     addProjectionWarning(state, 'conflict_unresolved', 'conflict could not be resolved without moving a played or locked target.', { conflictId: conflict.conflictId });
   }
+
   return false;
+}
+
+function buildConflictTargetGroups(state, conflict) {
+  return conflict.targetIds.map((targetId) => ({
+    targetId,
+    entities: resolveConflictTargets(state, conflict.scope, targetId).filter(isCardActive),
+  }));
+}
+
+function conflictEntityPairs(groups) {
+  const pairs = [];
+  for (let leftIndex = 0; leftIndex < groups.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < groups.length; rightIndex += 1) {
+      groups[leftIndex].entities.forEach((left) => {
+        groups[rightIndex].entities.forEach((right) => {
+          if (left.instrumentId !== right.instrumentId) pairs.push([left, right]);
+        });
+      });
+    }
+  }
+  return pairs;
+}
+
+function conflictTargetGroupsShareInstrument(groups) {
+  for (let leftIndex = 0; leftIndex < groups.length; leftIndex += 1) {
+    const leftInstruments = new Set(groups[leftIndex].entities.map((entity) => entity.instrumentId).filter(Boolean));
+    for (let rightIndex = leftIndex + 1; rightIndex < groups.length; rightIndex += 1) {
+      if (groups[rightIndex].entities.some((entity) => leftInstruments.has(entity.instrumentId))) return true;
+    }
+  }
+  return false;
+}
+
+function chooseConflictAnchor(conflict, transactionAnchor, first, second) {
+  if (entityMatchesTarget(first, transactionAnchor)) return first;
+  if (entityMatchesTarget(second, transactionAnchor)) return second;
+  if (entityMatchesConflictTarget(first, conflict.anchorTargetId)) return first;
+  if (entityMatchesConflictTarget(second, conflict.anchorTargetId)) return second;
+  return first;
+}
+
+function entityMatchesTarget(entity, target) {
+  if (!entity || !target) return false;
+  if (target.type === 'appearance') return entity.id === target.id || entity.appearanceId === target.id;
+  if (target.type === 'hole') return entity.id === target.id || entity.holeId === target.id;
+  if (target.type === 'participation') return entity.participationId === target.id;
+  return entityMatchesConflictTarget(entity, target.id);
+}
+
+function entityMatchesConflictTarget(entity, targetId) {
+  if (!entity || !targetId) return false;
+  return [entity.id, entity.appearanceId, entity.holeId, entity.participationId].filter(Boolean).includes(targetId);
 }
 
 function linkedOrder(entities, strategy, anchorEntity = null, anchorMode = null) {
@@ -240,18 +295,14 @@ function columnOrderRespectsConflicts(state, ordered) {
 function hasActiveConflictAtPlateau(state, card, plateauIndex) {
   return Object.values(state.conflicts).some((conflict) => {
     if (conflict.status !== 'active' || conflict.suppressedBySameColumn) return false;
-    if (!conflictTargetsCard(conflict, card)) return false;
-    return conflict.targetIds.some((targetId) => {
-      const other = resolveConflictTarget(state, conflict.scope, targetId);
+    const groups = buildConflictTargetGroups(state, conflict);
+    const cardGroupIndex = groups.findIndex((group) => group.entities.some((entity) => entity.id === card.id));
+    if (cardGroupIndex < 0) return false;
+    return groups.some((group, groupIndex) => groupIndex !== cardGroupIndex && group.entities.some((other) => {
       if (!other || other.id === card.id || other.instrumentId === card.instrumentId) return false;
       return getCardPlateauIndex(other) === plateauIndex;
-    });
+    }));
   });
-}
-
-function conflictTargetsCard(conflict, card) {
-  const ids = [card.id, card.appearanceId, card.holeId, card.participationId].filter(Boolean);
-  return conflict.targetIds.some((targetId) => ids.includes(targetId));
 }
 
 function applyResolvedOrderToColumn(ordered) {
@@ -525,10 +576,11 @@ function participationAnchorTarget(payload = {}) {
   return cardTarget('appearance', `appearance_${payload.participationId}_${appearanceIndex}`);
 }
 
-function targetFromAnchorTargetId(anchorTargetId) {
-  if (!anchorTargetId) return null;
-  if (String(anchorTargetId).startsWith('hole_')) return cardTarget('hole', anchorTargetId);
-  return cardTarget('appearance', anchorTargetId);
+function conflictAnchorTarget(payload = {}) {
+  if (!payload.anchorTargetId) return null;
+  if (payload.scope === 'participation') return { type: 'participation', id: payload.anchorTargetId };
+  if (String(payload.anchorTargetId).startsWith('hole_')) return cardTarget('hole', payload.anchorTargetId);
+  return cardTarget('appearance', payload.anchorTargetId);
 }
 
 function firstTarget(targets) {

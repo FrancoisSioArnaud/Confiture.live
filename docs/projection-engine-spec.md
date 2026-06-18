@@ -779,7 +779,11 @@ Une future action pourra les réorganiser.
 
 ### 10.1 Scope participation
 
-Un conflict scope `participation` signifie que les appearances issues de deux participations ne doivent pas se retrouver sur le même plateau.
+Un conflict scope `participation` signifie que les appearances issues de deux participations ne doivent pas se retrouver sur le même plateau, pour toute la soirée.
+
+Le resolver doit étendre ce conflict à toutes les appearances actives des participations ciblées : appearances déjà visibles, appearances matérialisées plus tard par `round_revealed`, et appearances ajoutées par une nouvelle participation si elle est déjà concernée par un conflict de participation.
+
+Conséquence : si `A` et `C` ont un conflict `scope: participation`, alors `A'` et `C'` doivent être séparés dès que le round suivant est révélé. Cette propagation est une conséquence de projection déterministe ; elle ne nécessite pas un nouvel event `conflict_created` pour chaque round.
 
 Usage typique :
 

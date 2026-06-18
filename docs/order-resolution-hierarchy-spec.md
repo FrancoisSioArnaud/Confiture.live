@@ -292,6 +292,10 @@ Règles :
 - deux cards en conflict ne peuvent pas rester sur le même plateau, quel que soit le sens de création du conflict ;
 - le conflict est une contrainte bidirectionnelle : `A → C` et `C → A` créent la même interdiction de cohabitation ;
 - le sens de création sert seulement à définir l’anchor préférée au moment de la résolution ;
+- `scope: appearance` concerne uniquement les appearances ciblées ;
+- `scope: participation` concerne toute la soirée : toutes les appearances actuelles et futures issues des participations ciblées héritent du conflict ;
+- quand un round suivant est révélé, le resolver réapplique les conflicts `scope: participation` aux nouvelles appearances matérialisées ;
+- un conflict `scope: participation` doit séparer `A'` et `C'` de la même manière qu’il sépare `A` et `C` si ces appearances se retrouvent sur le même plateau ;
 - un conflict gagne contre un link ;
 - si le conflict concerne l’anchor et une autre card mobile, l’autre card bouge ;
 - si la card à déplacer ne peut pas descendre, le resolver peut chercher un slot valide au-dessus ;
@@ -616,3 +620,38 @@ D ne peut pas descendre car il est déjà en bas de sa colonne. Le resolver doit
 Chant   : A, B
 Guitare : D, C
 ```
+
+### 8.9 Conflict toute la soirée et reveal round
+
+Setup :
+
+```txt
+Chant : A, B
+Guitare : C, D
+```
+
+L’organisateur crée un conflict `A-C` avec `scope: participation` / “toute la soirée”. Le premier round est résolu :
+
+```txt
+Chant : A, B
+Guitare : D, C
+```
+
+Quand le round 2 est révélé, les appearances `A'`, `B'`, `C'`, `D'` sont matérialisées. Le conflict de participation doit alors s’appliquer automatiquement aux nouvelles appearances :
+
+```txt
+Chant : A, B, A', B'
+Guitare : D, C, D', C'
+```
+
+Il est interdit d’obtenir :
+
+```txt
+Chant : A, B, A', B'
+Guitare : D, C, C', D'
+```
+
+car `A'` et `C'` seraient sur le même plateau.
+
+Avec `scope: appearance`, seul le passage ciblé est concerné. Dans le même setup, un conflict `A-C` scope appearance peut déplacer `C` sous `D`, mais il ne doit pas imposer automatiquement `C'` sous `D'`.
+

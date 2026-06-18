@@ -767,6 +767,8 @@ Feedback : dialog de scope + snackbar. Animation si déplacement.
 }
 ```
 
+Effet `scope: participation` : le conflict s’applique à toutes les appearances actuelles et futures des participations ciblées. Quand un round suivant est révélé, le resolver doit réévaluer ce conflict et séparer les nouvelles appearances si elles tombent sur le même plateau. Aucun nouvel event n’est nécessaire pour propager le conflict au round suivant.
+
 Pour conflict appearance :
 
 ```js

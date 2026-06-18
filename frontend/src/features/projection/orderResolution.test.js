@@ -495,4 +495,73 @@ describe('orderResolution', () => {
     expect(getCardPlateauIndex(state, 'instrument_vocals', vocalA)).toBe(1);
   });
 
+
+  it('applies a participation-scoped conflict to newly revealed next-round appearances', () => {
+    const vocalA1 = 'appearance_participation_a_instrument_vocals_1';
+    const vocalA2 = 'appearance_participation_a_instrument_vocals_2';
+    const guitarC1 = 'appearance_participation_c_instrument_guitar_1';
+    const guitarC2 = 'appearance_participation_c_instrument_guitar_2';
+    const guitarD1 = 'appearance_participation_d_instrument_guitar_1';
+    const guitarD2 = 'appearance_participation_d_instrument_guitar_2';
+    const state = projectJamState({ transactions: [
+      tx(1, [{ type: 'jam_created', payload: { jamId: 'jam_1', name: 'Jam', indicativeDate: '2026-06-17', linkReorderStrategy: 'move_to_first' } }]),
+      instrument(2, 'instrument_vocals', 'Chant', 'a'),
+      instrument(3, 'instrument_guitar', 'Guitare', 'b'),
+      participantForInstrument(4, 'a', 'instrument_vocals', 'order_0'),
+      participantForInstrument(5, 'b', 'instrument_vocals', 'order_1'),
+      participantForInstrument(6, 'c', 'instrument_guitar', 'order_0'),
+      participantForInstrument(7, 'd', 'instrument_guitar', 'order_1'),
+      tx(8, [{ type: 'conflict_created', payload: {
+        conflictId: 'conflict_a_c_all_night',
+        scope: 'participation',
+        targetIds: ['participation_a_instrument_vocals', 'participation_c_instrument_guitar'],
+        reason: 'manual',
+        anchorTargetId: 'participation_a_instrument_vocals',
+      } }]),
+      tx(9, [{ type: 'instrument_round_visibility_changed', payload: { instrumentId: 'instrument_vocals', visibleRoundCount: 2 } }]),
+      tx(10, [{ type: 'instrument_round_visibility_changed', payload: { instrumentId: 'instrument_guitar', visibleRoundCount: 2 } }]),
+    ] });
+
+    expect(getCardPlateauIndex(state, 'instrument_vocals', vocalA1)).toBe(0);
+    expect(getCardPlateauIndex(state, 'instrument_guitar', guitarD1)).toBe(0);
+    expect(getCardPlateauIndex(state, 'instrument_guitar', guitarC1)).toBe(1);
+    expect(getCardPlateauIndex(state, 'instrument_vocals', vocalA2)).toBe(2);
+    expect(getCardPlateauIndex(state, 'instrument_guitar', guitarD2)).toBe(2);
+    expect(getCardPlateauIndex(state, 'instrument_guitar', guitarC2)).toBe(3);
+  });
+
+  it('keeps appearance-scoped conflicts limited to the targeted appearance only when next round is revealed', () => {
+    const vocalA1 = 'appearance_participation_a_instrument_vocals_1';
+    const vocalA2 = 'appearance_participation_a_instrument_vocals_2';
+    const guitarC1 = 'appearance_participation_c_instrument_guitar_1';
+    const guitarC2 = 'appearance_participation_c_instrument_guitar_2';
+    const guitarD1 = 'appearance_participation_d_instrument_guitar_1';
+    const guitarD2 = 'appearance_participation_d_instrument_guitar_2';
+    const state = projectJamState({ transactions: [
+      tx(1, [{ type: 'jam_created', payload: { jamId: 'jam_1', name: 'Jam', indicativeDate: '2026-06-17', linkReorderStrategy: 'move_to_first' } }]),
+      instrument(2, 'instrument_vocals', 'Chant', 'a'),
+      instrument(3, 'instrument_guitar', 'Guitare', 'b'),
+      participantForInstrument(4, 'a', 'instrument_vocals', 'order_0'),
+      participantForInstrument(5, 'b', 'instrument_vocals', 'order_1'),
+      participantForInstrument(6, 'c', 'instrument_guitar', 'order_0'),
+      participantForInstrument(7, 'd', 'instrument_guitar', 'order_1'),
+      tx(8, [{ type: 'conflict_created', payload: {
+        conflictId: 'conflict_a_c_this_round',
+        scope: 'appearance',
+        targetIds: [vocalA1, guitarC1],
+        reason: 'manual',
+        anchorTargetId: vocalA1,
+      } }]),
+      tx(9, [{ type: 'instrument_round_visibility_changed', payload: { instrumentId: 'instrument_vocals', visibleRoundCount: 2 } }]),
+      tx(10, [{ type: 'instrument_round_visibility_changed', payload: { instrumentId: 'instrument_guitar', visibleRoundCount: 2 } }]),
+    ] });
+
+    expect(getCardPlateauIndex(state, 'instrument_vocals', vocalA1)).toBe(0);
+    expect(getCardPlateauIndex(state, 'instrument_guitar', guitarD1)).toBe(0);
+    expect(getCardPlateauIndex(state, 'instrument_guitar', guitarC1)).toBe(1);
+    expect(getCardPlateauIndex(state, 'instrument_vocals', vocalA2)).toBe(2);
+    expect(getCardPlateauIndex(state, 'instrument_guitar', guitarC2)).toBe(2);
+    expect(getCardPlateauIndex(state, 'instrument_guitar', guitarD2)).toBe(3);
+  });
+
 });
