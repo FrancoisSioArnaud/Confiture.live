@@ -116,6 +116,22 @@ retrying
 error
 ```
 
+L'indicateur de synchronisation doit être abonné à `syncStatusStore`. Il ne doit pas lire le statut une seule fois avec `getSyncStatus()` dans le rendu React, sinon l'UI peut rester bloquée sur “Synchronisation en attente” après un push pourtant accepté par le backend.
+
+La transition attendue après une action est :
+
+```txt
+action locale → pending
+push en cours → syncing
+réponse backend acceptée → markTransactionSynced()
+pendingCount = 0 → synced
+```
+
+`hydrateFromPayload()` et `hydrateFromServer()` doivent aussi hydrater le statut UI depuis l'état local :
+
+- s'il reste des pending locales non ackées, afficher `pending` ;
+- sinon afficher `synced`.
+
 ---
 
 ## 8. V1

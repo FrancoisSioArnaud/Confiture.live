@@ -8,6 +8,7 @@ import { JamListPage } from './JamListPage';
 import { NewJamPage } from './NewJamPage';
 import { JamDetailPage } from './JamDetailPage';
 import { getLocalTransactions, resetLocalDbForTests } from '../../sync/localDb';
+import { resetSyncStatusForTests, setSyncStatus, SYNC_STATUS } from '../../sync/syncStatus';
 
 const mockedNavigate = vi.hoisted(() => vi.fn());
 
@@ -32,6 +33,7 @@ describe('jam pages', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     await resetLocalDbForTests();
+    resetSyncStatusForTests();
   });
 
   it('renders jam list cards with explicit open and delete buttons', async () => {
@@ -96,6 +98,19 @@ describe('jam pages', () => {
     expect(await screen.findByRole('heading', { name: 'Jam du jeudi' })).toBeInTheDocument();
     expect(screen.getByText(/Sauvegardé sur cet appareil|Synchronisé|Synchronisation/)).toBeInTheDocument();
     expect(screen.queryByText(/route jam_1/i)).not.toBeInTheDocument();
+  });
+
+  it('updates the sync status indicator when the vanilla sync store changes after a successful push', async () => {
+    renderPage(<JamDetailPage />);
+    expect(await screen.findByRole('heading', { name: 'Jam du jeudi' })).toBeInTheDocument();
+
+    await waitFor(() => expect(screen.getByText('Synchronisé')).toBeInTheDocument());
+
+    setSyncStatus('jam_1', { status: SYNC_STATUS.PENDING, pendingCount: 1 });
+    await waitFor(() => expect(screen.getByText('Synchronisation en attente')).toBeInTheDocument());
+
+    setSyncStatus('jam_1', { status: SYNC_STATUS.SYNCED, pendingCount: 0 });
+    await waitFor(() => expect(screen.getByText('Synchronisé')).toBeInTheDocument());
   });
 
   it('does not call client session APIs when the jam API returns 404', async () => {

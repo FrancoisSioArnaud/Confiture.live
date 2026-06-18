@@ -95,7 +95,9 @@ export async function pushPendingTransactions({ jamId, api = jamsApi, retryDelay
   }
 
   const remaining = await getPendingTransactions(jamId);
-  setSyncStatus(jamId, { status: remaining.length ? SYNC_STATUS.PENDING : SYNC_STATUS.SYNCED, pendingCount: remaining.length, lastSyncedAt: new Date().toISOString(), lastError: null });
+  const statusPatch = { status: remaining.length ? SYNC_STATUS.PENDING : SYNC_STATUS.SYNCED, pendingCount: remaining.length, lastError: null };
+  if (!remaining.length) statusPatch.lastSyncedAt = new Date().toISOString();
+  setSyncStatus(jamId, statusPatch);
   return { pushed };
 }
 
@@ -108,7 +110,12 @@ export async function hydrateFromServer({ jamId, api = jamsApi, fromServerSequen
     serverSequenceNumberEnd: transaction.serverSequenceNumberEnd,
     latestServerSequenceNumber: payload.latestServerSequenceNumber ?? fromServerSequenceNumber,
   })));
-  await saveSyncState(jamId, { lastServerSequenceNumber: payload.latestServerSequenceNumber ?? fromServerSequenceNumber, status: SYNC_STATUS.SYNCED });
+  const lastServerSequenceNumber = payload.latestServerSequenceNumber ?? fromServerSequenceNumber;
+  await saveSyncState(jamId, { lastServerSequenceNumber, status: SYNC_STATUS.SYNCED });
+  const remaining = await getPendingTransactions(jamId);
+  const statusPatch = { status: remaining.length ? SYNC_STATUS.PENDING : SYNC_STATUS.SYNCED, pendingCount: remaining.length, lastError: null };
+  if (!remaining.length) statusPatch.lastSyncedAt = new Date().toISOString();
+  setSyncStatus(jamId, statusPatch);
   return payload;
 }
 

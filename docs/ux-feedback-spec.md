@@ -96,6 +96,14 @@ Reprise nécessaire : cette jam est ouverte ailleurs
 
 Pas de snackbar à chaque sync réussie.
 
+En revanche, le chip de statut doit se mettre à jour immédiatement quand le backend accepte les transactions :
+
+```txt
+Synchronisation en attente → Synchronisation en cours → Synchronisé
+```
+
+Cette mise à jour doit être réactive. Le composant ne doit pas dépendre d'un refresh de page ou d'un re-render lié à une autre partie du store.
+
 En cas d’échec de sync répété, ne pas changer d’état agressif. Garder un warning sympathique et non bloquant.
 
 ---

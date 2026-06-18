@@ -4,7 +4,7 @@ import { buildCreateParticipantTransaction } from '../participants/utils/buildPa
 import { projectJamState } from '../projection/projectJamState';
 import { getLocalTransactions, getPendingTransactions, getSyncState, resetLocalDbForTests, saveSyncState } from './localDb';
 import { pushPendingTransactions } from './syncQueue';
-import { getSyncStatus, SYNC_STATUS } from './syncStatus';
+import { getSyncStatus, resetSyncStatusForTests, SYNC_STATUS } from './syncStatus';
 
 function transaction(sequence = 1) {
   return {
@@ -142,6 +142,7 @@ function buildNicoGuitarTransaction(projection) {
 beforeEach(async () => {
   vi.useRealTimers();
   await resetLocalDbForTests();
+  resetSyncStatusForTests();
   jamStore.setState({ jamId: null, transactions: [], events: [], snapshot: null, projection: projectJamState(), projectionWarnings: [], lastProjectedAt: null });
 });
 
@@ -228,6 +229,7 @@ describe('local-first sync layer', () => {
 
     expect(await getLocalTransactions('jam_sync')).toHaveLength(1);
     expect(await getSyncState('jam_sync')).toMatchObject({ lastServerSequenceNumber: 3, status: SYNC_STATUS.SYNCED });
+    expect(getSyncStatus('jam_sync')).toMatchObject({ status: SYNC_STATUS.SYNCED, pendingCount: 0 });
   });
 
   it('persists full jam payload hydration so subsequent pushes use the server sequence base', async () => {
@@ -243,6 +245,7 @@ describe('local-first sync layer', () => {
 
     expect(await getLocalTransactions('jam_sync')).toHaveLength(1);
     expect(await getSyncState('jam_sync')).toMatchObject({ lastServerSequenceNumber: 7, status: SYNC_STATUS.SYNCED });
+    expect(getSyncStatus('jam_sync')).toMatchObject({ status: SYNC_STATUS.SYNCED, pendingCount: 0 });
 
     await jamStore.getState().applyLocalTransaction(transaction(2), { sync: false });
     const api = { pushTransaction: vi.fn().mockResolvedValue({ transactionId: 'transaction_2', serverSequenceNumberStart: 8, serverSequenceNumberEnd: 8, latestServerSequenceNumber: 8 }) };
@@ -261,6 +264,7 @@ describe('local-first sync layer', () => {
 
     expect(projection.jam.name).toBe('Jam sync updated');
     expect((await getPendingTransactions('jam_sync'))[0]).toMatchObject({ transactionId: 'transaction_2', status: 'pending' });
+    expect(getSyncStatus('jam_sync')).toMatchObject({ status: SYNC_STATUS.PENDING, pendingCount: 1 });
     expect(jamStore.getState().transactions.map((item) => item.transactionId)).toContain('transaction_2');
   });
 
@@ -279,6 +283,7 @@ describe('local-first sync layer', () => {
     expect(localTransactions.filter((item) => item.transactionId === 'transaction_2')).toHaveLength(1);
     expect(localTransactions.find((item) => item.transactionId === 'transaction_2')).toMatchObject({ serverSequenceNumberStart: 3, serverSequenceNumberEnd: 3 });
     expect(await getPendingTransactions('jam_sync')).toEqual([]);
+    expect(getSyncStatus('jam_sync')).toMatchObject({ status: SYNC_STATUS.SYNCED, pendingCount: 0 });
   });
 
   it('orders known server transactions before local pending transactions deterministically after refresh hydration', async () => {

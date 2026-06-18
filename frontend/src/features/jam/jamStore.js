@@ -1,7 +1,8 @@
 import { createStore } from 'zustand/vanilla';
 import { projectJamState } from '../projection/projectJamState';
-import { getLatestLocalSnapshot, getLocalTransactions, markTransactionSynced, saveLocalJam, saveLocalTransaction, saveSnapshot, saveSyncState } from '../sync/localDb';
+import { getLatestLocalSnapshot, getLocalTransactions, getPendingTransactions, markTransactionSynced, saveLocalJam, saveLocalTransaction, saveSnapshot, saveSyncState } from '../sync/localDb';
 import { enqueueTransaction, hydrateFromServer as hydrateTransactionsFromServer, pushPendingTransactions, scheduleSync } from '../sync/syncQueue';
+import { setSyncStatus, SYNC_STATUS } from '../sync/syncStatus';
 
 function flattenEvents(transactions) {
   return transactions.flatMap((transaction) => transaction.events ?? []);
@@ -30,10 +31,20 @@ async function persistServerPayload(jamId, payload, transactions, snapshot) {
     serverSequenceNumberEnd: transaction.serverSequenceNumberEnd,
     latestServerSequenceNumber: latestServerSequenceNumberFromPayload(payload, transactions),
   })));
+  const lastServerSequenceNumber = latestServerSequenceNumberFromPayload(payload, transactions);
   await saveSyncState(jamId, {
-    lastServerSequenceNumber: latestServerSequenceNumberFromPayload(payload, transactions),
-    status: 'synced',
+    lastServerSequenceNumber,
+    status: SYNC_STATUS.SYNCED,
   });
+
+  const pendingCount = (await getPendingTransactions(jamId)).length;
+  const statusPatch = {
+    status: pendingCount ? SYNC_STATUS.PENDING : SYNC_STATUS.SYNCED,
+    pendingCount,
+    lastError: null,
+  };
+  if (!pendingCount) statusPatch.lastSyncedAt = new Date().toISOString();
+  setSyncStatus(jamId, statusPatch);
 }
 
 

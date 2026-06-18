@@ -7,6 +7,7 @@ import { createJam as createJamApi } from '../../../shared/api/jamsApi';
 import { jamStore } from '../../jam/jamStore';
 import { getOrCreateClientId } from '../../sync/clientIdentity';
 import { markTransactionSynced, saveSyncState } from '../../sync/localDb';
+import { setSyncStatus, SYNC_STATUS } from '../../sync/syncStatus';
 import { buildCreateJamTransaction } from '../utils/createJamTransaction';
 import { DEFAULT_INSTRUMENTS } from '../utils/defaultInstruments';
 import { createId } from '../../../shared/utils/createId';
@@ -36,7 +37,8 @@ export function NewJamPage() {
       const ack = response?.transactionAck;
       if (ack) {
         await markTransactionSynced(transaction.jamId, transaction.transactionId, ack);
-        await saveSyncState(transaction.jamId, { lastServerSequenceNumber: response.latestServerSequenceNumber ?? ack.serverSequenceNumberEnd, status: 'synced' });
+        await saveSyncState(transaction.jamId, { lastServerSequenceNumber: response.latestServerSequenceNumber ?? ack.serverSequenceNumberEnd, status: SYNC_STATUS.SYNCED });
+        setSyncStatus(transaction.jamId, { status: SYNC_STATUS.SYNCED, pendingCount: 0, lastError: null, lastSyncedAt: new Date().toISOString() });
         await jamStore.getState().reloadFromLocalDb(transaction.jamId);
       }
       navigate(`/jams/${transaction.jamId}`);

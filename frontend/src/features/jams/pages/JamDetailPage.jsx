@@ -9,7 +9,7 @@ import { useFeedback } from '../../../shared/feedback/FeedbackProvider';
 import { jamStore } from '../../jam/jamStore';
 import { buildLinearUndoTransaction, getLatestUndoableTransaction } from '../../transactions/buildUndoTransaction';
 import { getNextClientSequenceNumber, getLatestClientSequenceNumber } from '../../sync/clientSequence';
-import { getSyncStatus } from '../../sync/syncStatus';
+import { useSyncStatus } from '../../sync/syncStatus';
 import { getOrCreateClientId } from '../../sync/clientIdentity';
 import { ParticipantDrawer } from '../../participants/components/ParticipantDrawer';
 import { JamTable } from '../../table/components/JamTable';
@@ -25,7 +25,7 @@ export function JamDetailPage() {
   const clientSequenceRef = useRef(0);
   const projection = useJamStoreState((state) => state.projection);
   const transactions = useJamStoreState((state) => state.transactions);
-  const syncStatus = getSyncStatus(jamId);
+  const syncStatus = useSyncStatus(jamId);
   const nextClientSequenceNumber = getNextClientSequenceNumber(transactions, clientId);
   const undoTarget = getLatestUndoableTransaction(transactions);
   const { data, isLoading, isError, error } = useQuery({ queryKey: ['jam', jamId], queryFn: () => getJam(jamId, { includeSnapshot: 'true' }) });

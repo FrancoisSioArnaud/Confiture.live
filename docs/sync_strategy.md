@@ -31,8 +31,9 @@ Quand l'organisateur fait une action :
 3. il sauvegarde la transaction dans IndexedDB ;
 4. il l'ajoute à `pendingTransactions` ;
 5. il tente de la pousser vers le backend ;
-6. si le push réussit, il marque la transaction `synced` ;
-7. si le réseau/backend échoue, il garde la transaction pending et réessaye.
+6. si le push réussit, il marque la transaction `synced` et retire l'entrée `pendingTransactions` correspondante ;
+7. il met à jour le store UI `syncStatus` pour que l'indicateur passe immédiatement à `synced` quand `pendingCount === 0` ;
+8. si le réseau/backend échoue, il garde la transaction pending et réessaye.
 
 Aucune étape ne demande un lease, un heartbeat ou une session active.
 
