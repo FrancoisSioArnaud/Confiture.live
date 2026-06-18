@@ -17,7 +17,7 @@ import {
 } from '../utils/buildCardActionTransaction';
 import { canDragCard, cardConflicts, cardLinks, participantHasPlayed } from '../utils/cardState';
 import { buildLinkModeTransaction, hasContradictoryConflict, linkModeInitialSelection, selectedCardsWillMove } from '../utils/buildLinkModeTransaction';
-import { activeConflictsBetween, buildConflictModeTransaction } from '../utils/buildConflictModeTransaction';
+import { activeConflictsBetween, buildConflictModeTransaction, isSameInstrumentConflict } from '../utils/buildConflictModeTransaction';
 import { buildPlayWithoutTransaction } from '../utils/buildPlayWithoutTransaction';
 import { buildSkipWithReplacementTransaction, buildSkipWithoutMusicianTransaction, replacementCandidatePresentation, replacementCandidatesForCallDrawer } from '../utils/buildCallDrawerTransaction';
 
@@ -120,7 +120,7 @@ function SortableProjectedCard({ card, projection, instrument, linkMode, conflic
   const selectedForLink = Boolean(linkMode?.selectedIds?.has(card.id));
   const selectableForLink = Boolean(linkMode?.active && linkMode.anchor?.instrumentId !== card.instrumentId && !card.played && !card.locked && !hasContradictoryConflict([linkMode.anchor, card].filter(Boolean), projection));
   const selectedForConflict = Boolean(conflictMode?.active && (conflictMode.anchor?.id === card.id || conflictMode.target?.id === card.id));
-  const selectableForConflict = Boolean(conflictMode?.active && card.type === 'appearance' && conflictMode.anchor?.id !== card.id);
+  const selectableForConflict = Boolean(conflictMode?.active && card.type === 'appearance' && conflictMode.anchor?.id !== card.id && conflictMode.anchor?.instrumentId !== card.instrumentId);
   const dragDisabled = linkMode?.active || conflictMode?.active || !canDragCard(card, projection);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id, data: { card, instrumentId: instrument.instrumentId } });
   return (
@@ -465,6 +465,10 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
       setConflictMode({ active: false, anchor: null, target: null });
       return;
     }
+    if (isSameInstrumentConflict(conflictMode.anchor, card)) {
+      onFeedback?.('Conflit impossible : choisis une autre colonne');
+      return;
+    }
     if (card.played || card.locked) {
       onFeedback?.('Conflit impossible : passage joué ou verrouillé');
       return;
@@ -479,6 +483,10 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
   function validateConflictMode(scope) {
     const { anchor, target } = conflictMode;
     if (!anchor || !target) return;
+    if (isSameInstrumentConflict(anchor, target)) {
+      onFeedback?.('Conflit impossible : choisis une autre colonne');
+      return;
+    }
     const transaction = buildConflictModeTransaction({ jamId, clientId, clientSequenceNumber, projection, anchorCard: anchor, targetCard: target, scope });
     if (transaction) {
       dispatch(transaction);
@@ -540,6 +548,11 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
     if (selectedCards.length < 1) return;
     if (selectedCards.some((card) => card.played || card.locked)) {
       onFeedback?.('Link impossible : passage joué ou verrouillé');
+      return;
+    }
+    const selectedInstrumentIds = selectedCards.map((card) => card.instrumentId).filter(Boolean);
+    if (new Set(selectedInstrumentIds).size !== selectedInstrumentIds.length) {
+      onFeedback?.('Link impossible : une seule cible par colonne');
       return;
     }
     if (hasContradictoryConflict(selectedCards, projection)) {

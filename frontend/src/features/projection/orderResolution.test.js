@@ -295,22 +295,62 @@ describe('orderResolution', () => {
   });
 
 
-  it('suppresses direct conflict links with a deterministic warning from the resolver', () => {
+  it('suppresses invalid same-column links before applying direct conflict logic', () => {
+    const state = projectJamState({ transactions: [
+      ...baseJam(),
+      participant(3, 'a', 'order_0'),
+      participant(4, 'b', 'order_1'),
+      tx(5, [{ type: 'link_created', payload: {
+        linkId: 'link_same_column',
+        targets: [{ type: 'appearance', id: 'appearance_participation_a_guitar_1' }, { type: 'appearance', id: 'appearance_participation_b_guitar_1' }],
+        anchorTarget: { type: 'appearance', id: 'appearance_participation_a_guitar_1' },
+        reorderStrategy: 'average_position',
+      } }]),
+    ] });
+
+    expect(state.links.link_same_column.suppressedBySameColumn).toBe(true);
+    expect(state.projectionWarnings.map((warning) => warning.code)).toContain('link_suppressed_by_same_column');
+  });
+
+  it('suppresses invalid same-column conflicts instead of reordering within one column', () => {
     const state = projectJamState({ transactions: [
       ...baseJam(),
       participant(3, 'a', 'order_0'),
       participant(4, 'b', 'order_1'),
       tx(5, [{ type: 'conflict_created', payload: {
-        conflictId: 'conflict_direct',
+        conflictId: 'conflict_same_column',
         scope: 'appearance',
         targetIds: ['appearance_participation_a_guitar_1', 'appearance_participation_b_guitar_1'],
         reason: 'manual',
         anchorTargetId: 'appearance_participation_a_guitar_1',
       } }]),
-      tx(6, [{ type: 'link_created', payload: {
+    ] });
+
+    expect(state.conflicts.conflict_same_column.suppressedBySameColumn).toBe(true);
+    expect(columnIds(state)[0]).toEqual(['appearance_participation_a_guitar_1', 'appearance_participation_b_guitar_1']);
+    expect(state.projectionWarnings.map((warning) => warning.code)).toContain('conflict_suppressed_by_same_column');
+  });
+
+  it('suppresses direct conflict links with a deterministic warning from the resolver across columns', () => {
+    const vocalAppearance = 'appearance_participation_a_instrument_vocals_1';
+    const guitarAppearance = 'appearance_participation_b_instrument_guitar_1';
+    const state = projectJamState({ transactions: [
+      tx(1, [{ type: 'jam_created', payload: { jamId: 'jam_1', name: 'Jam', indicativeDate: '2026-06-17', linkReorderStrategy: 'move_to_first' } }]),
+      instrument(2, 'instrument_vocals', 'Chant', 'a'),
+      instrument(3, 'instrument_guitar', 'Guitare', 'b'),
+      participantForInstrument(4, 'a', 'instrument_vocals', 'order_0'),
+      participantForInstrument(5, 'b', 'instrument_guitar', 'order_0'),
+      tx(6, [{ type: 'conflict_created', payload: {
+        conflictId: 'conflict_direct',
+        scope: 'appearance',
+        targetIds: [vocalAppearance, guitarAppearance],
+        reason: 'manual',
+        anchorTargetId: vocalAppearance,
+      } }]),
+      tx(7, [{ type: 'link_created', payload: {
         linkId: 'link_direct_conflict',
-        targets: [{ type: 'appearance', id: 'appearance_participation_a_guitar_1' }, { type: 'appearance', id: 'appearance_participation_b_guitar_1' }],
-        anchorTarget: { type: 'appearance', id: 'appearance_participation_a_guitar_1' },
+        targets: [{ type: 'appearance', id: vocalAppearance }, { type: 'appearance', id: guitarAppearance }],
+        anchorTarget: { type: 'appearance', id: vocalAppearance },
         reorderStrategy: 'average_position',
       } }]),
     ] });
@@ -319,25 +359,57 @@ describe('orderResolution', () => {
     expect(state.projectionWarnings.map((warning) => warning.code)).toContain('link_suppressed_by_conflict');
   });
 
-  it('warns deterministically when a link cannot align a played target', () => {
+  it('warns deterministically when a cross-column link cannot align a played target', () => {
+    const vocalAppearance = 'appearance_participation_a_instrument_vocals_1';
+    const guitarAppearance = 'appearance_participation_b_instrument_guitar_1';
     const state = projectJamState({ transactions: [
-      ...baseJam(),
-      participant(3, 'a', 'order_0'),
-      participant(4, 'b', 'order_1'),
-      tx(5, [{ type: 'plateau_played', payload: { plateauIndex: 1, targets: [{ type: 'appearance', id: 'appearance_participation_b_guitar_1' }], playedAt: '2026-06-17T20:00:00.000Z' } }]),
-      tx(6, [{ type: 'link_created', payload: {
+      tx(1, [{ type: 'jam_created', payload: { jamId: 'jam_1', name: 'Jam', indicativeDate: '2026-06-17', linkReorderStrategy: 'move_to_first' } }]),
+      instrument(2, 'instrument_vocals', 'Chant', 'a'),
+      instrument(3, 'instrument_guitar', 'Guitare', 'b'),
+      participantForInstrument(4, 'a', 'instrument_vocals', 'order_0'),
+      participantForInstrument(5, 'c', 'instrument_guitar', 'order_0'),
+      participantForInstrument(6, 'b', 'instrument_guitar', 'order_1'),
+      tx(7, [{ type: 'plateau_played', payload: { plateauIndex: 2, targets: [{ type: 'appearance', id: guitarAppearance }], playedAt: '2026-06-17T20:00:00.000Z' } }]),
+      tx(8, [{ type: 'link_created', payload: {
         linkId: 'link_pinned',
-        targets: [{ type: 'appearance', id: 'appearance_participation_a_guitar_1' }, { type: 'appearance', id: 'appearance_participation_b_guitar_1' }],
-        anchorTarget: { type: 'appearance', id: 'appearance_participation_a_guitar_1' },
+        targets: [{ type: 'appearance', id: vocalAppearance }, { type: 'appearance', id: guitarAppearance }],
+        anchorTarget: { type: 'appearance', id: vocalAppearance },
         reorderStrategy: 'move_to_first',
       } }]),
     ] });
 
-    expect(state.appearances.appearance_participation_b_guitar_1.playedAtPlateauIndex).toBe(2);
+    expect(state.appearances[guitarAppearance].playedAtPlateauIndex).toBe(2);
     expect(state.projectionWarnings.map((warning) => warning.code)).toContain('link_target_pinned');
   });
 
 
+
+
+  it('separates cross-column conflicts by moving the non-anchor target within its own column', () => {
+    const vocalAppearance = 'appearance_participation_a_instrument_vocals_1';
+    const guitarB = 'appearance_participation_b_instrument_guitar_1';
+    const guitarC = 'appearance_participation_c_instrument_guitar_1';
+    const state = projectJamState({ transactions: [
+      tx(1, [{ type: 'jam_created', payload: { jamId: 'jam_1', name: 'Jam', indicativeDate: '2026-06-17', linkReorderStrategy: 'move_to_first' } }]),
+      instrument(2, 'instrument_vocals', 'Chant', 'a'),
+      instrument(3, 'instrument_guitar', 'Guitare', 'b'),
+      participantForInstrument(4, 'a', 'instrument_vocals', 'order_0'),
+      participantForInstrument(5, 'b', 'instrument_guitar', 'order_0'),
+      participantForInstrument(6, 'c', 'instrument_guitar', 'order_1'),
+      tx(7, [{ type: 'conflict_created', payload: {
+        conflictId: 'conflict_a_b',
+        scope: 'appearance',
+        targetIds: [vocalAppearance, guitarB],
+        reason: 'manual',
+        anchorTargetId: vocalAppearance,
+      } }]),
+    ] });
+
+    expect(getCardPlateauIndex(state, 'instrument_vocals', vocalAppearance)).toBe(0);
+    expect(getCardPlateauIndex(state, 'instrument_guitar', guitarC)).toBe(0);
+    expect(getCardPlateauIndex(state, 'instrument_guitar', guitarB)).toBe(1);
+    expect(state.conflicts.conflict_a_b.suppressedBySameColumn).toBe(false);
+  });
 
   it('moves the linked target to the first linked plateau even when the anchor is lower in its column', () => {
     const vocalAppearance = 'appearance_participation_a_instrument_vocals_1';

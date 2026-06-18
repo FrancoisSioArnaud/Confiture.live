@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { activeConflictsBetween, buildConflictModeTransaction } from './buildConflictModeTransaction';
+import { activeConflictsBetween, buildConflictModeTransaction, isSameInstrumentConflict } from './buildConflictModeTransaction';
 
 vi.mock('../../../shared/utils/createId', () => ({ createId: (prefix) => `${prefix}_test` }));
 
@@ -11,6 +11,22 @@ describe('buildConflictModeTransaction', () => {
     const transaction = buildConflictModeTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 5, projection: { conflicts: {} }, anchorCard: anchor, targetCard: target, scope: 'appearance' });
     expect(transaction.events.map((event) => event.type)).toEqual(['conflict_created']);
     expect(transaction.events[0].payload).toMatchObject({ scope: 'appearance', reason: 'manual', targetIds: ['appearance_a', 'appearance_b'] });
+  });
+
+
+
+  it('refuses to create a conflict between two cards in the same column', () => {
+    const sameColumnTarget = { type: 'appearance', id: 'appearance_c', participationId: 'participation_c', instrumentId: 'instrument_a' };
+    expect(isSameInstrumentConflict(anchor, sameColumnTarget)).toBe(true);
+    expect(buildConflictModeTransaction({
+      jamId: 'jam_1',
+      clientId: 'client_1',
+      clientSequenceNumber: 7,
+      projection: { conflicts: {} },
+      anchorCard: anchor,
+      targetCard: sameColumnTarget,
+      scope: 'appearance',
+    })).toBeNull();
   });
 
   it('removes existing conflicts without conflict_updated', () => {

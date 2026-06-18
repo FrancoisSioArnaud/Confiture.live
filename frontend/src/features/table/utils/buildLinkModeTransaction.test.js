@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildLinkModeTransaction, hasContradictoryConflict } from './buildLinkModeTransaction';
+import { buildLinkModeTransaction, hasContradictoryConflict, hasDuplicateInstrument } from './buildLinkModeTransaction';
 
 vi.mock('../../../shared/utils/createId', () => ({ createId: (prefix) => `${prefix}_test` }));
 
@@ -10,6 +10,24 @@ describe('buildLinkModeTransaction', () => {
     expect(transaction.events.map((event) => event.type)).toEqual(['link_removed', 'link_created']);
     expect(transaction.events[1].payload.reorderStrategy).toBe('average_position');
     expect(transaction.events).not.toContainEqual(expect.objectContaining({ type: 'link_updated' }));
+  });
+
+
+
+  it('refuses to create a link between two cards in the same column', () => {
+    const cards = [
+      { type: 'appearance', id: 'appearance_1', instrumentId: 'instrument_guitar' },
+      { type: 'appearance', id: 'appearance_2', instrumentId: 'instrument_guitar' },
+    ];
+    expect(hasDuplicateInstrument(cards)).toBe(true);
+    expect(buildLinkModeTransaction({
+      jamId: 'jam_1',
+      clientId: 'client_1',
+      clientSequenceNumber: 4,
+      projection: { jam: { linkReorderStrategy: 'move_to_first' }, links: {} },
+      anchorCard: cards[0],
+      selectedCards: cards,
+    })).toBeNull();
   });
 
   it('detects contradictory appearance and participation conflicts', () => {

@@ -10,8 +10,12 @@ function targetMatchesCard(target, card) {
   return target.type === card.type && target.id === card.id;
 }
 
+export function isUsableActiveLink(link) {
+  return link?.status === 'active' && link.suppressedByConflict !== true && link.suppressedBySameColumn !== true;
+}
+
 export function activeLinksForCards(cards, links) {
-  return Object.values(links ?? {}).filter((link) => link.status === 'active' && link.targets.some((target) => cards.some((card) => targetMatchesCard(target, card))));
+  return Object.values(links ?? {}).filter((link) => isUsableActiveLink(link) && link.targets.some((target) => cards.some((card) => targetMatchesCard(target, card))));
 }
 
 export function linkModeInitialSelection(anchorCard, links, cardsById) {
@@ -19,9 +23,14 @@ export function linkModeInitialSelection(anchorCard, links, cardsById) {
   return linkedCards.length > 0 ? linkedCards : [anchorCard];
 }
 
+export function hasDuplicateInstrument(cards) {
+  const instrumentIds = cards.map((card) => card?.instrumentId).filter(Boolean);
+  return new Set(instrumentIds).size !== instrumentIds.length;
+}
+
 export function hasContradictoryConflict(cards, projection) {
   return Object.values(projection.conflicts ?? {}).some((conflict) => {
-    if (conflict.status !== 'active') return false;
+    if (conflict.status !== 'active' || conflict.suppressedBySameColumn) return false;
     const ids = cards.map((card) => card.id);
     const participationIds = cards.filter((card) => card.type === 'appearance').map((card) => card.participationId);
     const targetSet = conflict.scope === 'participation' ? participationIds : ids;
@@ -30,6 +39,7 @@ export function hasContradictoryConflict(cards, projection) {
 }
 
 export function buildLinkModeTransaction({ jamId, clientId, clientSequenceNumber, projection, anchorCard, selectedCards }) {
+  if (hasDuplicateInstrument(selectedCards)) return null;
   const events = [];
   const linksToRemove = activeLinksForCards([anchorCard, ...selectedCards], projection.links);
   linksToRemove.forEach((link) => events.push(linkRemoved({ linkId: link.linkId })));

@@ -19,7 +19,7 @@ export function hasConflictBetweenTargets(state, targets) {
     const entity = target.type === 'appearance' ? state.appearances[target.id] : state.holes[target.id];
     return [target.id, entity?.participationId].filter(Boolean);
   });
-  return Object.values(state.conflicts).some((conflict) => conflict.status === 'active' && conflict.targetIds.every((id) => ids.includes(id)));
+  return Object.values(state.conflicts).some((conflict) => conflict.status === 'active' && conflict.suppressedBySameColumn !== true && conflict.targetIds.every((id) => ids.includes(id)));
 }
 
 export function resolveConflictTarget(state, scope, id) {

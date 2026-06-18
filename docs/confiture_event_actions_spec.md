@@ -270,6 +270,8 @@ Payload recommandé :
 
 Un link est une contrainte relationnelle. Il ne fige pas toute la composition du plateau.
 
+Un link est toujours inter-colonnes : deux targets d'un même link ne peuvent pas appartenir au même instrument / à la même colonne. L'UI doit empêcher cette sélection, le builder doit refuser la transaction, et le resolver doit ignorer défensivement tout ancien event invalide.
+
 Il n’y a pas de drawer de link en V0. Toute création/suppression de link se fait via le **mode link du tableau**.
 
 ---
@@ -293,6 +295,8 @@ manual
 ```
 
 Un conflict ne cible pas de hole en V0.
+
+Un conflict manuel est toujours inter-colonnes : deux targets d'un même conflict ne peuvent pas appartenir au même instrument / à la même colonne. L'UI doit empêcher cette sélection, le builder doit refuser la transaction, et le resolver doit ignorer défensivement tout ancien event invalide.
 
 ### Conflict sur participation
 
@@ -1524,6 +1528,7 @@ En général → scope: participation
 
 ### Conséquences sur la liste
 
+- refuse l’action si deux targets sont dans la même colonne / le même instrument ;
 - empêche les targets d’être sur le même plateau ;
 - si les targets sont déjà sur le même plateau, l’algo doit les séparer ;
 - l’origin card du mode conflict est l’anchor ;
@@ -1919,6 +1924,7 @@ En général → scope participation
 Règles :
 
 - pas de conflict sur hole en V0 ;
+- pas de conflict entre deux cards de la même colonne / du même instrument ;
 - pas de `conflict_updated` ;
 - modifier = supprimer puis recréer ;
 - suppression de conflict ne réorganise pas immédiatement.

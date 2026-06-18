@@ -350,6 +350,22 @@ Dernier recours pour garantir une projection déterministe.
 
 ---
 
+
+### 5.1 Contraintes inter-colonnes uniquement
+
+En V0, `link` et `conflict` sont des contraintes de plateau entre colonnes différentes.
+
+Règles officielles :
+
+- un `link` ne peut jamais relier deux cards de la même colonne / du même instrument ;
+- un `conflict` ne peut jamais relier deux cards de la même colonne / du même instrument ;
+- l'UI doit refuser la sélection dès que les deux targets sont dans la même colonne ;
+- les builders de transactions doivent retourner `null` ou refuser la transaction si cette règle est violée ;
+- le resolver doit rester défensif : si un ancien event invalide existe malgré tout dans l'event log, il doit ignorer/supprimer la contrainte pour le calcul visible, ajouter un `projectionWarning` déterministe, et ne pas réorganiser la colonne ;
+- le backend peut valider la forme du payload, mais la validation métier complète dépend de la projection car le payload ne contient pas forcément l'instrument de chaque target.
+
+Raison produit : dans une même colonne, deux cards sont déjà ordonnées verticalement. Un link ou conflict a du sens uniquement pour aligner ou séparer des cards situées dans des colonnes différentes sur un même plateau visuel.
+
 ## 5. Quand lancer la résolution
 
 La résolution doit être lancée après chaque transaction appliquée.

@@ -723,7 +723,7 @@ Feedback : snackbar si déplacement + animation.
 }
 ```
 
-Effet : crée la contrainte de link. Le resolver global aligne les targets selon la stratégie sans violer played, locked ou conflict.
+Effet : crée la contrainte de link. Le resolver global aligne les targets selon la stratégie sans violer played, locked ou conflict. Les targets doivent appartenir à des colonnes / instruments différents ; un link entre deux cards de la même colonne est invalide et doit être refusé côté UI/builder, puis ignoré défensivement par le resolver si un ancien event invalide existe.
 
 ---
 
@@ -783,6 +783,8 @@ Pour conflict appearance :
 ```
 
 ---
+
+Effet : crée une contrainte négative entre deux targets situées dans des colonnes / instruments différents. Un conflict entre deux cards de la même colonne est invalide : il doit être refusé côté UI/builder, puis ignoré défensivement par le resolver si un ancien event invalide existe.
 
 ### 12.2 `conflict_removed`
 

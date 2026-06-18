@@ -78,6 +78,12 @@ function applyLinkConstraint(state, link, transactionAnchor) {
     addProjectionWarning(state, 'link_target_missing', 'link ignored because at least one target is missing.', { linkId: link.linkId });
     return;
   }
+  if (hasDuplicateInstrumentEntries(targets)) {
+    link.suppressedBySameColumn = true;
+    addProjectionWarning(state, 'link_suppressed_by_same_column', 'link ignored because two targets are in the same column.', { linkId: link.linkId });
+    return;
+  }
+  link.suppressedBySameColumn = false;
   if (hasConflictBetweenTargets(state, link.targets)) {
     link.suppressedByConflict = true;
     addProjectionWarning(state, 'link_suppressed_by_conflict', 'link ignored because its targets have an active direct conflict.', { linkId: link.linkId });
@@ -106,6 +112,13 @@ function applyConflictConstraint(state, conflict, transactionAnchor) {
     return;
   }
 
+  if (hasDuplicateInstrumentEntries(entries.map((entity) => ({ entity })))) {
+    conflict.suppressedBySameColumn = true;
+    addProjectionWarning(state, 'conflict_suppressed_by_same_column', 'conflict ignored because two targets are in the same column.', { conflictId: conflict.conflictId });
+    return;
+  }
+  conflict.suppressedBySameColumn = false;
+
   const anchorEntity = resolveConflictTarget(state, conflict.scope, conflict.anchorTargetId)
     ?? entries.find((entity) => targetKey(cardTarget(entity)) === targetKey(transactionAnchor))
     ?? entries[0];
@@ -113,7 +126,6 @@ function applyConflictConstraint(state, conflict, transactionAnchor) {
     .filter((entity) => entity.id !== anchorEntity.id)
     .sort(compareBaseColumnOrder)
     .forEach((entity, index) => {
-      if (!sameColumn(entity, anchorEntity)) return;
       if (!samePlateau(entity, anchorEntity) && getPositionInRound(entity) !== getPositionInRound(anchorEntity)) return;
       if (isCardPlayed(entity) || isCardLocked(entity)) {
         addProjectionWarning(state, 'conflict_target_pinned', 'conflict could not move a played or locked target.', { conflictId: conflict.conflictId, target: cardTarget(entity) });
@@ -130,8 +142,9 @@ function linkedOrder(entities, strategy) {
   return Math.min(...values);
 }
 
-function sameColumn(a, b) {
-  return a?.instrumentId && a.instrumentId === b?.instrumentId;
+function hasDuplicateInstrumentEntries(entries) {
+  const instrumentIds = entries.map((entry) => entry.entity?.instrumentId).filter(Boolean);
+  return new Set(instrumentIds).size !== instrumentIds.length;
 }
 
 function samePlateau(a, b) {
@@ -148,7 +161,7 @@ function setCardOrder(card, order) {
 
 export function applyResolvedLinkAlignment(state) {
   Object.values(state.links)
-    .filter((link) => link.status === 'active' && !link.suppressedByConflict)
+    .filter((link) => link.status === 'active' && !link.suppressedByConflict && !link.suppressedBySameColumn)
     .sort((a, b) => String(a.linkId ?? a.id).localeCompare(String(b.linkId ?? b.id)))
     .forEach((link) => alignLinkResolvedPlateaux(state, link));
 }
@@ -158,6 +171,11 @@ function alignLinkResolvedPlateaux(state, link) {
     .map((target) => ({ target, entity: getTargetEntity(state, target) }))
     .filter(({ entity }) => isCardActive(entity));
   if (targetEntries.length < 2) return;
+  if (hasDuplicateInstrumentEntries(targetEntries)) {
+    link.suppressedBySameColumn = true;
+    addProjectionWarning(state, 'link_suppressed_by_same_column', 'link ignored because two targets are in the same column.', { linkId: link.linkId });
+    return;
+  }
 
   const desiredIndex = linkedResolvedIndex(targetEntries, link.reorderStrategy);
   if (!Number.isFinite(desiredIndex)) return;

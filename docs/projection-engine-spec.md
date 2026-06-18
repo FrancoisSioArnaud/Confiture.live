@@ -1058,3 +1058,10 @@ Ne pas implémenter dans le moteur V0 :
 - suppression physique d’historique ;
 - renumérotation des appearances ;
 - édition arbitraire d’un event ancien.
+
+
+---
+
+## Règle V0 — link/conflict inter-colonnes
+
+Les contraintes `link` et `conflict` ne sont valides qu'entre targets appartenant à des colonnes / instruments différents. Le moteur de projection doit rester défensif : si un ancien event invalide relie deux cards d'une même colonne, il marque la contrainte comme ignorée/suppressed, ajoute un warning déterministe, et ne réorganise pas la colonne.
