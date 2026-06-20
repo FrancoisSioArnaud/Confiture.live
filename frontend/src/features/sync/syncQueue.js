@@ -1,8 +1,13 @@
 import * as jamsApi from '../../shared/api/jamsApi';
 import {
-  getPendingTransactions,
+  getDuePendingTransactions,
+  getErroredTransactions,
   getLocalTransactions,
+  getNextRetryDelayMs,
+  getPendingTransactions,
+  getRetryDelayMs,
   getSyncState,
+  markTransactionError,
   markTransactionFailed,
   markTransactionPending,
   markTransactionSynced,
@@ -13,18 +18,71 @@ import {
 import { setSyncStatus, SYNC_STATUS } from './syncStatus';
 
 const timers = new Map();
+const ACCEPTED_ACK_STATUSES = new Set(['accepted', 'already_accepted']);
 
-function isSequenceConflict(error) {
-  const body = error?.payload?.body;
-  return error?.status === 409 && (body?.error === 'sequence_conflict' || body?.reason === 'sequence_mismatch');
-}
-
-function latestServerSequenceFromError(error) {
-  return error?.payload?.body?.latestServerSequenceNumber;
+class InvalidTransactionAckError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'InvalidTransactionAckError';
+    this.retryable = true;
+  }
 }
 
 function isOffline() {
   return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
+function stringifyError(error) {
+  return error?.message ?? String(error);
+}
+
+export function isRetryablePushError(error) {
+  if (error?.retryable === true) return true;
+  if (!Number.isInteger(error?.status)) return true;
+  if (error.status < 400) return true;
+  if (error.status === 408 || error.status === 429) return true;
+  if (error.status >= 500) return true;
+  return false;
+}
+
+export function validateTransactionAck(ack, transactionId) {
+  if (!ACCEPTED_ACK_STATUSES.has(ack?.status)) {
+    throw new InvalidTransactionAckError('Ack serveur invalide : status manquant ou inattendu.');
+  }
+
+  if (ack.transactionId !== transactionId) {
+    throw new InvalidTransactionAckError('Ack serveur invalide : transactionId incohérent.');
+  }
+
+  if (!Number.isInteger(ack.latestServerSequenceNumber)) {
+    throw new InvalidTransactionAckError('Ack serveur invalide : latestServerSequenceNumber manquant.');
+  }
+
+  if (!Number.isInteger(ack.serverSequenceNumberStart) || !Number.isInteger(ack.serverSequenceNumberEnd)) {
+    throw new InvalidTransactionAckError('Ack serveur invalide : bornes serverSequenceNumber manquantes.');
+  }
+
+  if (ack.serverSequenceNumberStart > ack.serverSequenceNumberEnd) {
+    throw new InvalidTransactionAckError('Ack serveur invalide : bornes serverSequenceNumber incohérentes.');
+  }
+
+  return ack;
+}
+
+export function isCreateJamTransaction(transaction) {
+  return Boolean(transaction?.events?.some((event) => event.type === 'jam_created'));
+}
+
+function validateCreateJamResponse(response, transaction) {
+  if (response?.jamId !== transaction.jamId) {
+    throw new InvalidTransactionAckError('Ack serveur invalide : jamId de création incohérent.');
+  }
+
+  const transactionAck = response?.transactionAck;
+  return validateTransactionAck({
+    ...transactionAck,
+    latestServerSequenceNumber: response.latestServerSequenceNumber ?? transactionAck?.latestServerSequenceNumber,
+  }, transaction.transactionId);
 }
 
 export async function enqueueTransaction({ jamId, transaction }) {
@@ -38,22 +96,54 @@ export async function enqueueTransaction({ jamId, transaction }) {
 export function scheduleSync({ jamId, api = jamsApi, delayMs = 400 } = {}) {
   clearTimeout(timers.get(jamId));
   const timer = setTimeout(() => pushPendingTransactions({ jamId, api }), delayMs);
+  if (typeof timer.unref === 'function') timer.unref();
   timers.set(jamId, timer);
   return timer;
 }
 
+function scheduleNextDueRetry({ jamId, api, allPending }) {
+  const nextDelayMs = getNextRetryDelayMs(allPending);
+  if (Number.isFinite(nextDelayMs)) scheduleSync({ jamId, api, delayMs: nextDelayMs });
+  return nextDelayMs;
+}
+
+async function pushTransactionToServer({ api, jamId, transaction, syncState }) {
+  if (isCreateJamTransaction(transaction)) {
+    const response = await api.createJam({ clientId: transaction.clientId, transaction });
+    return validateCreateJamResponse(response, transaction);
+  }
+
+  return validateTransactionAck(await api.pushTransaction(jamId, {
+    clientId: transaction.clientId,
+    baseServerSequenceNumber: syncState.lastServerSequenceNumber ?? 0,
+    transaction,
+  }), transaction.transactionId);
+}
+
 export async function pushPendingTransactions({ jamId, api = jamsApi, retryDelayMs = 1000 } = {}) {
-  const pending = await getPendingTransactions(jamId);
-  if (pending.length === 0) {
-    setSyncStatus(jamId, { status: SYNC_STATUS.SYNCED, pendingCount: 0, lastSyncedAt: new Date().toISOString() });
+  const allPending = await getPendingTransactions(jamId);
+  if (allPending.length === 0) {
+    const errored = await getErroredTransactions(jamId);
+    if (errored.length > 0) {
+      setSyncStatus(jamId, { status: SYNC_STATUS.ERROR, pendingCount: 0, lastError: errored[0].lastError ?? 'Transaction en erreur' });
+      return { pushed: 0, errorCount: errored.length };
+    }
+    setSyncStatus(jamId, { status: SYNC_STATUS.SYNCED, pendingCount: 0, lastError: null, lastSyncedAt: new Date().toISOString() });
     return { pushed: 0 };
   }
   if (isOffline()) {
-    setSyncStatus(jamId, { status: SYNC_STATUS.OFFLINE, pendingCount: pending.length, lastError: null });
+    setSyncStatus(jamId, { status: SYNC_STATUS.OFFLINE, pendingCount: allPending.length, lastError: null });
     return { pushed: 0, offline: true };
   }
 
-  setSyncStatus(jamId, { status: SYNC_STATUS.SYNCING, pendingCount: pending.length, lastError: null });
+  const pending = await getDuePendingTransactions(jamId);
+  if (pending.length === 0) {
+    const nextRetryDelayMs = scheduleNextDueRetry({ jamId, api, allPending });
+    setSyncStatus(jamId, { status: SYNC_STATUS.RETRYING, pendingCount: allPending.length, lastError: allPending[0]?.lastError ?? null });
+    return { pushed: 0, delayed: true, nextRetryDelayMs };
+  }
+
+  setSyncStatus(jamId, { status: SYNC_STATUS.SYNCING, pendingCount: allPending.length, lastError: null });
   let syncState = await getSyncState(jamId);
   let pushed = 0;
 
@@ -61,43 +151,41 @@ export async function pushPendingTransactions({ jamId, api = jamsApi, retryDelay
     const transaction = await getTransactionRecord(jamId, item.transactionId);
     if (!transaction) continue;
     try {
-      const ack = await api.pushTransaction(jamId, {
-        clientId: transaction.clientId,
-        baseServerSequenceNumber: syncState.lastServerSequenceNumber ?? 0,
-        transaction,
-      });
+      const ack = await pushTransactionToServer({ api, jamId, transaction, syncState });
       await markTransactionSynced(jamId, transaction.transactionId, ack);
       syncState = { ...syncState, lastServerSequenceNumber: ack.latestServerSequenceNumber, status: SYNC_STATUS.SYNCED };
       await saveSyncState(jamId, syncState);
       pushed += 1;
     } catch (error) {
-      if (isSequenceConflict(error)) {
-        const latestServerSequenceNumber = latestServerSequenceFromError(error);
-        await saveSyncState(jamId, {
-          ...syncState,
-          ...(Number.isInteger(latestServerSequenceNumber) ? { lastServerSequenceNumber: latestServerSequenceNumber } : {}),
-          status: SYNC_STATUS.ERROR,
-          error: 'sequence_conflict',
-        });
-        setSyncStatus(jamId, {
-          status: SYNC_STATUS.ERROR,
-          pendingCount: pending.length,
-          lastError: 'Le serveur possède déjà des events inconnus du client. Rechargez la jam avant de synchroniser.',
-        });
-        return { pushed, error, sequenceConflict: true, latestServerSequenceNumber };
+      const lastError = stringifyError(error);
+
+      if (!isRetryablePushError(error)) {
+        await markTransactionError(jamId, transaction.transactionId, error);
+        await saveSyncState(jamId, { ...syncState, status: SYNC_STATUS.ERROR, error: lastError });
+        const remaining = await getPendingTransactions(jamId);
+        setSyncStatus(jamId, { status: SYNC_STATUS.ERROR, pendingCount: remaining.length, lastError });
+        return { pushed, error, retryable: false };
       }
 
-      await markTransactionFailed(jamId, transaction.transactionId, error, retryDelayMs);
-      setSyncStatus(jamId, { status: SYNC_STATUS.RETRYING, pendingCount: pending.length, lastError: error.message });
-      scheduleSync({ jamId, api, delayMs: retryDelayMs });
-      return { pushed, error };
+      const progressiveRetryDelayMs = getRetryDelayMs(item.attemptCount ?? 0, { baseDelayMs: retryDelayMs });
+      await markTransactionFailed(jamId, transaction.transactionId, error, progressiveRetryDelayMs);
+      const remaining = await getPendingTransactions(jamId);
+      setSyncStatus(jamId, { status: SYNC_STATUS.RETRYING, pendingCount: remaining.length, lastError });
+      scheduleSync({ jamId, api, delayMs: progressiveRetryDelayMs });
+      return { pushed, error, retryable: true, retryDelayMs: progressiveRetryDelayMs };
     }
   }
 
   const remaining = await getPendingTransactions(jamId);
-  const statusPatch = { status: remaining.length ? SYNC_STATUS.PENDING : SYNC_STATUS.SYNCED, pendingCount: remaining.length, lastError: null };
-  if (!remaining.length) statusPatch.lastSyncedAt = new Date().toISOString();
+  const errored = await getErroredTransactions(jamId);
+  const statusPatch = {
+    status: remaining.length ? SYNC_STATUS.RETRYING : errored.length ? SYNC_STATUS.ERROR : SYNC_STATUS.SYNCED,
+    pendingCount: remaining.length,
+    lastError: remaining[0]?.lastError ?? errored[0]?.lastError ?? null,
+  };
+  if (!remaining.length && !errored.length) statusPatch.lastSyncedAt = new Date().toISOString();
   setSyncStatus(jamId, statusPatch);
+  if (remaining.length) scheduleNextDueRetry({ jamId, api, allPending: remaining });
   return { pushed };
 }
 
@@ -113,8 +201,13 @@ export async function hydrateFromServer({ jamId, api = jamsApi, fromServerSequen
   const lastServerSequenceNumber = payload.latestServerSequenceNumber ?? fromServerSequenceNumber;
   await saveSyncState(jamId, { lastServerSequenceNumber, status: SYNC_STATUS.SYNCED });
   const remaining = await getPendingTransactions(jamId);
-  const statusPatch = { status: remaining.length ? SYNC_STATUS.PENDING : SYNC_STATUS.SYNCED, pendingCount: remaining.length, lastError: null };
-  if (!remaining.length) statusPatch.lastSyncedAt = new Date().toISOString();
+  const errored = await getErroredTransactions(jamId);
+  const statusPatch = {
+    status: remaining.length ? SYNC_STATUS.PENDING : errored.length ? SYNC_STATUS.ERROR : SYNC_STATUS.SYNCED,
+    pendingCount: remaining.length,
+    lastError: errored[0]?.lastError ?? null,
+  };
+  if (!remaining.length && !errored.length) statusPatch.lastSyncedAt = new Date().toISOString();
   setSyncStatus(jamId, statusPatch);
   return payload;
 }

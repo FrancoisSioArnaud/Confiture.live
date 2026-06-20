@@ -7,7 +7,7 @@ import * as jamsApi from '../../../shared/api/jamsApi';
 import { JamListPage } from './JamListPage';
 import { NewJamPage } from './NewJamPage';
 import { JamDetailPage } from './JamDetailPage';
-import { getLocalTransactions, resetLocalDbForTests } from '../../sync/localDb';
+import { getLocalTransactions, getPendingTransactions, resetLocalDbForTests } from '../../sync/localDb';
 import { resetSyncStatusForTests, setSyncStatus, SYNC_STATUS } from '../../sync/syncStatus';
 
 const mockedNavigate = vi.hoisted(() => vi.fn());
@@ -15,7 +15,7 @@ const mockedNavigate = vi.hoisted(() => vi.fn());
 vi.mock('../../../shared/api/jamsApi', () => ({
   listJams: vi.fn().mockResolvedValue({ results: [{ jamId: 'jam_1', name: 'Jam du jeudi', indicativeDate: '2026-01-15', summary: { uniqueParticipantsCount: 2, playedPlateausCount: 1 } }] }),
   archiveJam: vi.fn().mockResolvedValue(null),
-  createJam: vi.fn().mockResolvedValue({ jamId: 'jam_1', latestServerSequenceNumber: 2, transactionAck: { transactionId: 'transaction_test', serverSequenceNumberStart: 1, serverSequenceNumberEnd: 2 } }),
+  createJam: vi.fn(({ transaction }) => Promise.resolve({ jamId: transaction.jamId, latestServerSequenceNumber: transaction.events.length, transactionAck: { status: 'accepted', transactionId: transaction.transactionId, serverSequenceNumberStart: 1, serverSequenceNumberEnd: transaction.events.length, latestServerSequenceNumber: transaction.events.length } })),
   getJam: vi.fn().mockResolvedValue({ jam: { jamId: 'jam_1', name: 'Jam du jeudi', indicativeDate: '2026-01-15' }, snapshot: null, transactions: [{ transactionId: 'tx_1', clientSequenceNumber: 1, serverSequenceNumberStart: 1, events: [{ eventId: 'evt_1', transactionId: 'tx_1', type: 'jam_created', payload: { jamId: 'jam_1', name: 'Jam du jeudi', indicativeDate: '2026-01-15', linkReorderStrategy: 'move_to_first' }, clientSequenceNumber: 1, serverSequenceNumber: 1, eventIndexInTransaction: 0 }, { eventId: 'evt_2', transactionId: 'tx_1', type: 'instrument_added', payload: { instrumentId: 'instrument_guitar', label: 'Guitare', orderKey: 'a', visible: true, isDefault: true }, clientSequenceNumber: 1, serverSequenceNumber: 2, eventIndexInTransaction: 1 }] }] }),
 }));
 
@@ -59,26 +59,34 @@ describe('jam pages', () => {
     expect(screen.getByText(/Saxophone/)).toBeInTheDocument();
   });
 
-  it('does not navigate to a local-only jam when backend creation fails', async () => {
+  it('creates a jam locally, navigates immediately, and keeps the create transaction pending if backend creation fails', async () => {
+    vi.useFakeTimers();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     jamsApi.createJam.mockRejectedValueOnce(new Error('server down'));
 
     renderPage(<NewJamPage />);
-    await userEvent.type(screen.getByPlaceholderText('Nom de la jam'), 'Jam en panne');
-    await userEvent.click(screen.getByRole('button', { name: /créer la jam/i }));
+    await user.type(screen.getByPlaceholderText('Nom de la jam'), 'Jam en panne');
+    await user.click(screen.getByRole('button', { name: /créer la jam/i }));
 
-    expect(await screen.findByText(/impossible de créer la jam côté serveur/i)).toBeInTheDocument();
-    expect(mockedNavigate).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockedNavigate).toHaveBeenCalledWith(expect.stringMatching(/^\/jams\/jam_/)));
+    await waitFor(() => expect(jamsApi.createJam).toHaveBeenCalled());
 
     const { transaction } = jamsApi.createJam.mock.calls[0][0];
-    await expect(getLocalTransactions(transaction.jamId)).resolves.toEqual([]);
+    await expect(getLocalTransactions(transaction.jamId)).resolves.toHaveLength(1);
+    expect((await getPendingTransactions(transaction.jamId))[0]).toMatchObject({ transactionId: transaction.transactionId, status: 'retrying' });
+    vi.clearAllTimers();
+    vi.useRealTimers();
   });
 
-  it('navigates to the created jam only after backend creation succeeds', async () => {
+  it('creates a jam locally, then syncs the create transaction when backend creation succeeds', async () => {
     renderPage(<NewJamPage />);
     await userEvent.type(screen.getByPlaceholderText('Nom de la jam'), 'Jam OK');
     await userEvent.click(screen.getByRole('button', { name: /créer la jam/i }));
 
     await waitFor(() => expect(mockedNavigate).toHaveBeenCalledWith(expect.stringMatching(/^\/jams\/jam_/)));
+    await waitFor(() => expect(jamsApi.createJam).toHaveBeenCalled());
+    const { transaction } = jamsApi.createJam.mock.calls[0][0];
+    await waitFor(async () => expect(await getPendingTransactions(transaction.jamId)).toEqual([]));
   });
 
   it('sends a null indicative date and respects initial instrument reorder', async () => {

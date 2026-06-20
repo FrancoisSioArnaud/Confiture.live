@@ -34,23 +34,50 @@ export function JamDetailPage() {
 
 
   useEffect(() => {
-    if (data) jamStore.getState().hydrateFromPayload(jamId, data).catch((error) => enqueueFeedback(`Hydratation locale impossible : ${error?.message ?? 'erreur inconnue'}`, 'warning'));
+    if (!data) return;
+
+    jamStore.getState()
+      .hydrateFromPayload(jamId, data)
+      .then(() => jamStore.getState().pushPending())
+      .catch((error) => enqueueFeedback(`Hydratation locale ou relance sync impossible : ${error?.message ?? 'erreur inconnue'}`, 'warning'));
   }, [data, enqueueFeedback, jamId]);
+
+  useEffect(() => {
+    function handleOnline() {
+      jamStore.getState()
+        .pushPending()
+        .catch((error) => enqueueFeedback(`Relance sync impossible : ${error?.message ?? 'erreur inconnue'}`, 'warning'));
+    }
+
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [enqueueFeedback]);
+
+  useEffect(() => {
+    if (!isError) return;
+
+    jamStore.getState()
+      .reloadFromLocalDb(jamId)
+      .then(() => jamStore.getState().pushPending())
+      .catch(() => {});
+  }, [isError, jamId]);
 
   useEffect(() => {
     clientSequenceRef.current = Math.max(clientSequenceRef.current, getLatestClientSequenceNumber(transactions, clientId));
   }, [clientId, transactions]);
 
 
-  if (isLoading) {
+  const hasLocalProjection = projection?.jam?.jamId === jamId && transactions.length > 0;
+
+  if (isLoading && !hasLocalProjection) {
     return <Stack alignItems="center" py={6}><CircularProgress /><Typography mt={2}>Chargement de la jam…</Typography></Stack>;
   }
-  if (isError) {
+  if (isError && !hasLocalProjection) {
     return <Alert severity="warning">Impossible de charger cette jam. {error?.message}</Alert>;
   }
 
   const jam = projection?.jam ?? data?.jam;
-  const canEdit = Boolean(projection) && !isLoading && !isError;
+  const canEdit = Boolean(projection?.jam) && (!isLoading || hasLocalProjection) && (!isError || hasLocalProjection);
 
 
   function withReservedClientSequence(transaction) {

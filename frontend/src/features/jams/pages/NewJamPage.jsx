@@ -3,11 +3,8 @@ import { Alert, Box, Button, Checkbox, IconButton, Paper, Stack, TextField, Typo
 import { useMutation } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createJam as createJamApi } from '../../../shared/api/jamsApi';
 import { jamStore } from '../../jam/jamStore';
 import { getOrCreateClientId } from '../../sync/clientIdentity';
-import { markTransactionSynced, saveSyncState } from '../../sync/localDb';
-import { setSyncStatus, SYNC_STATUS } from '../../sync/syncStatus';
 import { buildCreateJamTransaction } from '../utils/createJamTransaction';
 import { DEFAULT_INSTRUMENTS } from '../utils/defaultInstruments';
 import { createId } from '../../../shared/utils/createId';
@@ -32,15 +29,8 @@ export function NewJamPage() {
         selectedInstrumentIds,
         orderedInstruments: instruments,
       });
-      const response = await createJamApi({ clientId, transaction });
       await jamStore.getState().applyLocalTransaction(transaction, { sync: false });
-      const ack = response?.transactionAck;
-      if (ack) {
-        await markTransactionSynced(transaction.jamId, transaction.transactionId, ack);
-        await saveSyncState(transaction.jamId, { lastServerSequenceNumber: response.latestServerSequenceNumber ?? ack.serverSequenceNumberEnd, status: SYNC_STATUS.SYNCED });
-        setSyncStatus(transaction.jamId, { status: SYNC_STATUS.SYNCED, pendingCount: 0, lastError: null, lastSyncedAt: new Date().toISOString() });
-        await jamStore.getState().reloadFromLocalDb(transaction.jamId);
-      }
+      jamStore.getState().pushPending().catch(() => {});
       navigate(`/jams/${transaction.jamId}`);
     },
   });
@@ -77,7 +67,7 @@ export function NewJamPage() {
           <Typography variant="h4" fontWeight={900}>Nouvelle jam</Typography>
           <Typography color="text.secondary">Configure les instruments de départ. Tu pourras ajuster la jam ensuite.</Typography>
         </Box>
-        {mutation.isError ? <Alert severity="error">Impossible de créer la jam côté serveur. Vérifie la connexion puis réessaie.</Alert> : null}
+        {mutation.isError ? <Alert severity="error">Impossible de créer la jam localement. Vérifie le navigateur puis réessaie.</Alert> : null}
         <TextField label="Nom" placeholder="Nom de la jam" value={name} onChange={(event) => setName(event.target.value)} fullWidth autoFocus />
         <TextField label="Date indicative" type="date" value={indicativeDate} onChange={(event) => setIndicativeDate(event.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
         <Box>

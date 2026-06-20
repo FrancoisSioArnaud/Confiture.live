@@ -111,6 +111,42 @@ def test_create_list_and_retrieve_jam(client):
     assert payload["events"][0]["type"] == "jam_created"
 
 
+def test_create_jam_idempotence_does_not_duplicate_after_lost_response(client):
+    body = {
+        "clientId": "client_1",
+        "transaction": {
+            "transactionId": "transaction_create_jam_idempotent",
+            "jamId": "jam_idempotent",
+            "clientSequenceNumber": 1,
+            "schemaVersion": 1,
+            "events": [{
+                "eventId": "event_create_jam_idempotent",
+                "jamId": "jam_idempotent",
+                "type": "jam_created",
+                "payload": {
+                    "jamId": "jam_idempotent",
+                    "name": "Jam idempotente",
+                    "indicativeDate": "2026-06-17",
+                    "linkReorderStrategy": "move_to_first",
+                },
+                "schemaVersion": 1,
+            }],
+        },
+    }
+
+    first = client.post("/api/jams/", body, content_type="application/json")
+    second = client.post("/api/jams/", body, content_type="application/json")
+
+    assert first.status_code == 201
+    assert first.json()["transactionAck"]["status"] == "accepted"
+    assert second.status_code == 200
+    assert second.json()["transactionAck"]["status"] == "already_accepted"
+    assert second.json()["transactionAck"]["transactionId"] == "transaction_create_jam_idempotent"
+    assert Jam.objects.filter(jam_id="jam_idempotent").count() == 1
+    assert JamTransaction.objects.filter(transaction_id="transaction_create_jam_idempotent").count() == 1
+
+
+
 def test_create_jam_with_instruments_persists_transaction_and_events(client):
     response = create_jam_with_instruments(client)
 

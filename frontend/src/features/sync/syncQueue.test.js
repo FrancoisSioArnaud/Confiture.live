@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { jamStore } from '../jam/jamStore';
 import { buildCreateParticipantTransaction } from '../participants/utils/buildParticipantDrawerTransaction';
 import { projectJamState } from '../projection/projectJamState';
-import { getLocalTransactions, getPendingTransactions, getSyncState, resetLocalDbForTests, saveSyncState } from './localDb';
+import { getLocalTransactions, getPendingTransactions, getRetryDelayMs, getSyncState, resetLocalDbForTests, saveSyncState } from './localDb';
 import { pushPendingTransactions } from './syncQueue';
 import { getSyncStatus, resetSyncStatusForTests, SYNC_STATUS } from './syncStatus';
 
@@ -159,8 +159,8 @@ describe('local-first sync layer', () => {
   });
 
   it('pushes pending transactions successfully and records server sequence state', async () => {
-    await jamStore.getState().applyLocalTransaction(transaction(1), { sync: false });
-    const api = { pushTransaction: vi.fn().mockResolvedValue({ status: 'accepted', transactionId: 'transaction_1', serverSequenceNumberStart: 1, serverSequenceNumberEnd: 1, latestServerSequenceNumber: 1 }) };
+    await jamStore.getState().applyLocalTransaction(transaction(2), { sync: false });
+    const api = { pushTransaction: vi.fn().mockResolvedValue({ status: 'accepted', transactionId: 'transaction_2', serverSequenceNumberStart: 1, serverSequenceNumberEnd: 1, latestServerSequenceNumber: 1 }) };
 
     const result = await pushPendingTransactions({ jamId: 'jam_sync', api });
 
@@ -171,40 +171,76 @@ describe('local-first sync layer', () => {
     expect(getSyncStatus('jam_sync')).toMatchObject({ status: SYNC_STATUS.SYNCED, pendingCount: 0 });
   });
 
+  it('syncs a pending jam creation through POST /api/jams/', async () => {
+    await jamStore.getState().applyLocalTransaction(transaction(1), { sync: false });
+    const api = {
+      createJam: vi.fn().mockResolvedValue({
+        jamId: 'jam_sync',
+        latestServerSequenceNumber: 1,
+        transactionAck: { status: 'accepted', transactionId: 'transaction_1', serverSequenceNumberStart: 1, serverSequenceNumberEnd: 1, latestServerSequenceNumber: 1 },
+      }),
+      pushTransaction: vi.fn(),
+    };
+
+    const result = await pushPendingTransactions({ jamId: 'jam_sync', api });
+
+    expect(result.pushed).toBe(1);
+    expect(api.createJam).toHaveBeenCalledWith({ clientId: 'client_1', transaction: expect.objectContaining({ transactionId: 'transaction_1' }) });
+    expect(api.pushTransaction).not.toHaveBeenCalled();
+    expect(await getPendingTransactions('jam_sync')).toEqual([]);
+  });
+
+  it('uses progressive retry backoff delays', () => {
+    expect(getRetryDelayMs(0, { baseDelayMs: 500, maxDelayMs: 30000 })).toBe(500);
+    expect(getRetryDelayMs(1, { baseDelayMs: 500, maxDelayMs: 30000 })).toBe(1000);
+    expect(getRetryDelayMs(2, { baseDelayMs: 500, maxDelayMs: 30000 })).toBe(2000);
+    expect(getRetryDelayMs(20, { baseDelayMs: 500, maxDelayMs: 30000 })).toBe(30000);
+  });
+
   it('keeps a transaction pending and schedules retry after push error', async () => {
     vi.useFakeTimers();
-    await jamStore.getState().applyLocalTransaction(transaction(1), { sync: false });
+    await jamStore.getState().applyLocalTransaction(transaction(2), { sync: false });
     const api = { pushTransaction: vi.fn().mockRejectedValue(new Error('offline')) };
 
     const result = await pushPendingTransactions({ jamId: 'jam_sync', api, retryDelayMs: 500 });
 
     expect(result.error.message).toBe('offline');
-    expect((await getPendingTransactions('jam_sync'))[0]).toMatchObject({ transactionId: 'transaction_1', status: 'retry', attemptCount: 1 });
+    expect((await getPendingTransactions('jam_sync'))[0]).toMatchObject({ transactionId: 'transaction_2', status: 'retrying', attemptCount: 1 });
     expect(getSyncStatus('jam_sync')).toMatchObject({ status: SYNC_STATUS.RETRYING, pendingCount: 1, lastError: 'offline' });
     vi.clearAllTimers();
     vi.useRealTimers();
   });
 
-  it('keeps pending transactions and requires resync after server sequence conflict', async () => {
+  it('does not mark a malformed 200 ack as synced and schedules a retry', async () => {
     vi.useFakeTimers();
-    await saveSyncState('jam_sync', { lastServerSequenceNumber: 1, status: SYNC_STATUS.SYNCED });
-    await jamStore.getState().applyLocalTransaction(transaction(1), { sync: false });
-    const sequenceConflict = new Error('HTTP 409');
-    sequenceConflict.status = 409;
-    sequenceConflict.payload = {
-      body: {
-        error: 'sequence_conflict',
-        latestServerSequenceNumber: 4,
-      },
-    };
-    const api = { pushTransaction: vi.fn().mockRejectedValue(sequenceConflict) };
+    await jamStore.getState().applyLocalTransaction(transaction(2), { sync: false });
+    const api = { pushTransaction: vi.fn().mockResolvedValue({ transactionId: 'transaction_2' }) };
 
     const result = await pushPendingTransactions({ jamId: 'jam_sync', api, retryDelayMs: 500 });
 
-    expect(result).toMatchObject({ pushed: 0, sequenceConflict: true, latestServerSequenceNumber: 4 });
-    expect((await getPendingTransactions('jam_sync'))[0]).toMatchObject({ transactionId: 'transaction_1', status: 'pending', attemptCount: 0 });
-    expect(await getSyncState('jam_sync')).toMatchObject({ lastServerSequenceNumber: 4, status: SYNC_STATUS.ERROR, error: 'sequence_conflict' });
-    expect(getSyncStatus('jam_sync')).toMatchObject({ status: SYNC_STATUS.ERROR, pendingCount: 1 });
+    expect(result).toMatchObject({ pushed: 0, retryable: true });
+    expect((await getPendingTransactions('jam_sync'))[0]).toMatchObject({ transactionId: 'transaction_2', status: 'retrying', attemptCount: 1 });
+    expect(await getSyncState('jam_sync')).toMatchObject({ lastServerSequenceNumber: 0 });
+    expect(getSyncStatus('jam_sync')).toMatchObject({ status: SYNC_STATUS.RETRYING, pendingCount: 1 });
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  it('marks non-retryable HTTP errors as error without scheduling a retry', async () => {
+    vi.useFakeTimers();
+    await saveSyncState('jam_sync', { lastServerSequenceNumber: 1, status: SYNC_STATUS.SYNCED });
+    await jamStore.getState().applyLocalTransaction(transaction(2), { sync: false });
+    const validationError = new Error('HTTP 400');
+    validationError.status = 400;
+    validationError.payload = { body: { transaction: 'invalid payload' } };
+    const api = { pushTransaction: vi.fn().mockRejectedValue(validationError) };
+
+    const result = await pushPendingTransactions({ jamId: 'jam_sync', api, retryDelayMs: 500 });
+
+    expect(result).toMatchObject({ pushed: 0, retryable: false });
+    expect(await getPendingTransactions('jam_sync')).toEqual([]);
+    expect(await getSyncState('jam_sync')).toMatchObject({ lastServerSequenceNumber: 1, status: SYNC_STATUS.ERROR, error: 'HTTP 400' });
+    expect(getSyncStatus('jam_sync')).toMatchObject({ status: SYNC_STATUS.ERROR, pendingCount: 0, lastError: 'HTTP 400' });
     await vi.advanceTimersByTimeAsync(500);
     expect(api.pushTransaction).toHaveBeenCalledTimes(1);
     vi.clearAllTimers();
@@ -248,7 +284,7 @@ describe('local-first sync layer', () => {
     expect(getSyncStatus('jam_sync')).toMatchObject({ status: SYNC_STATUS.SYNCED, pendingCount: 0 });
 
     await jamStore.getState().applyLocalTransaction(transaction(2), { sync: false });
-    const api = { pushTransaction: vi.fn().mockResolvedValue({ transactionId: 'transaction_2', serverSequenceNumberStart: 8, serverSequenceNumberEnd: 8, latestServerSequenceNumber: 8 }) };
+    const api = { pushTransaction: vi.fn().mockResolvedValue({ status: 'accepted', transactionId: 'transaction_2', serverSequenceNumberStart: 8, serverSequenceNumberEnd: 8, latestServerSequenceNumber: 8 }) };
 
     await pushPendingTransactions({ jamId: 'jam_sync', api });
 
@@ -341,7 +377,7 @@ describe('local-first sync layer', () => {
     await jamStore.getState().applyLocalTransaction(participantTransaction, { sync: false });
     expect(jamStore.getState().projection.participants[participantTransaction.events[0].payload.participantId].name).toBe('Nico');
 
-    const api = { pushTransaction: vi.fn().mockResolvedValue({ transactionId: participantTransaction.transactionId, serverSequenceNumberStart: 3, serverSequenceNumberEnd: 4, latestServerSequenceNumber: 4 }) };
+    const api = { pushTransaction: vi.fn().mockResolvedValue({ status: 'accepted', transactionId: participantTransaction.transactionId, serverSequenceNumberStart: 3, serverSequenceNumberEnd: 4, latestServerSequenceNumber: 4 }) };
     await pushPendingTransactions({ jamId: 'jam_sync', api });
 
     expect(api.pushTransaction).toHaveBeenCalledWith('jam_sync', expect.objectContaining({

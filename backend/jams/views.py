@@ -15,6 +15,28 @@ def _client_id(request):
     return request.data.get("clientId")
 
 
+def _transaction_ack_payload(transaction, status_text, latest_server_sequence_number=None):
+    latest = latest_server_sequence_number
+    if latest is None:
+        latest = transaction.jam.latest_server_sequence_number
+    return {
+        "status": status_text,
+        "transactionId": transaction.transaction_id,
+        "serverSequenceNumberStart": transaction.server_sequence_number_start,
+        "serverSequenceNumberEnd": transaction.server_sequence_number_end,
+        "latestServerSequenceNumber": latest,
+    }
+
+
+def _create_jam_response(jam, transaction, status_text, response_status):
+    latest = jam.latest_server_sequence_number
+    return Response({
+        "jamId": jam.jam_id,
+        "latestServerSequenceNumber": latest,
+        "transactionAck": _transaction_ack_payload(transaction, status_text, latest),
+    }, status=response_status)
+
+
 @api_view(["GET"])
 def health(request):
     return Response({"status": "ok"})
@@ -49,6 +71,15 @@ class JamViewSet(viewsets.ModelViewSet):
         jam_id = payload.get("jamId")
         if not jam_id:
             raise ValidationError({"transaction.events.jam_created.payload.jamId": "This field is required."})
+
+        transaction_id = transaction_payload.get("transactionId")
+        if transaction_id:
+            existing_transaction = JamTransaction.objects.select_related("jam").filter(transaction_id=transaction_id).first()
+            if existing_transaction:
+                if existing_transaction.jam.jam_id != jam_id:
+                    raise ValidationError({"transaction.transactionId": "Already used for another jam."})
+                return _create_jam_response(existing_transaction.jam, existing_transaction, "already_accepted", status.HTTP_200_OK)
+
         if Jam.objects.filter(jam_id=jam_id).exists():
             raise ValidationError({"jamId": "Jam already exists."})
 
@@ -62,15 +93,7 @@ class JamViewSet(viewsets.ModelViewSet):
             transaction_payload = {**transaction_payload, "jamId": jam.jam_id}
             transaction, _created = accept_transaction(jam, client_id, transaction_payload)
 
-        return Response({
-            "jamId": jam.jam_id,
-            "latestServerSequenceNumber": transaction.server_sequence_number_end,
-            "transactionAck": {
-                "transactionId": transaction.transaction_id,
-                "serverSequenceNumberStart": transaction.server_sequence_number_start,
-                "serverSequenceNumberEnd": transaction.server_sequence_number_end,
-            },
-        }, status=status.HTTP_201_CREATED)
+        return _create_jam_response(jam, transaction, "accepted", status.HTTP_201_CREATED)
 
     def retrieve(self, request, *args, **kwargs):
         jam = self.get_object()
