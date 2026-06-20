@@ -349,9 +349,15 @@ function alignLinkResolvedPlateaux(state, link, { anchor = null, anchorMode = nu
     return;
   }
 
-  const desiredIndex = linkedResolvedIndex(targetEntries, link.reorderStrategy, anchor, anchorMode, manualMoveContext);
+  const priorityEntry = linkedManualPriorityEntry(targetEntries, anchor, anchorMode, manualMoveContext);
+  const desiredIndex = linkedResolvedIndex(targetEntries, link.reorderStrategy, priorityEntry);
   if (!Number.isFinite(desiredIndex)) return;
 
+  // If a manual move gives priority to one target of a link, that priority is
+  // inherited by the whole link group. Each mobile target may therefore push
+  // mobile cards in its own column so the group reaches the moved/displaced
+  // plateau. Played and locked cards remain fixed and stop that part of the
+  // propagation.
   targetEntries
     .sort((a, b) => targetKey(a.target).localeCompare(targetKey(b.target)))
     .forEach(({ target, entity }) => {
@@ -361,20 +367,24 @@ function alignLinkResolvedPlateaux(state, link, { anchor = null, anchorMode = nu
         }
         return;
       }
-      moveCardToResolvedIndex(state, entity, desiredIndex);
+      moveCardToResolvedIndex(state, entity, desiredIndex, { link, target });
     });
 }
 
-function linkedResolvedIndex(targetEntries, strategy, anchor = null, anchorMode = null, manualMoveContext = null) {
-  if (anchorMode === 'manual_move') {
-    const anchorEntry = targetEntries.find(({ target }) => targetKey(target) === targetKey(anchor));
-    if (anchorEntry) return (anchorEntry.entity.resolvedPlateauIndex ?? 1) - 1;
-
-    const displacedEntry = manualMoveContext
-      ? linkedEntryTouchedByManualMove(targetEntries, manualMoveContext)
-      : null;
-    if (displacedEntry) return (displacedEntry.entity.resolvedPlateauIndex ?? 1) - 1;
+function linkedManualPriorityEntry(targetEntries, anchor = null, anchorMode = null, manualMoveContext = null) {
+  if (anchorMode !== 'manual_move') return null;
+  const movedTarget = manualMoveContext?.target ?? anchor;
+  const movedKey = targetKey(movedTarget);
+  if (movedKey) {
+    const movedEntry = targetEntries.find(({ target }) => targetKey(target) === movedKey);
+    if (movedEntry) return movedEntry;
   }
+
+  return manualMoveContext ? linkedEntryTouchedByManualMove(targetEntries, manualMoveContext) : null;
+}
+
+function linkedResolvedIndex(targetEntries, strategy, priorityEntry = null) {
+  if (priorityEntry) return (priorityEntry.entity.resolvedPlateauIndex ?? 1) - 1;
   const indexes = targetEntries
     .map(({ entity }) => (entity.resolvedPlateauIndex ?? 1) - 1)
     .filter(Number.isFinite);
@@ -403,20 +413,25 @@ function linkedEntryTouchedByManualMove(targetEntries, manualMoveContext) {
   return null;
 }
 
-function moveCardToResolvedIndex(state, card, desiredIndex) {
+function moveCardToResolvedIndex(state, card, desiredIndex, { link = null, target = null } = {}) {
   const cards = getCardsByInstrument(state).get(card.instrumentId) ?? [];
   const ordered = sortCardsByCurrentResolvedOrder(cards);
   const currentIndex = ordered.findIndex((candidate) => candidate.id === card.id);
-  if (currentIndex < 0) return;
-  const [moved] = ordered.splice(currentIndex, 1);
-  const boundedIndex = Math.max(0, Math.min(desiredIndex, ordered.length));
-  ordered.splice(boundedIndex, 0, moved);
-  ordered.forEach((candidate, index) => {
-    if (!isCardPlayed(candidate) && !isCardLocked(candidate)) setCardOrder(candidate, index + 1);
-    candidate.resolvedPlateauIndex = index + 1;
-    candidate.resolvedColumnOrder = index + 1;
-    candidate.resolvedOrderKey = buildResolvedOrderKey(candidate, index);
-  });
+  if (currentIndex < 0) return false;
+  const boundedIndex = Math.max(0, Math.min(desiredIndex, ordered.length - 1));
+  if (currentIndex === boundedIndex) return true;
+
+  const candidateOrder = moveItemToIndex(ordered, currentIndex, boundedIndex);
+  if (pinnedCardsWouldMove(ordered, candidateOrder)) {
+    addProjectionWarning(state, 'link_target_pinned', 'link could not align without moving a played or locked target.', {
+      linkId: link?.linkId,
+      target: target ?? cardTarget(card),
+    });
+    return false;
+  }
+
+  applyResolvedOrderToColumn(candidateOrder);
+  return true;
 }
 
 function getSortedCardsWithManualHints(state) {
