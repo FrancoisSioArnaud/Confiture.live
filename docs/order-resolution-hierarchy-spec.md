@@ -342,6 +342,7 @@ Règles :
 - si une card linkée est déplacée, le groupe linké doit suivre ;
 - la card déplacée transmet sa priorité aux autres targets de son link : ces targets deviennent des relais de priorité et peuvent pousser les cards mobiles de leurs propres colonnes pour rejoindre le plateau cible ;
 - si une card non linkée est déplacée avant/après une card linkée et décale cette card linkée, cette card linkée hérite de la priorité du déplacement, puis transmet cette priorité au reste du groupe linké ;
+- si cette propagation pousse une autre card linkée dans une autre colonne, cette autre card hérite à son tour de la priorité et propage son propre link ;
 - aucun déplacement manuel ne doit être refusé uniquement parce qu’il touche une zone contenant un link ;
 - aucun déplacement partiel durable du groupe linké n’est autorisé dans l’ordre résolu final ;
 - le link ne peut pas violer un conflict ;
@@ -349,7 +350,7 @@ Règles :
 
 Si un déplacement manuel d’une card linkée crée un conflict avec une autre card, le moteur essaye d’abord de déplacer l’autre card conflictuelle. Si une card non-linkée décale une target linkée, le resolver conserve le déplacement manuel et réaligne le reste du groupe linké autour de la target décalée.
 
-Transmission de priorité : quand une card déplacée appartient à un link, la position obtenue par cette card après le drag devient la position cible du groupe linké. Chaque autre target mobile du groupe est alors autorisée à déplacer les cards mobiles de sa colonne pour rejoindre cette position. Ce relais de priorité ne peut jamais déplacer une card `played` ou `locked` : dans ce cas, la partie bloquée du link reste fixe et le resolver émet un warning déterministe.
+Transmission de priorité : quand une card déplacée appartient à un link, la position obtenue par cette card après le drag devient la position cible du groupe linké. Chaque autre target mobile du groupe est alors autorisée à déplacer les cards mobiles de sa colonne pour rejoindre cette position. Si cette target pousse une autre card mobile qui appartient à un autre link, cette card poussée devient à son tour un relais de priorité pour son propre link : le resolver propage donc les conséquences en cascade jusqu’à stabilisation. Ce relais de priorité ne peut jamais déplacer une card `played` ou `locked` : dans ce cas, la partie bloquée du link reste fixe et le resolver émet un warning déterministe.
 
 Point d’implémentation obligatoire : la passe link ne doit jamais pré-réappliquer la stratégie `move_to_first` / `move_to_last` / `average_position` avant d’avoir pris en compte le drag manuel. Sinon, le link peut annuler la card déplacée avant que le resolver détecte l’intention utilisateur. Les links doivent être validés d’abord, puis alignés depuis les `resolvedPlateauIndex` après application du manual move.
 

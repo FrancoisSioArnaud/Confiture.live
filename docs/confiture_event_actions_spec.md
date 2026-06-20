@@ -749,7 +749,7 @@ Page création de jam.
 
 ### Conséquences sur la liste
 
-Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés. Lors d’un drag, la card déplacée transmet sa priorité aux targets mobiles de son link ; ces targets peuvent pousser les cards mobiles de leurs propres colonnes pour rejoindre le plateau cible, sans jamais déplacer du played ou du locked.
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés. Lors d’un drag, la card déplacée transmet sa priorité aux targets mobiles de son link ; ces targets peuvent pousser les cards mobiles de leurs propres colonnes pour rejoindre le plateau cible. Si une target déplacée par propagation pousse une autre card linkée, cette card poussée hérite de la priorité et propage à son tour son propre link. La résolution continue jusqu’à stabilisation, sans jamais déplacer du played ou du locked.
 
 
 - initialise la jam ;

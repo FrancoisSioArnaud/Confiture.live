@@ -637,6 +637,7 @@ Règles clés :
 - un link peut déplacer un groupe mobile, mais jamais du played/locked ;
 - une card déplacée qui appartient à un link transmet sa priorité à toutes les autres targets mobiles du link ; ces targets peuvent pousser les cards mobiles de leurs colonnes pour rejoindre le plateau cible ;
 - si une card non linkée décale une target linkée, cette target linkée relaie la priorité au reste du groupe linké ;
+- si une target déplacée par propagation pousse une autre card linkée, cette card poussée devient prioritaire pour son propre link, ce qui permet une résolution en cascade ;
 - un manual reorder existant prime sur l’ordre automatique, mais pas sur les contraintes fortes ;
 - une action de drag ne doit pas être refusée uniquement parce que la zone contient un link ou un conflict ; elle est acceptée si la card déplacée n’est ni played ni locked, puis le resolver réconcilie le tableau ;
 - si une action demande un déplacement réellement impossible à cause de played/locked, elle doit être refusée avant création de l’event, ou ignorée/clampée par projection avec warning si l’event existe déjà.

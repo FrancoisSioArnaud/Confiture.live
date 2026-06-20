@@ -871,6 +871,52 @@ describe('orderResolution', () => {
     expect(getCardPlateauIndex(state, 'instrument_bass', bassA)).toBe(getCardPlateauIndex(state, 'instrument_guitar', guitarA));
   });
 
+  it('propagates priority again when a pushed linked card displaces another linked card', () => {
+    const vocalA = 'appearance_participation_a_instrument_vocals_1';
+    const vocalB = 'appearance_participation_b_instrument_vocals_1';
+    const guitarC = 'appearance_participation_c_instrument_guitar_1';
+    const guitarD = 'appearance_participation_d_instrument_guitar_1';
+    const bassE = 'appearance_participation_e_instrument_bass_1';
+    const bassF = 'appearance_participation_f_instrument_bass_1';
+    const state = projectJamState({ transactions: [
+      tx(1, [{ type: 'jam_created', payload: { jamId: 'jam_1', name: 'Jam', indicativeDate: '2026-06-17', linkReorderStrategy: 'move_to_first' } }]),
+      instrument(2, 'instrument_vocals', 'Chant', 'a'),
+      instrument(3, 'instrument_guitar', 'Guitare', 'b'),
+      instrument(4, 'instrument_bass', 'Basse', 'c'),
+      participantForInstrument(5, 'b', 'instrument_vocals', 'order_0'),
+      participantForInstrument(6, 'a', 'instrument_vocals', 'order_1'),
+      participantForInstrument(7, 'c', 'instrument_guitar', 'order_0'),
+      participantForInstrument(8, 'd', 'instrument_guitar', 'order_1'),
+      participantForInstrument(9, 'f', 'instrument_bass', 'order_0'),
+      participantForInstrument(10, 'e', 'instrument_bass', 'order_1'),
+      tx(11, [{ type: 'link_created', payload: {
+        linkId: 'link_b_c',
+        targets: [{ type: 'appearance', id: vocalB }, { type: 'appearance', id: guitarC }],
+        reorderStrategy: 'move_to_first',
+      } }]),
+      tx(12, [{ type: 'link_created', payload: {
+        linkId: 'link_d_e',
+        targets: [{ type: 'appearance', id: guitarD }, { type: 'appearance', id: bassE }],
+        reorderStrategy: 'move_to_first',
+      } }]),
+      tx(13, [{ type: 'appearance_moved_between', payload: {
+        appearanceId: vocalA,
+        instrumentId: 'instrument_vocals',
+        afterTarget: null,
+        beforeTarget: { type: 'appearance', id: vocalB },
+        movedLinkedGroup: false,
+      } }]),
+    ] });
+
+    expect(columnIds(state)).toEqual([
+      [vocalA, vocalB],
+      [guitarD, guitarC],
+      [bassE, bassF],
+    ]);
+    expect(getCardPlateauIndex(state, 'instrument_vocals', vocalB)).toBe(getCardPlateauIndex(state, 'instrument_guitar', guitarC));
+    expect(getCardPlateauIndex(state, 'instrument_guitar', guitarD)).toBe(getCardPlateauIndex(state, 'instrument_bass', bassE));
+  });
+
   it('does not propagate link priority through a locked card in another linked column', () => {
     const vocalA = 'appearance_participation_a_instrument_vocals_1';
     const vocalB = 'appearance_participation_b_instrument_vocals_1';
