@@ -29,7 +29,7 @@ PAYLOAD_REQUIRED_FIELDS = {
     "hole_moved_between": {"holeId", "instrumentId", "afterTarget", "beforeTarget", "movedLinkedGroup"},
     "hole_locked": {"holeId"},
     "hole_unlocked": {"holeId"},
-    "link_created": {"linkId", "targets", "anchorTarget", "reorderStrategy"},
+    "link_created": {"linkId", "targets", "reorderStrategy"},
     "link_removed": {"linkId"},
     "conflict_created": {"conflictId", "scope", "targetIds", "reason", "anchorTargetId"},
     "conflict_removed": {"conflictId"},
@@ -72,6 +72,15 @@ def validate_event_payload_shape(event_type, payload, field_name):
             raise ValidationError({f"{field_name}.targets": "Must be an array."})
         for target_index, target in enumerate(payload["targets"]):
             validate_target(target, f"{field_name}.targets[{target_index}]")
+        if event_type == "link_created":
+            if len(payload["targets"]) < 2:
+                raise ValidationError({f"{field_name}.targets": "A link must contain at least two targets."})
+            seen_targets = set()
+            for target_index, target in enumerate(payload["targets"]):
+                target_key = (target.get("type"), target.get("id"))
+                if target_key in seen_targets:
+                    raise ValidationError({f"{field_name}.targets[{target_index}]": "Duplicate target in link."})
+                seen_targets.add(target_key)
 
 
 def validate_target(value, field_name):

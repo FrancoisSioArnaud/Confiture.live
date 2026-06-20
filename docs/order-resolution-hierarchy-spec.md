@@ -155,8 +155,8 @@ L’`anchor` est la card ou le groupe de cards qui exprime l’intention princip
 |---|---|
 | `appearance_moved_between` | appearance déplacée |
 | `hole_moved_between` | hole déplacé |
-| `link_created` | card d’origine du mode link (`anchorTarget`) |
-| `conflict_created` | card d’origine du mode conflict (`anchorTargetId`) |
+| `link_created` | pas d’anchor de contrainte ; le link est un groupe non orienté |
+| `conflict_created` | pas d’anchor de contrainte ; le conflict est une interdiction non orientée |
 | `participation_added` | nouvelle appearance du round concerné, avec intention de fin de round visible |
 | `hole_added` | nouveau hole, avec intention de position issue de l’action |
 | `appearance_skipped` | décision d’appel : skipped + replacement/hole éventuel |
@@ -165,7 +165,21 @@ L’`anchor` est la card ou le groupe de cards qui exprime l’intention princip
 | `round_revealed` | pas d’anchor forte ; ordre naturel + contraintes existantes |
 | `link_removed` / `conflict_removed` | pas d’anchor forte ; préserver l’ordre résolu courant si rien n’oblige à bouger |
 
-L’anchor est forte, mais pas absolue : elle ne peut jamais battre `played` ou `locked`.
+L’anchor vient d’une action utilisateur concrète, par exemple un drag manuel. Un link ou conflict créé ne porte plus d’anchor métier : son sens de création ne doit pas influencer la résolution. L’anchor est forte, mais pas absolue : elle ne peut jamais battre `played` ou `locked`.
+
+
+### Links non orientés
+
+Un link est un groupe non orienté de targets. Il n’a pas d’anchor. Créer le même link depuis A, B ou C doit produire le même résultat.
+
+Règles :
+
+- un link actif contient toujours au moins deux targets ;
+- une target ne peut appartenir qu’à un seul groupe link actif ;
+- créer un link avec une target déjà linkée fusionne les groupes concernés ;
+- retirer une target d’un link conserve le link restant si au moins deux targets restent ;
+- si moins de deux targets restent, le link est supprimé ;
+- supprimer une target ou un link ne provoque pas de retour magique de l’ordre courant.
 
 ### Zone impactée
 

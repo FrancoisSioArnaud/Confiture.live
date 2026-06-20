@@ -7,8 +7,6 @@ const ANCHOR_EXTRACTORS = {
   appearance_moved_between: (event) => cardTarget('appearance', event.payload?.appearanceId),
   hole_moved_between: (event) => cardTarget('hole', event.payload?.holeId),
   hole_added: (event) => cardTarget('hole', event.payload?.holeId),
-  link_created: (event) => event.payload?.anchorTarget ?? null,
-  conflict_created: (event) => conflictAnchorTarget(event.payload),
   participation_added: (event) => participationAnchorTarget(event.payload),
   appearance_skipped: (event) => cardTarget('appearance', event.payload?.appearanceId),
   plateau_played: (event) => firstTarget(event.payload?.targets),
@@ -31,7 +29,7 @@ export function resolveOrderAfterTransaction(state, context = {}) {
 
   applyManualOrderHints(state);
 
-  applyActiveLinks(state, { anchor, anchorMode });
+  applyActiveLinks(state);
   assignAllResolvedColumnOrders(state);
   applyResolvedLinkAlignment(state, { anchor, anchorMode, manualMoveContext });
   applyActiveConflicts(state, { anchor });
@@ -66,11 +64,11 @@ export function applyManualOrderHints(state) {
   });
 }
 
-export function applyActiveLinks(state, { anchor = null, anchorMode = null } = {}) {
+export function applyActiveLinks(state) {
   Object.values(state.links)
     .filter((link) => link.status === 'active')
     .sort((a, b) => String(a.linkId ?? a.id).localeCompare(String(b.linkId ?? b.id)))
-    .forEach((link) => applyLinkConstraint(state, link, { anchor, anchorMode }));
+    .forEach((link) => applyLinkConstraint(state, link));
 }
 
 export function applyActiveConflicts(state, { anchor = null } = {}) {
@@ -90,13 +88,14 @@ export function applyActiveConflicts(state, { anchor = null } = {}) {
   }
 }
 
-function applyLinkConstraint(state, link, { anchor = null, anchorMode = null } = {}) {
+function applyLinkConstraint(state, link) {
   const targets = link.targets.map((target) => ({ target, entity: getTargetEntity(state, target) })).filter(({ entity }) => isCardActive(entity));
   if (targets.length < 2) {
-    link.suppressedByConflict = true;
-    addProjectionWarning(state, 'link_target_missing', 'link ignored because at least one target is missing.', { linkId: link.linkId });
+    link.suppressedByInvalidTargets = true;
+    addProjectionWarning(state, 'link_target_missing', 'link ignored because at least two active targets are required.', { linkId: link.linkId });
     return;
   }
+  link.suppressedByInvalidTargets = false;
   if (hasDuplicateInstrumentEntries(targets)) {
     link.suppressedBySameColumn = true;
     addProjectionWarning(state, 'link_suppressed_by_same_column', 'link ignored because two targets are in the same column.', { linkId: link.linkId });
@@ -110,8 +109,7 @@ function applyLinkConstraint(state, link, { anchor = null, anchorMode = null } =
   }
 
   link.suppressedByConflict = false;
-  const anchorEntity = targets.find(({ target }) => targetKey(target) === targetKey(anchor))?.entity ?? null;
-  const order = linkedOrder(targets.map(({ entity }) => entity), link.reorderStrategy, anchorEntity, anchorMode);
+  const order = linkedOrder(targets.map(({ entity }) => entity), link.reorderStrategy);
   targets.forEach(({ target, entity }) => {
     if (isCardPlayed(entity) || isCardLocked(entity)) {
       if (getPositionInRound(entity) !== order) {
@@ -200,8 +198,6 @@ function conflictTargetGroupsShareInstrument(groups) {
 function chooseConflictAnchor(conflict, transactionAnchor, first, second) {
   if (entityMatchesTarget(first, transactionAnchor)) return first;
   if (entityMatchesTarget(second, transactionAnchor)) return second;
-  if (entityMatchesConflictTarget(first, conflict.anchorTargetId)) return first;
-  if (entityMatchesConflictTarget(second, conflict.anchorTargetId)) return second;
   return first;
 }
 
@@ -218,8 +214,7 @@ function entityMatchesConflictTarget(entity, targetId) {
   return [entity.id, entity.appearanceId, entity.holeId, entity.participationId].filter(Boolean).includes(targetId);
 }
 
-function linkedOrder(entities, strategy, anchorEntity = null, anchorMode = null) {
-  if (anchorMode === 'manual_move' && anchorEntity) return getPositionInRound(anchorEntity);
+function linkedOrder(entities, strategy) {
   const values = entities.map(getPositionInRound);
   if (strategy === 'move_to_last') return Math.max(...values);
   if (strategy === 'average_position') return values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -327,7 +322,7 @@ function setCardOrder(card, order) {
 
 export function applyResolvedLinkAlignment(state, { anchor = null, anchorMode = null, manualMoveContext = null } = {}) {
   Object.values(state.links)
-    .filter((link) => link.status === 'active' && !link.suppressedByConflict && !link.suppressedBySameColumn)
+    .filter((link) => link.status === 'active' && !link.suppressedByConflict && !link.suppressedBySameColumn && !link.suppressedByInvalidTargets)
     .sort((a, b) => String(a.linkId ?? a.id).localeCompare(String(b.linkId ?? b.id)))
     .forEach((link) => alignLinkResolvedPlateaux(state, link, { anchor, anchorMode, manualMoveContext }));
 }

@@ -462,3 +462,65 @@ def test_retrieve_jam_with_snapshot_includes_transactions_and_events(client):
     assert len(payload["events"]) == 2
     assert payload["transactions"][1]["payload"]["transactionId"] == "transaction_2"
     assert payload["events"][1]["type"] == "jam_updated"
+
+
+def test_link_created_accepts_non_oriented_payload_without_anchor(client):
+    create_jam_with_instruments(client, jam_id="jam_link_validation")
+
+    response = client.post("/api/jams/jam_link_validation/transactions/", {
+        "clientId": "client_1",
+        "baseServerSequenceNumber": 3,
+        "transaction": {
+            "transactionId": "transaction_link_without_anchor",
+            "jamId": "jam_link_validation",
+            "clientSequenceNumber": 2,
+            "schemaVersion": 1,
+            "events": [{
+                "eventId": "event_link_without_anchor",
+                "jamId": "jam_link_validation",
+                "type": "link_created",
+                "payload": {
+                    "linkId": "link_without_anchor",
+                    "targets": [
+                        {"type": "appearance", "id": "appearance_a"},
+                        {"type": "appearance", "id": "appearance_b"},
+                    ],
+                    "reorderStrategy": "move_to_first",
+                },
+                "schemaVersion": 1,
+            }],
+        },
+    }, content_type="application/json")
+
+    assert response.status_code == 201
+    event = JamEvent.objects.get(jam__jam_id="jam_link_validation", event_id="event_link_without_anchor")
+    assert "anchorTarget" not in event.payload
+
+
+def test_link_created_rejects_less_than_two_targets(client):
+    create_jam_with_instruments(client, jam_id="jam_link_invalid")
+
+    response = client.post("/api/jams/jam_link_invalid/transactions/", {
+        "clientId": "client_1",
+        "baseServerSequenceNumber": 3,
+        "transaction": {
+            "transactionId": "transaction_bad_link",
+            "jamId": "jam_link_invalid",
+            "clientSequenceNumber": 2,
+            "schemaVersion": 1,
+            "events": [{
+                "eventId": "event_bad_link",
+                "jamId": "jam_link_invalid",
+                "type": "link_created",
+                "payload": {
+                    "linkId": "link_bad",
+                    "targets": [{"type": "appearance", "id": "appearance_a"}],
+                    "reorderStrategy": "move_to_first",
+                },
+                "schemaVersion": 1,
+            }],
+        },
+    }, content_type="application/json")
+
+    assert response.status_code == 400
+    assert "at least two targets" in str(response.json())

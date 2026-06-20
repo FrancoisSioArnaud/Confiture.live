@@ -278,6 +278,9 @@ Il n’y a pas de drawer de link en V0. Toute création/suppression de link se f
 
 ## 1.8 Conflict
 
+Les conflicts sont non orientés : créer A-C ou C-A définit la même interdiction de cohabitation. Le sens de création ne doit pas influencer le reorder. La priorité vient de la dernière action utilisateur, notamment la card déplacée manuellement.
+
+
 Contrainte indiquant que deux targets ne peuvent pas être placées sur le même plateau.
 
 Scopes V0 :
@@ -746,6 +749,9 @@ Page création de jam.
 
 ### Conséquences sur la liste
 
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
+
 - initialise la jam ;
 - initialise la config ;
 - aucune appearance n’existe encore ;
@@ -770,6 +776,9 @@ Modale/page édition de jam.
 
 ### Conséquences sur la liste
 
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
+
 - modifie uniquement les métadonnées ;
 - aucun impact d’ordre ;
 - aucun recalcul vertical.
@@ -792,6 +801,9 @@ Config de la jam, dans la modale/page édition de jam.
 ```
 
 ### Conséquences sur la liste
+
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
 
 - ne réorganise pas immédiatement les links existants ;
 - s’applique uniquement aux futures créations de links ;
@@ -819,6 +831,9 @@ Modale/page création ou édition de jam.
 
 ### Conséquences sur la liste
 
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
+
 - ajoute une colonne vide ;
 - aucun impact sur les autres colonnes ;
 - aucun impact sur les plateaux joués.
@@ -841,6 +856,9 @@ Modale/page édition de jam.
 ```
 
 ### Conséquences sur la liste
+
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
 
 - modifie le libellé ;
 - ne change pas l’ordre vertical ;
@@ -869,6 +887,9 @@ Si l’organisateur confirme la suppression, on ne hard-delete pas l’instrumen
 ```
 
 ### Conséquences sur la liste
+
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
 
 - la colonne devient invisible dans le tableau ;
 - l’instrument disparaît du drawer d’appel ;
@@ -905,6 +926,9 @@ Modale/page édition de jam.
 
 ### Conséquences sur la liste
 
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
+
 - change uniquement l’ordre horizontal des colonnes ;
 - ne change jamais l’ordre vertical des appearances ;
 - ne change pas les links/conflicts/locks.
@@ -928,6 +952,9 @@ Drawer ajout participant.
 
 ### Conséquences sur la liste
 
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
+
 - crée la personne ;
 - aucun impact direct sur l’ordre ;
 - l’impact vient des `participation_added` de la même transaction.
@@ -950,6 +977,9 @@ Drawer édition participant.
 ```
 
 ### Conséquences sur la liste
+
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
 
 - modifie le nom affiché ;
 - aucun impact d’ordre.
@@ -975,6 +1005,9 @@ Si le participant a déjà joué, l’option “Supprimer” ne doit pas être p
 ```
 
 ### Conséquences sur la liste
+
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
 
 - retire le participant de la projection active ;
 - retire ses participations futures ;
@@ -1009,6 +1042,9 @@ Menu trois points d’une card : “Musicien parti”.
 ```
 
 ### Conséquences sur la liste
+
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
 
 - passe le participant en `left` ;
 - supprime toutes ses appearances futures de la projection active ;
@@ -1072,6 +1108,9 @@ La base de données n’étant pas en production, il n’est pas nécessaire de 
 
 ### Conséquences sur la liste
 
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
+
 - crée une participation ;
 - crée ou rend calculable `appearanceIndex 1` ;
 - ajoute l’appearance 1 à la fin du round 1 ;
@@ -1119,6 +1158,9 @@ Drawer édition participant ou menu trois points d’une card : “Retirer cet i
 
 ### Conséquences sur la liste
 
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
+
 - retire les appearances futures de cette participation ;
 - empêche la génération d’appearances futures pour cette participation ;
 - conserve les appearances jouées dans l’historique ;
@@ -1160,6 +1202,9 @@ Pas d’entrée UI directe. Event interne généré quand une action doit cibler
 
 ### Conséquences sur la liste
 
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
+
 - donne une identité stable à une appearance ;
 - ne modifie pas l’ordre par elle-même ;
 - l’action qui l’a déclenchée peut modifier l’ordre.
@@ -1188,6 +1233,9 @@ Pas de drag horizontal.
 `previousTargetId` et `nextTargetId` peuvent cibler une appearance ou un hole de la même colonne.
 
 ### Conséquences sur la liste
+
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
 
 - déplace l’appearance dans sa colonne ;
 - ne change pas son `appearanceIndex` ;
@@ -1226,6 +1274,9 @@ Icône lock/unlock sur la card.
 
 ### Conséquences sur la liste
 
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
+
 - fige l’appearance à sa position actuelle ;
 - interdit les déplacements automatiques ;
 - interdit les déplacements manuels ;
@@ -1249,6 +1300,9 @@ Icône lock/unlock sur la card.
 ```
 
 ### Conséquences sur la liste
+
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
 
 - retire le verrou ;
 - ne déclenche pas de recalcul immédiat ;
@@ -1280,6 +1334,9 @@ Passer ce passage
 
 ### Conséquences sur la liste
 
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
+
 - action ponctuelle ;
 - ne stocke pas un état durable `temporarily_away` ;
 - repousse l’appearance d’un plateau / slot dans sa colonne ;
@@ -1308,6 +1365,9 @@ Menu trois points d’une card future : “Supprimer ce passage”.
 ```
 
 ### Conséquences sur la liste
+
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
 
 - supprime uniquement cette occurrence ;
 - ne supprime pas le participant ;
@@ -1362,21 +1422,20 @@ Il n’y a pas de drawer de link.
 ```js
 {
   linkId: "link_123",
-  strategy: "move_to_first",
-  originTarget: {
-    targetType: "appearance",
-    targetId: "appearance_nicolas_guitar_1"
-  },
+  reorderStrategy: "move_to_first",
   targets: [
-    { targetType: "appearance", targetId: "appearance_nicolas_guitar_1" },
-    { targetType: "appearance", targetId: "appearance_sarah_drums_1" }
+    { type: "appearance", id: "appearance_nicolas_guitar_1" },
+    { type: "appearance", id: "appearance_sarah_drums_1" }
   ]
 }
 ```
 
-`strategy` doit être copié depuis la config courante de la jam au moment de la création, pour que le replay reste déterministe même si la setting change plus tard.
+`reorderStrategy` doit être copié depuis la config courante de la jam au moment de la création, pour que le replay reste déterministe même si la setting change plus tard.
 
 ### Conséquences sur la liste
+
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
 
 - force les targets à être sur le même plateau ;
 - peut déplacer des cards non jouées et non lockées ;
@@ -1465,6 +1524,9 @@ Si le link contient seulement deux targets, désélectionner une target supprime
 
 ### Conséquences sur la liste
 
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
+
 - supprime l’obligation de jouer ensemble ;
 - ne réorganise pas immédiatement la liste ;
 - les cards restent là où elles sont ;
@@ -1527,6 +1589,9 @@ En général → scope: participation
 ```
 
 ### Conséquences sur la liste
+
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
 
 - empêche les targets d’être sur le même plateau ;
 - `scope: appearance` s’applique uniquement aux appearances ciblées ;
@@ -1592,6 +1657,9 @@ Il n’y a pas d’édition directe d’un conflict. Pour modifier un conflict, 
 
 ### Conséquences sur la liste
 
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
+
 - retire la contrainte ;
 - ne réorganise pas immédiatement la liste ;
 - les cards restent là où elles sont ;
@@ -1635,6 +1703,9 @@ Il n’y a pas d’event `play_without_created`.
 
 ### Conséquences sur la liste
 
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
+
 - ajoute un hole dans une colonne ;
 - le hole occupe une vraie position ;
 - il peut être joué ;
@@ -1660,6 +1731,9 @@ Menu trois points d’un hole : “Supprimer ce trou”.
 ```
 
 ### Conséquences sur la liste
+
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
 
 - supprime uniquement le hole ;
 - ne supprime jamais une appearance de musicien ;
@@ -1705,6 +1779,9 @@ Drag vertical d’un hole dans sa colonne.
 
 ### Conséquences sur la liste
 
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
+
 - déplace le hole dans sa colonne ;
 - refuse si le hole est joué ;
 - refuse si le hole est locké ;
@@ -1729,6 +1806,9 @@ Icône lock/unlock sur le hole.
 
 ### Conséquences sur la liste
 
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
+
 - fige le hole ;
 - interdit déplacement manuel ;
 - interdit déplacement automatique ;
@@ -1752,6 +1832,9 @@ Icône lock/unlock sur le hole.
 
 ### Conséquences sur la liste
 
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
+
 - retire le verrou ;
 - ne déclenche pas de recalcul immédiat.
 
@@ -1773,6 +1856,9 @@ Bouton en bas d’une colonne : “Afficher le round suivant”.
 ```
 
 ### Conséquences sur la liste
+
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
 
 - change uniquement les rounds visibles de cette colonne ;
 - ne change pas l’ordre métier ;
@@ -1812,6 +1898,9 @@ Masquer un round : non.
 
 ### Conséquences sur la liste
 
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
+
 - marque les appearances/holes du plateau comme joués ;
 - les cards deviennent grisées ;
 - elles restent visibles ;
@@ -1840,6 +1929,9 @@ Action secondaire sur le dernier plateau joué.
 
 ### Conséquences sur la liste
 
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
+
 - retire l’état played des cards du plateau ;
 - les cards redeviennent candidates selon leur position actuelle ;
 - ne change pas l’ordre visuel ;
@@ -1862,6 +1954,9 @@ Bouton Undo global.
 ```
 
 ### Conséquences sur la liste
+
+Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
+
 
 - ajoute un event d’undo ;
 - ne supprime jamais l’historique ;
@@ -2583,8 +2678,10 @@ La suppression d’un link manuel se fait via le mode link du tableau.
 
 Comportement attendu :
 
-- ouvrir le mode link depuis une card déjà liée pré-sélectionne les targets du link actif ;
+- ouvrir le mode link depuis une card déjà liée pré-sélectionne toutes les targets du groupe link actif ;
 - désélectionner les autres cards et valider crée une transaction contenant `link_removed` ;
-- si la sélection finale contient moins de deux cards, aucun `link_created` n’est émis ;
+- si la sélection finale contient moins de deux cards après fusion/réduction du groupe, aucun `link_created` n’est émis ;
 - le bouton `Valider` doit rester actif lorsqu’un link existant peut être supprimé ;
-- une suppression de link ne doit pas provoquer de retour magique de l’ordre courant.
+- une suppression de link ne doit pas provoquer de retour magique de l’ordre courant ;
+- si une target est retirée d’un link de trois targets ou plus, le builder émet `link_removed` pour l’ancien groupe puis `link_created` pour le groupe restant ;
+- si un nouveau link touche une target déjà linkée, tous les groupes touchés sont fusionnés en un seul link actif.

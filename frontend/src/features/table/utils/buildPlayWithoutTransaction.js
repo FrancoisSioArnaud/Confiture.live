@@ -35,7 +35,6 @@ export function buildPlayWithoutTransaction({ jamId, clientId, clientSequenceNum
     events.push(linkCreated({
       linkId: createId('link'),
       targets: [{ type: 'appearance', id: sourceCard.id }, ...holeTargets],
-      anchorTarget: { type: 'appearance', id: sourceCard.id },
       reorderStrategy: projection.jam?.linkReorderStrategy ?? 'move_to_first',
     }));
   }

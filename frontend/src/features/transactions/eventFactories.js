@@ -153,7 +153,7 @@ export function holeUnlocked(payload) {
 }
 
 export function linkCreated(payload) {
-  return event(EVENT_TYPES.LINK_CREATED, z.object({ linkId: id, targets: z.array(target).min(2), anchorTarget: target, reorderStrategy: linkReorderStrategy }).strict(), payload);
+  return event(EVENT_TYPES.LINK_CREATED, z.object({ linkId: id, targets: z.array(target).min(2), reorderStrategy: linkReorderStrategy }).strict(), payload);
 }
 
 export function linkRemoved(payload) {

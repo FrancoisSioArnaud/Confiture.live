@@ -104,7 +104,7 @@ export function buildDemoSeedTransactions(seed) {
     const target = 'appearance_participation_links_nicolas_guitar_1';
     return [
       ...remapSeedTransactions(buildDemoSeedTransactions('simple'), 'simple', seed, jamId),
-      tx(seed, 11, jamId, 'Link Sarah Nicolas', [['link_created', { linkId: 'link_demo_links_sarah_nicolas', targets: [{ type: 'appearance', id: source }, { type: 'appearance', id: target }], anchorTarget: { type: 'appearance', id: source }, reorderStrategy: 'move_to_first' }]]),
+      tx(seed, 11, jamId, 'Link Sarah Nicolas', [['link_created', { linkId: 'link_demo_links_sarah_nicolas', targets: [{ type: 'appearance', id: source }, { type: 'appearance', id: target }], reorderStrategy: 'move_to_first' }]]),
       tx(seed, 12, jamId, 'Conflict Léa Paul', [['conflict_created', { conflictId: 'conflict_demo_links_lea_paul', scope: 'appearance', targetIds: ['appearance_participation_links_lea_vocals_1', 'appearance_participation_links_paul_guitar_1'], reason: 'manual', anchorTargetId: 'appearance_participation_links_lea_vocals_1' }]]),
     ];
   }

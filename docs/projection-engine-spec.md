@@ -299,7 +299,7 @@ Contrainte d’alignement entre targets.
     { type: "appearance", id: "appearance_..." },
     { type: "hole", id: "hole_..." }
   ],
-  anchorTarget: { type: "appearance", id: "appearance_..." }
+  // pas d’anchor : le link est un groupe non orienté
 }
 ```
 
@@ -675,6 +675,9 @@ Quand un participant devient `left` :
 
 ## 9. Links
 
+Un link est un groupe non orienté de targets. Il n’a pas d’anchor et doit contenir au moins deux targets actives. Créer un link avec une target déjà linkée fusionne les groupes concernés ; retirer une target conserve le groupe restant si au moins deux targets restent, sinon le link est supprimé.
+
+
 ### 9.1 Création
 
 Un link est créé via mode link du tableau.
@@ -685,7 +688,6 @@ Input logique :
 link_created {
   linkId,
   targets,
-  anchorTarget,
   reorderStrategy
 }
 ```
@@ -787,6 +789,9 @@ Une future action pourra les réorganiser.
 ---
 
 ## 10. Conflicts
+
+Les conflicts sont non orientés. Le sens de création ne doit pas influencer la résolution du tableau ; seule la dernière action utilisateur, notamment un drag manuel, peut devenir l’intention prioritaire. `anchorTargetId` peut rester présent dans certains payloads legacy ou de trace, mais le resolver ne doit pas s’en servir pour orienter le conflit.
+
 
 ### 10.1 Scope participation
 

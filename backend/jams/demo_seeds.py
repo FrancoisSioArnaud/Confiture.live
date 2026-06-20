@@ -122,7 +122,7 @@ def build_demo_seed(seed):
     if seed == "links":
         return [
             *_remap(build_demo_seed("simple"), "simple", seed),
-            _tx(seed, 11, jam_id, "Link Sarah Nicolas", [("link_created", {"linkId": "link_demo_links_sarah_nicolas", "targets": [{"type": "appearance", "id": "appearance_participation_links_sarah_vocals_1"}, {"type": "appearance", "id": "appearance_participation_links_nicolas_guitar_1"}], "anchorTarget": {"type": "appearance", "id": "appearance_participation_links_sarah_vocals_1"}, "reorderStrategy": "move_to_first"})]),
+            _tx(seed, 11, jam_id, "Link Sarah Nicolas", [("link_created", {"linkId": "link_demo_links_sarah_nicolas", "targets": [{"type": "appearance", "id": "appearance_participation_links_sarah_vocals_1"}, {"type": "appearance", "id": "appearance_participation_links_nicolas_guitar_1"}], "reorderStrategy": "move_to_first"})]),
             _tx(seed, 12, jam_id, "Conflict Léa Paul", [("conflict_created", {"conflictId": "conflict_demo_links_lea_paul", "scope": "appearance", "targetIds": ["appearance_participation_links_lea_vocals_1", "appearance_participation_links_paul_guitar_1"], "reason": "manual", "anchorTargetId": "appearance_participation_links_lea_vocals_1"})]),
         ]
     if seed == "multi":

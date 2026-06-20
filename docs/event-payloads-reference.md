@@ -62,8 +62,8 @@ Le context doit permettre de dériver l’anchor :
 |---|---|
 | `appearance_moved_between` | `payload.appearanceId` |
 | `hole_moved_between` | `payload.holeId` |
-| `link_created` | `payload.anchorTarget` |
-| `conflict_created` | `payload.anchorTargetId` |
+| `link_created` | pas d’anchor ; le link est non orienté |
+| `conflict_created` | champ legacy/trace seulement ; ne doit pas orienter la résolution |
 | `participation_added` | nouvelle appearance de la participation |
 | `hole_added` | `payload.holeId` |
 | `appearance_skipped` | `payload.appearanceId` + replacement |
@@ -718,13 +718,12 @@ Feedback : snackbar si déplacement + animation.
       { type: "appearance", id: "appearance_..." },
       { type: "hole", id: "hole_..." }
     ],
-    anchorTarget: { type: "appearance", id: "appearance_..." },
     reorderStrategy: "move_to_first"
   }
 }
 ```
 
-Effet : crée la contrainte de link. Le resolver global aligne les targets selon la stratégie sans violer played, locked ou conflict. Les drags ultérieurs restent autorisés autour d’une target linkée : si une autre card décale cette target, le groupe linké suit la target décalée plutôt que d’annuler le déplacement manuel.
+Effet : crée une contrainte de link non orientée. Le resolver global aligne les targets selon la stratégie sans violer played, locked ou conflict. Le payload ne contient pas d’anchor : créer le link depuis n’importe quelle target doit produire le même groupe. Un link actif doit toujours contenir au moins deux targets. Les drags ultérieurs restent autorisés autour d’une target linkée : si une autre card décale cette target, le groupe linké suit la target décalée plutôt que d’annuler le déplacement manuel.
 
 ---
 

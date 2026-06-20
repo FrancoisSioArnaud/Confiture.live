@@ -110,7 +110,6 @@ describe('event factories', () => {
     expect(linkCreated({
       linkId: 'link_1',
       targets: [{ type: 'appearance', id: 'appearance_guitar_1' }, { type: 'hole', id: 'hole_drums_1' }],
-      anchorTarget: { type: 'appearance', id: 'appearance_guitar_1' },
       reorderStrategy: 'move_to_first',
     }).payload.targets).toHaveLength(2);
 

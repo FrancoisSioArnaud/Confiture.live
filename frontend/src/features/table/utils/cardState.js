@@ -1,5 +1,5 @@
 function isUsableActiveLink(link) {
-  return link.status === 'active' && link.suppressedByConflict !== true && link.suppressedBySameColumn !== true;
+  return link.status === 'active' && link.suppressedByConflict !== true && link.suppressedBySameColumn !== true && link.suppressedByInvalidTargets !== true;
 }
 
 function isUsableActiveConflict(conflict) {

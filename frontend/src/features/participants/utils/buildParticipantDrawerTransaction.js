@@ -102,7 +102,6 @@ function addInitialPairEvents(events, { projection, participations, linkedPairKe
           events.push(linkCreated({
             linkId: createId('link'),
             targets: [{ type: 'appearance', id: leftAppearanceId }, { type: 'appearance', id: rightAppearanceId }],
-            anchorTarget: { type: 'appearance', id: leftAppearanceId },
             reorderStrategy: linkReorderStrategy,
           }));
         }
