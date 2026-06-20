@@ -44,7 +44,7 @@ export const colors = {
 
     // States métier volontairement très distincts
     locked: '#f59e0b',
-    linked: '#38bdf8',
+    linked: '#facc15',
     conflict: '#ef4444',
     played: '#14532d',
     selectable: '#8b5cf6',

@@ -216,7 +216,8 @@ UI :
 
 ```txt
 - fond standard
-- bordure standard
+- bordure neutre standard uniquement
+- aucune bordure colorée liée à l’état link / lock / conflict / selected
 - nom lisible
 - actions visibles
 ```
@@ -229,7 +230,9 @@ UI :
 
 ```txt
 - bouton link en état actif
-- icône link pleine/active ou couleur accentuée
+- icône link en couleur d’accent link
+- couleur d’accent link = jaune du thème
+- aucune bordure colorée de card pour signaler le link
 - éventuel badge discret “lié”
 ```
 
@@ -242,8 +245,8 @@ L’icône link doit avoir un aspect non lié et un aspect lié.
 Exemples :
 
 ```txt
-Non lié : icône link outline / couleur neutre
-Lié : icône link active / couleur accent / badge
+Non lié : icône link blanche, cliquable, jamais visuellement disabled
+Lié : icône link active en jaune du thème / badge éventuel
 ```
 
 ## 4.3 État locked
@@ -254,7 +257,8 @@ UI :
 
 ```txt
 - icône cadenas fermé
-- léger marqueur visuel de verrouillage
+- icône lock en couleur d’accent lock du thème
+- aucune bordure colorée de card pour signaler le lock
 ```
 
 Règles :
@@ -468,6 +472,25 @@ Durée recommandée :
 ---
 
 # Iconographie officielle des cards
+
+## 5.0 Règle visuelle des états
+
+Les états métier des cards doivent être indiqués par les icônes, chips et couleurs d’accent associées, pas par des bordures colorées.
+
+```txt
+- link actif : icône link jaune ;
+- link inactif : icône link blanche et cliquable ;
+- locked : icône lock en couleur d’accent lock ;
+- conflict : chip / icône swords si nécessaire ;
+- played : opacity / chip joué ;
+- bordure de card : toujours neutre, jamais utilisée pour coder l’état.
+```
+
+Les boutons d’action de plateau dans le rail sont des boutons icône seule, affichés côte à côte :
+
+```txt
+[campaign] [check_circle]
+```
 
 Les icônes MUI doivent être cohérentes dans toute l’app. Pour les cards, le plateau rail et les actions secondaires, utiliser uniquement les icônes suivantes :
 

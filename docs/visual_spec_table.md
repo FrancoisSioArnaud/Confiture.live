@@ -895,6 +895,10 @@ Utiliser les icônes MUI suivantes de manière homogène dans toute l’interfac
 
 Les entrées de menus secondaires des cards doivent afficher l’icône à gauche du texte. Les boutons d’action de plateau doivent utiliser `campaign` pour l’appel et `check_circle` pour l’état/action joué.
 
+Les boutons d’action de plateau du rail doivent être affichés côte à côte et en icône seule, avec label accessible via `aria-label` / tooltip : `campaign` pour appeler, `check_circle` pour marquer comme joué.
+
+Les cards ne doivent pas utiliser de bordure colorée pour indiquer `link`, `locked`, `conflict`, `selected` ou `selectable`. La bordure reste neutre ; les états passent par les icônes/chips. Le bouton link inactif est blanc et cliquable ; le bouton link actif utilise la couleur d’accent link jaune du thème. L’icône lock active utilise la couleur d’accent lock du thème.
+
 # 13. Floating action button
 
 ## 13.1 Ajouter participant

@@ -4,6 +4,7 @@ import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } 
 import { Alert, Box, Button, Card, CardContent, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Drawer, FormControlLabel, FormGroup, IconButton, List, ListItem, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Stack, SvgIcon, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { useState } from 'react';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
+import { colors } from '../../../app/theme';
 import {
   buildRevealRoundTransaction,
   buildTogglePlateauPlayedTransaction,
@@ -72,10 +73,20 @@ function DragHandle({ onBlockedDrag, dragListeners, dragAttributes, dragDisabled
 }
 
 function CardActions({ card, linked, linkModeActive, onToggleLink, onToggleLock, onOpenMenu }) {
+  const linkColor = linked || linkModeActive ? colors.state.linked : colors.text.primary;
+  const lockColor = card.locked ? colors.state.locked : colors.text.primary;
   return (
     <Stack direction="row" spacing={0.25} alignItems="center" sx={{ mt: 0.25 }}>
-      <Tooltip title={linkModeActive ? 'Sélection link' : linked ? 'Lié' : 'Non lié'}><IconButton size="small" aria-label={linked ? 'Card liée' : 'Card non liée'} onClick={onToggleLink}><LinkIcon fontSize="small" color={linked || linkModeActive ? 'primary' : 'disabled'} /></IconButton></Tooltip>
-      <Tooltip title={card.locked ? 'Déverrouiller' : 'Verrouiller'}><IconButton size="small" aria-label={card.locked ? 'Déverrouiller' : 'Verrouiller'} onClick={onToggleLock}>{card.locked ? <Lock fontSize="small" /> : <LockOpen fontSize="small" />}</IconButton></Tooltip>
+      <Tooltip title={linkModeActive ? 'Sélection link' : linked ? 'Lié' : 'Non lié'}>
+        <IconButton size="small" aria-label={linked ? 'Card liée' : 'Card non liée'} onClick={onToggleLink} sx={{ color: linkColor }}>
+          <LinkIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title={card.locked ? 'Déverrouiller' : 'Verrouiller'}>
+        <IconButton size="small" aria-label={card.locked ? 'Déverrouiller' : 'Verrouiller'} onClick={onToggleLock} sx={{ color: lockColor }}>
+          {card.locked ? <Lock fontSize="small" /> : <LockOpen fontSize="small" />}
+        </IconButton>
+      </Tooltip>
       <IconButton size="small" aria-label="Menu card" onClick={onOpenMenu}><MoreVert fontSize="small" /></IconButton>
     </Stack>
   );
@@ -85,7 +96,7 @@ function AppearanceCard({ card, projection, linkModeActive, selectedForLink, sel
   const linked = cardLinks(card, projection.links).length > 0;
   const conflicted = cardConflicts(card, projection.conflicts).length > 0;
   return (
-    <Card variant="outlined" data-testid={`appearance-card-${card.id}`} sx={{ height: '100%', opacity: card.played ? 0.55 : 1, borderStyle: card.locked || linked ? 'solid' : 'dashed', borderColor: selectedForConflict ? 'error.main' : selectableForConflict ? 'error.light' : selectedForLink ? 'success.main' : selectableForLink ? 'primary.light' : linked ? 'primary.main' : card.locked ? 'warning.main' : conflicted ? 'error.main' : 'divider', bgcolor: card.played ? 'action.hover' : 'background.paper', transition: 'transform 850ms ease, opacity 300ms ease, border-color 200ms ease' }}>
+    <Card variant="outlined" data-testid={`appearance-card-${card.id}`} sx={{ height: '100%', opacity: card.played ? 0.55 : 1, borderStyle: 'solid', borderColor: 'divider', bgcolor: card.played ? 'action.hover' : 'background.paper', transition: 'transform 850ms ease, opacity 300ms ease, background-color 200ms ease' }}>
       <CardContent sx={{ p: 1, height: '100%', '&:last-child': { pb: 1 } }}>
         <Stack direction="row" spacing={0.75} alignItems="flex-start" sx={{ height: '100%' }}>
           <DragHandle onBlockedDrag={onBlockedDrag} dragListeners={dragListeners} dragAttributes={dragAttributes} dragDisabled={dragDisabled} />
@@ -107,7 +118,7 @@ function AppearanceCard({ card, projection, linkModeActive, selectedForLink, sel
 function HoleCard({ card, projection, linkModeActive, selectedForLink, selectableForLink, onToggleLink, onToggleLock, onOpenMenu, onBlockedDrag, dragListeners, dragAttributes, dragDisabled }) {
   const linked = cardLinks(card, projection.links).length > 0;
   return (
-    <Card variant="outlined" data-testid={`hole-card-${card.id}`} sx={{ height: '100%', opacity: card.played ? 0.55 : 1, borderColor: selectedForLink ? 'success.main' : selectableForLink ? 'primary.light' : linked ? 'primary.main' : card.locked ? 'warning.main' : 'divider', bgcolor: card.played ? 'action.hover' : 'background.paper', transition: 'transform 850ms ease, opacity 300ms ease, border-color 200ms ease' }}>
+    <Card variant="outlined" data-testid={`hole-card-${card.id}`} sx={{ height: '100%', opacity: card.played ? 0.55 : 1, borderStyle: 'solid', borderColor: 'divider', bgcolor: card.played ? 'action.hover' : 'background.paper', transition: 'transform 850ms ease, opacity 300ms ease, background-color 200ms ease' }}>
       <CardContent sx={{ p: 1, height: '100%', '&:last-child': { pb: 1 } }}>
         <Stack direction="row" spacing={0.75} alignItems="flex-start" sx={{ height: '100%' }}>
           <DragHandle onBlockedDrag={onBlockedDrag} dragListeners={dragListeners} dragAttributes={dragAttributes} dragDisabled={dragDisabled} />
@@ -150,17 +161,23 @@ function PlateauRail({ rows, projection, onOpenCallDrawer, onTogglePlateauPlayed
           const played = row.targets.length > 0 && row.targets.every((target) => (target.type === 'appearance' ? projection.appearances[target.id]?.played : projection.holes[target.id]?.played));
           return (
             <Box key={row.plateauIndex}>
-                    <Paper variant="outlined" sx={{ p: 1, height: TABLE_ROW_HEIGHT, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <Paper variant="outlined" sx={{ p: 1, height: TABLE_ROW_HEIGHT, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <Typography variant="subtitle2" fontWeight={900}>Plateau {row.plateauIndex + 1}</Typography>
-                <Stack spacing={0.5}>
+                <Stack direction="row" spacing={0.5} alignItems="center">
                   <Tooltip title={played ? 'Ce plateau est déjà joué.' : 'Appeler ce plateau'}>
                     <span>
-                      <Button size="small" variant="outlined" startIcon={<Campaign />} onClick={() => onOpenCallDrawer?.(row.plateauIndex)} disabled={played}>Appeler</Button>
+                      <IconButton size="small" aria-label="Appeler plateau" color="primary" onClick={() => onOpenCallDrawer?.(row.plateauIndex)} disabled={played}>
+                        <Campaign fontSize="small" />
+                      </IconButton>
                     </span>
                   </Tooltip>
-                  <Button size="small" color={played ? 'success' : 'primary'} variant={played ? 'contained' : 'outlined'} startIcon={<CheckCircle />} onClick={() => onTogglePlateauPlayed(row.plateauIndex, row.targets, played)} disabled={row.targets.length === 0}>
-                    {played ? 'Joué' : 'Marquer joué'}
-                  </Button>
+                  <Tooltip title={played ? 'Plateau joué' : 'Marquer comme joué'}>
+                    <span>
+                      <IconButton size="small" aria-label={played ? 'Plateau joué' : 'Marquer comme joué'} color={played ? 'success' : 'primary'} onClick={() => onTogglePlateauPlayed(row.plateauIndex, row.targets, played)} disabled={row.targets.length === 0}>
+                        <CheckCircle fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
                 </Stack>
               </Paper>
             </Box>

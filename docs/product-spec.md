@@ -743,3 +743,23 @@ Ces icônes doivent être utilisées dans les actions directes, les menus second
 ## Plateau joué et instruments vides
 
 Quand un plateau est marqué joué, chaque colonne visible doit être figée sur cette ligne. Si une colonne est vide, l’app crée un trou joué `played_empty_slot` avant de marquer le plateau joué. Les participations ajoutées plus tard ne peuvent pas venir occuper cette ligne historique.
+
+### Règles visuelles cards — V0
+
+Les états des cards ne sont pas signalés par des bordures colorées. La bordure reste neutre pour tous les états (`link`, `locked`, `conflict`, sélection, played).
+
+```txt
+- link inactif : icône link blanche, cliquable ;
+- link actif : icône link en jaune, couleur d’accent link du thème ;
+- locked : icône lock en couleur d’accent lock du thème ;
+- conflict : chip / icône conflict si nécessaire ;
+- played : opacity / chip joué.
+```
+
+Les boutons du rail de plateau sont côte à côte et en icône seule :
+
+```txt
+[campaign] appeler plateau
+[check_circle] marquer comme joué
+```
+
