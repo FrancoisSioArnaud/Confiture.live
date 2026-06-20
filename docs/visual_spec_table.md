@@ -1177,3 +1177,22 @@ Règles UI :
 - dès qu’une card d’une colonne est sélectionnée, les autres cards de la même colonne deviennent désactivées/non sélectionnables ;
 - cliquer à nouveau une card sélectionnée la désélectionne et rend les autres cards de sa colonne sélectionnables ;
 - le mode conflict suit les mêmes règles de sélection/désélection que le mode link, avec une couleur distincte.
+
+## Mise à jour — alignement graphique colonnes/lignes et suppression de link
+
+Règles d’alignement du tableau :
+
+- la colonne de gauche `Plateaux` possède une entête visible, de même hauteur que les entêtes instruments ;
+- les entêtes instruments affichent uniquement le nom de l’instrument ;
+- aucun compteur, sous-titre ou mention `Round visible` ne doit apparaître dans l’entête instrument ;
+- le nom d’instrument utilise un niveau de titre lisible (`h6` ou équivalent) ;
+- les lignes plateau et les lignes cards partagent la même hauteur ;
+- le gap vertical entre les plateaux est identique au gap vertical entre les cards ;
+- les cards appearance/hole occupent toute la largeur de leur colonne.
+
+Règles du mode link :
+
+- ouvrir le mode link depuis une card déjà linkée pré-sélectionne les cards du link existant ;
+- désélectionner les autres cards du link doit permettre d’enregistrer la suppression du link ;
+- le bouton `Valider` ne doit pas être désactivé si la sélection courante correspond à une suppression de link existant ;
+- valider avec moins de deux cards sélectionnées supprime les links actifs associés à l’anchor, sans créer de nouveau link.

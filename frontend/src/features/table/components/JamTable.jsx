@@ -17,7 +17,7 @@ import {
   buildToggleLockTransaction,
 } from '../utils/buildCardActionTransaction';
 import { canDragCard, cardConflicts, cardLinks, participantHasPlayed } from '../utils/cardState';
-import { buildLinkModeTransaction, contradictoryConflictsForCards, linkModeInitialSelection, selectedCardsWillMove } from '../utils/buildLinkModeTransaction';
+import { activeLinksForCards, buildLinkModeTransaction, contradictoryConflictsForCards, linkModeInitialSelection, selectedCardsWillMove } from '../utils/buildLinkModeTransaction';
 import { activeConflictsBetween, buildConflictModeTransaction } from '../utils/buildConflictModeTransaction';
 import { buildPlayWithoutTransaction } from '../utils/buildPlayWithoutTransaction';
 import { buildSkipWithReplacementTransaction, buildSkipWithoutMusicianTransaction, replacementCandidatePresentation, replacementCandidatesForCallDrawer } from '../utils/buildCallDrawerTransaction';
@@ -112,6 +112,7 @@ function AppearanceCard({ card, projection, linkModeActive, selectedForLink, sel
       variant="outlined"
       data-testid={`appearance-card-${card.id}`}
       sx={{
+        width: '100%',
         height: '100%',
         opacity: card.played ? 0.55 : disabledByMode ? 0.42 : 1,
         borderStyle: 'solid',
@@ -145,6 +146,7 @@ function HoleCard({ card, projection, linkModeActive, selectedForLink, selection
       variant="outlined"
       data-testid={`hole-card-${card.id}`}
       sx={{
+        width: '100%',
         height: '100%',
         opacity: card.played ? 0.55 : disabledByMode ? 0.42 : 1,
         borderStyle: 'solid',
@@ -215,6 +217,7 @@ function SortableProjectedCard({ card, projection, instrument, linkMode, conflic
       aria-label={selectionModeActive ? modeLabel : undefined}
       aria-disabled={selectionModeActive && !modeClickable ? 'true' : undefined}
       sx={{
+        width: '100%',
         height: '100%',
         transform: transformToCss(transform),
         transition: card.locked ? undefined : transition,
@@ -270,39 +273,42 @@ function ModeActionBar({ mode, selectedCount, canValidate, onCancel, onValidate 
 function PlateauRail({ rows, projection, onOpenCallDrawer, onTogglePlateauPlayed }) {
   return (
     <Box sx={{ minWidth: 132, flex: '0 0 132px', position: { sm: 'sticky' }, left: 0, zIndex: 1, bgcolor: 'background.paper' }}>
-      <Stack spacing={0}>
-        <Box sx={{ height: TABLE_HEADER_HEIGHT }} />
-        {rows.map((row) => {
-          const played = row.targets.length > 0 && row.targets.every((target) => (target.type === 'appearance' ? projection.appearances[target.id]?.played : projection.holes[target.id]?.played));
-          return (
-            <Box key={row.plateauIndex}>
-              <Paper variant="outlined" sx={{ p: 1, height: TABLE_ROW_HEIGHT, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                <Typography variant="subtitle2" fontWeight={900}>Plateau {row.plateauIndex + 1}</Typography>
-                <Stack direction="row" spacing={0.5} alignItems="center">
-                  <Tooltip title={played ? 'Ce plateau est déjà joué.' : 'Appeler ce plateau'}>
-                    <span>
-                      <IconButton size="small" aria-label="Appeler plateau" color="primary" onClick={() => onOpenCallDrawer?.(row.plateauIndex)} disabled={played}>
-                        <Campaign fontSize="small" />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                  <Tooltip title={played ? 'Plateau joué' : 'Marquer comme joué'}>
-                    <span>
-                      <IconButton size="small" aria-label={played ? 'Plateau joué' : 'Marquer comme joué'} color={played ? 'success' : 'primary'} onClick={() => onTogglePlateauPlayed(row.plateauIndex, row.targets, played)} disabled={row.targets.length === 0}>
-                        <CheckCircle fontSize="small" />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                </Stack>
-              </Paper>
-            </Box>
-          );
-        })}
+      <Stack spacing={0} sx={{ height: '100%' }}>
+        <Box sx={{ height: TABLE_HEADER_HEIGHT, display: 'flex', alignItems: 'center' }}>
+          <Typography variant="h6" fontWeight={900} noWrap>Plateaux</Typography>
+        </Box>
+        <Stack spacing={1}>
+          {rows.map((row) => {
+            const played = row.targets.length > 0 && row.targets.every((target) => (target.type === 'appearance' ? projection.appearances[target.id]?.played : projection.holes[target.id]?.played));
+            return (
+              <Box key={row.plateauIndex} sx={{ height: TABLE_ROW_HEIGHT, display: 'flex', alignItems: 'stretch' }}>
+                <Paper variant="outlined" sx={{ p: 1, width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <Typography variant="subtitle2" fontWeight={900}>Plateau {row.plateauIndex + 1}</Typography>
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <Tooltip title={played ? 'Ce plateau est déjà joué.' : 'Appeler ce plateau'}>
+                      <span>
+                        <IconButton size="small" aria-label="Appeler plateau" color="primary" onClick={() => onOpenCallDrawer?.(row.plateauIndex)} disabled={played}>
+                          <Campaign fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                    <Tooltip title={played ? 'Plateau joué' : 'Marquer comme joué'}>
+                      <span>
+                        <IconButton size="small" aria-label={played ? 'Plateau joué' : 'Marquer comme joué'} color={played ? 'success' : 'primary'} onClick={() => onTogglePlateauPlayed(row.plateauIndex, row.targets, played)} disabled={row.targets.length === 0}>
+                          <CheckCircle fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </Stack>
+                </Paper>
+              </Box>
+            );
+          })}
+        </Stack>
       </Stack>
     </Box>
   );
 }
-
 
 function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSequenceNumber, onClose, onTransaction, onFeedback }) {
   const theme = useTheme();
@@ -704,7 +710,7 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
   }
 
   function commitLinkMode(selectedCards, conflictsToRemove = []) {
-    const anchorCard = selectedCards.find((card) => card.id === linkMode.anchor?.id) ?? selectedCards[0];
+    const anchorCard = selectedCards.find((card) => card.id === linkMode.anchor?.id) ?? linkMode.anchor ?? selectedCards[0];
     const transaction = buildLinkModeTransaction({ jamId, clientId, clientSequenceNumber, projection, anchorCard, selectedCards, conflictsToRemove });
     if (transaction) {
       dispatch(transaction);
@@ -716,9 +722,17 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
     cancelLinkMode();
   }
 
+  function canCommitLinkMode() {
+    const selectedCards = [...linkMode.selectedIds].map((id) => cardById.get(id)?.card).filter(Boolean);
+    if (selectedCards.length >= 2) return true;
+    if (!linkMode.anchor) return false;
+    return activeLinksForCards([linkMode.anchor, ...selectedCards], projection.links).length > 0;
+  }
+
   function validateLinkMode() {
     const selectedCards = [...linkMode.selectedIds].map((id) => cardById.get(id)?.card).filter(Boolean);
-    if (selectedCards.length < 2) {
+    const isLinkRemoval = linkMode.anchor && activeLinksForCards([linkMode.anchor, ...selectedCards], projection.links).length > 0;
+    if (selectedCards.length < 2 && !isLinkRemoval) {
       onFeedback?.('Sélectionne au moins deux cards à lier');
       return;
     }
@@ -782,21 +796,16 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
           <Stack direction="row" spacing={1.25} alignItems="stretch" sx={{ minHeight: 360, width: 'max-content', pr: 1 }}>
             <PlateauRail rows={rows} projection={projection} onOpenCallDrawer={(plateauIndex) => { setOpenPlateauIndex(plateauIndex); onOpenCallDrawer?.(plateauIndex); }} onTogglePlateauPlayed={togglePlateauPlayed} />
             {columns.map((column) => {
-              const counter = projection.countersByInstrument[column.instrument.instrumentId]?.notYetPlayedFirstTime ?? 0;
               return (
-                <Box key={column.instrument.instrumentId} sx={{ minWidth: { xs: 236, sm: 272 }, maxWidth: 292, flex: '0 0 auto' }}>
+                <Box key={column.instrument.instrumentId} sx={{ width: { xs: 236, sm: 272 }, flex: '0 0 auto' }}>
                   <Stack spacing={0} sx={{ height: '100%' }}>
-                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ height: TABLE_HEADER_HEIGHT }}>
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography variant="subtitle1" fontWeight={900} noWrap>{column.instrument.label}</Typography>
-                        <Typography variant="caption" color="text.secondary">Round {column.visibleRoundCount ?? 1} visible</Typography>
-                      </Box>
-                      <Chip size="small" label={`${counter} à faire passer`} />
-                    </Stack>
+                    <Box sx={{ height: TABLE_HEADER_HEIGHT, display: 'flex', alignItems: 'center', minWidth: 0 }}>
+                      <Typography variant="h6" fontWeight={900} noWrap>{column.instrument.label}</Typography>
+                    </Box>
                     <SortableContext items={column.cards.map((card) => card.id)} strategy={verticalListSortingStrategy}>
                       <Stack spacing={1}>
                         {column.cards.map((card) => (
-                          <Box key={card.id} sx={{ height: TABLE_ROW_HEIGHT, display: 'flex', alignItems: 'stretch' }}>
+                          <Box key={card.id} sx={{ height: TABLE_ROW_HEIGHT, display: 'flex', alignItems: 'stretch', width: '100%' }}>
                             <SortableProjectedCard card={card} projection={projection} instrument={column.instrument} linkMode={presentedLinkMode} conflictMode={presentedConflictMode} onToggleLink={selectCardForLink} onSelectConflict={selectConflictTarget} onToggleLock={toggleLock} onOpenMenu={openMenu} onBlockedDrag={() => onFeedback?.('Déplacement impossible : passage joué ou verrouillé')} />
                           </Box>
                         ))}
@@ -817,7 +826,7 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
         <ModeActionBar
           mode="link"
           selectedCount={linkMode.selectedIds.size}
-          canValidate={linkMode.selectedIds.size >= 2}
+          canValidate={canCommitLinkMode()}
           onCancel={cancelLinkMode}
           onValidate={validateLinkMode}
         />

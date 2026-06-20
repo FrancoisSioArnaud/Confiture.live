@@ -1105,3 +1105,18 @@ Quand le tableau est en mode link ou conflict :
 - les cards non sélectionnées d’une colonne déjà sélectionnée sont visuellement atténuées et non sélectionnables ;
 - cliquer une card déjà sélectionnée la désélectionne ;
 - après désélection, toutes les cards éligibles de la colonne redeviennent sélectionnables.
+
+## Mise à jour — largeur des cards et suppression de link en mode link
+
+Les cards doivent occuper toute la largeur disponible de leur colonne :
+
+- le wrapper sortable prend `width: 100%` ;
+- la card MUI prend `width: 100%` ;
+- les cards restent alignées avec la colonne de plateaux.
+
+En mode link, la suppression d’un link existant passe par le même mode que la création :
+
+- ouvrir le mode depuis une card déjà linkée sélectionne les cards liées ;
+- l’utilisateur peut désélectionner une ou plusieurs cards ;
+- si la sélection finale contient moins de deux cards mais qu’un link actif est concerné, `Valider` reste disponible ;
+- valider supprime le link existant et ne crée pas de nouveau link.

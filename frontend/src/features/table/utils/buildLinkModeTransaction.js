@@ -25,7 +25,8 @@ function conflictTargetIdsForCards(conflict, cards) {
 }
 
 export function activeLinksForCards(cards, links) {
-  return Object.values(links ?? {}).filter((link) => isUsableActiveLink(link) && link.targets.some((target) => cards.some((card) => targetMatchesCard(target, card))));
+  const validCards = cards.filter(Boolean);
+  return Object.values(links ?? {}).filter((link) => isUsableActiveLink(link) && link.targets.some((target) => validCards.some((card) => targetMatchesCard(target, card))));
 }
 
 export function linkModeInitialSelection(anchorCard, links, cardsById) {
@@ -46,8 +47,9 @@ export function hasContradictoryConflict(cards, projection) {
 }
 
 export function buildLinkModeTransaction({ jamId, clientId, clientSequenceNumber, projection, anchorCard, selectedCards, conflictsToRemove = [] }) {
+  if (!anchorCard) return null;
   const events = [];
-  const uniqueSelectedCards = [...new Map(selectedCards.map((card) => [card.id, card])).values()];
+  const uniqueSelectedCards = [...new Map(selectedCards.filter(Boolean).map((card) => [card.id, card])).values()];
   if (hasDuplicateInstrument(uniqueSelectedCards)) return null;
   const linksToRemove = activeLinksForCards([anchorCard, ...uniqueSelectedCards], projection.links);
   linksToRemove.forEach((link) => events.push(linkRemoved({ linkId: link.linkId })));

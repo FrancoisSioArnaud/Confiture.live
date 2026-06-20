@@ -35,4 +35,59 @@ describe('buildLinkModeTransaction', () => {
     expect(transaction.events.map((event) => event.type)).toEqual(['conflict_removed', 'link_created']);
   });
 
+
+  it('can remove an existing link when only one selected card remains in link mode', () => {
+    const anchorCard = { type: 'appearance', id: 'appearance_1', instrumentId: 'instrument_vocals' };
+    const projection = {
+      jam: { linkReorderStrategy: 'move_to_first' },
+      links: {
+        link_existing: {
+          linkId: 'link_existing',
+          status: 'active',
+          targets: [
+            { type: 'appearance', id: 'appearance_1' },
+            { type: 'appearance', id: 'appearance_2' },
+          ],
+        },
+      },
+    };
+    const transaction = buildLinkModeTransaction({
+      jamId: 'jam_1',
+      clientId: 'client_1',
+      clientSequenceNumber: 6,
+      projection,
+      anchorCard,
+      selectedCards: [anchorCard],
+    });
+    expect(transaction.events.map((event) => event.type)).toEqual(['link_removed']);
+    expect(transaction.label).toBe('Retirer link');
+  });
+
+
+  it('can remove an existing link when every linked card is deselected but the anchor is known', () => {
+    const anchorCard = { type: 'appearance', id: 'appearance_1', instrumentId: 'instrument_vocals' };
+    const projection = {
+      jam: { linkReorderStrategy: 'move_to_first' },
+      links: {
+        link_existing: {
+          linkId: 'link_existing',
+          status: 'active',
+          targets: [
+            { type: 'appearance', id: 'appearance_1' },
+            { type: 'appearance', id: 'appearance_2' },
+          ],
+        },
+      },
+    };
+    const transaction = buildLinkModeTransaction({
+      jamId: 'jam_1',
+      clientId: 'client_1',
+      clientSequenceNumber: 7,
+      projection,
+      anchorCard,
+      selectedCards: [],
+    });
+    expect(transaction.events.map((event) => event.type)).toEqual(['link_removed']);
+  });
+
 });

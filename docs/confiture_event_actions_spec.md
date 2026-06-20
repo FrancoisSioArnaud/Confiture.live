@@ -2576,3 +2576,15 @@ Exemple :
 - l’UI propose `Ajouter Basse à Léo`.
 
 Si l’organisateur veut deux participants distincts, il doit changer le nom. La création d’un participant distinct avec le même nom reste refusée.
+
+## Mise à jour — suppression de link via mode link
+
+La suppression d’un link manuel se fait via le mode link du tableau.
+
+Comportement attendu :
+
+- ouvrir le mode link depuis une card déjà liée pré-sélectionne les targets du link actif ;
+- désélectionner les autres cards et valider crée une transaction contenant `link_removed` ;
+- si la sélection finale contient moins de deux cards, aucun `link_created` n’est émis ;
+- le bouton `Valider` doit rester actif lorsqu’un link existant peut être supprimé ;
+- une suppression de link ne doit pas provoquer de retour magique de l’ordre courant.

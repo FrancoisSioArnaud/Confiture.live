@@ -785,3 +785,19 @@ En V0, les modes link et conflict utilisent une interaction de tableau dédiée 
 - une seule card par colonne peut être sélectionnée à la fois ;
 - cliquer une card sélectionnée la désélectionne ;
 - link et conflict partagent les mêmes règles de sélection, avec des couleurs distinctes.
+
+## Mise à jour V0 — alignement tableau et suppression de link
+
+Le tableau jam doit conserver un alignement strict entre la colonne `Plateaux` et les colonnes instruments :
+
+- entête visible `Plateaux` à gauche ;
+- entêtes instruments réduites au seul nom de l’instrument ;
+- cards occupant toute la largeur de la colonne ;
+- même hauteur de ligne et même gap vertical pour plateaux et cards.
+
+Le mode link sert aussi à supprimer un link existant :
+
+- une card déjà linkée ouvre le mode avec les targets du link pré-sélectionnées ;
+- l’utilisateur peut désélectionner des targets ;
+- valider une sélection restante de moins de deux cards supprime le link existant ;
+- le bouton `Valider` doit être activé pour cette suppression.
