@@ -751,8 +751,8 @@ Les états des cards ne sont pas signalés par des bordures colorées. La bordur
 ```txt
 - link inactif : icône link blanche, cliquable ;
 - link actif : icône link en jaune, couleur d’accent link du thème ;
-- locked : icône lock en couleur d’accent lock du thème ;
-- conflict : chip / icône conflict si nécessaire ;
+- locked : icône lock en couleur d’accent lock verte du thème ;
+- conflict : chip / icône conflict uniquement pour les conflits entre deux participants différents ;
 - played : opacity / chip joué.
 ```
 
@@ -763,3 +763,12 @@ Les boutons du rail de plateau sont côte à côte et en icône seule :
 [check_circle] marquer comme joué
 ```
 
+
+
+### Règles d’entêtes tableau — V0 compacte
+
+La colonne plateau possède une entête alignée en hauteur avec les entêtes instruments. Les gaps verticaux sont identiques entre la colonne plateau et les colonnes instruments. Les entêtes instruments affichent uniquement le nom de l’instrument en niveau de titre plus grand ; les compteurs et mentions de round visible ne sont pas affichés dans ces entêtes.
+
+### Drag visuel des locked
+
+Les cards locked ne doivent pas bouger visuellement pendant le drag and drop d’autres éléments. Elles restent stables, sans transform/preview/transition parasite ; les autres cards peuvent se réorganiser autour.

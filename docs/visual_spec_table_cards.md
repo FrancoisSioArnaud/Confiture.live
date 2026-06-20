@@ -199,7 +199,7 @@ Badges possibles :
 - locked
 - played
 - skipped récent / remplacé, si visible temporairement
-- conflict warning, seulement en mode conflict ou si action refusée
+- conflict warning, uniquement pour les conflits entre deux participants différents ; pas de tag pour les conflicts automatiques entre deux participations d’un même participant
 ```
 
 Les badges doivent rester discrets. Les états principaux doivent aussi être visibles par la forme/couleur de la card.
@@ -257,7 +257,7 @@ UI :
 
 ```txt
 - icône cadenas fermé
-- icône lock en couleur d’accent lock du thème
+- icône lock en couleur d’accent lock verte du thème
 - aucune bordure colorée de card pour signaler le lock
 ```
 
@@ -269,6 +269,10 @@ Règles :
 - impossible à déplacer par link/conflict/recalcul
 ```
 
+
+
+Pendant un drag and drop autour d’elle, une card locked ne doit pas prendre de transform, de preview ou d’animation qui donne l’impression qu’elle bouge. Elle reste visuellement stable et les autres cards s’organisent autour.
+
 Si l’organisateur tente une action incompatible :
 
 ```txt
@@ -276,7 +280,11 @@ Si l’organisateur tente une action incompatible :
 - snackbar explicative
 ```
 
-## 4.4 État unlocked
+## 4.4 État conflict
+
+Le chip `Conflit` est réservé aux conflits entre deux participants différents. Les conflicts automatiques entre deux participations d’un même participant sont appliqués par le resolver, mais ne génèrent pas de tag visible sur la card.
+
+## 4.5 État unlocked
 
 UI :
 
@@ -290,7 +298,7 @@ Règle :
 La card peut être déplacée si elle n’est pas played.
 ```
 
-## 4.5 État played
+## 4.6 État played
 
 Une appearance jouée devient historique.
 
@@ -311,7 +319,7 @@ Règles :
 - ne peut plus être remplacée
 ```
 
-## 4.6 État sélectionnée en mode link
+## 4.7 État sélectionnée en mode link
 
 Quand le tableau est en mode link :
 
@@ -329,7 +337,7 @@ Règle importante :
 Recliquer sur le bouton link de la card anchor sort du mode link.
 ```
 
-## 4.7 État sélectionnée en mode conflict
+## 4.8 État sélectionnée en mode conflict
 
 Quand le tableau est en mode conflict :
 

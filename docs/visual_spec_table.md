@@ -897,7 +897,38 @@ Les entrées de menus secondaires des cards doivent afficher l’icône à gauch
 
 Les boutons d’action de plateau du rail doivent être affichés côte à côte et en icône seule, avec label accessible via `aria-label` / tooltip : `campaign` pour appeler, `check_circle` pour marquer comme joué.
 
-Les cards ne doivent pas utiliser de bordure colorée pour indiquer `link`, `locked`, `conflict`, `selected` ou `selectable`. La bordure reste neutre ; les états passent par les icônes/chips. Le bouton link inactif est blanc et cliquable ; le bouton link actif utilise la couleur d’accent link jaune du thème. L’icône lock active utilise la couleur d’accent lock du thème.
+Les cards ne doivent pas utiliser de bordure colorée pour indiquer `link`, `locked`, `conflict`, `selected` ou `selectable`. La bordure reste neutre ; les états passent par les icônes/chips. Le bouton link inactif est blanc et cliquable ; le bouton link actif utilise la couleur d’accent link jaune du thème. L’icône lock active utilise la couleur d’accent lock verte du thème. Le chip `Conflit` est affiché uniquement pour les conflicts entre deux participants différents ; les conflicts automatiques entre deux participations d’un même participant restent actifs dans le resolver mais ne doivent pas afficher de chip conflit.
+
+
+
+## 12.1 Entêtes et alignement vertical du tableau
+
+La colonne de gauche des plateaux possède une vraie entête visuelle, alignée en hauteur avec les entêtes des colonnes instruments.
+
+Règles :
+
+```txt
+- entête plateau : même hauteur que les entêtes instruments ;
+- gap vertical entre l’entête et le premier plateau : identique au gap entre entête instrument et première card ;
+- gap entre plateaux : identique au gap entre les cards ;
+- les entêtes instruments affichent uniquement le nom de l’instrument ;
+- le nom de l’instrument utilise un niveau de titre plus fort, type `h6` ou équivalent.
+```
+
+Les infos secondaires comme `Round visible` ou le compteur `à faire passer` ne sont pas affichées dans l’entête de colonne instrument en V0 compacte.
+
+## 12.2 Stabilité visuelle des cards locked pendant le drag
+
+Une card locked ne doit pas être visuellement affectée pendant le drag and drop d’autres cards autour d’elle.
+
+Règles :
+
+```txt
+- la card locked reste à sa place ;
+- elle ne prend pas de transform/preview/transition parasite ;
+- elle conserve son style locked normal ;
+- les autres cards peuvent se réorganiser autour sans donner l’impression que la locked bouge.
+```
 
 # 13. Floating action button
 

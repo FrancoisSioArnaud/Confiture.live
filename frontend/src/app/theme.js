@@ -43,7 +43,7 @@ export const colors = {
     focusOutline: '#facc15',
 
     // States métier volontairement très distincts
-    locked: '#f59e0b',
+    locked: '#4ade80',
     linked: '#facc15',
     conflict: '#ef4444',
     played: '#14532d',
