@@ -772,3 +772,16 @@ La colonne plateau possède une entête alignée en hauteur avec les entêtes in
 ### Drag visuel des locked
 
 Les cards locked ne doivent pas bouger visuellement pendant le drag and drop d’autres éléments. Elles restent stables, sans transform/preview/transition parasite ; les autres cards peuvent se réorganiser autour.
+
+## Mise à jour — validation des modes link/conflict
+
+En V0, les modes link et conflict utilisent une interaction de tableau dédiée :
+
+- le bouton d’entrée dans le mode reste sur la card hors mode ;
+- une fois le mode actif, les cards n’ont plus de boutons internes ;
+- toute la card est cliquable pour sélectionner/désélectionner ;
+- `Annuler` et `Valider` sont disponibles en fixed bottom ;
+- le bouton flottant d’ajout participant est masqué pendant le mode actif ;
+- une seule card par colonne peut être sélectionnée à la fois ;
+- cliquer une card sélectionnée la désélectionne ;
+- link et conflict partagent les mêmes règles de sélection, avec des couleurs distinctes.

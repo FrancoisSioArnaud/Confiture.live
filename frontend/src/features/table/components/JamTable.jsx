@@ -2,7 +2,7 @@ import { Campaign, CheckCircle, Delete, DisabledByDefault, DragHandle as DragHan
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Alert, Box, Button, Card, CardContent, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Drawer, FormControlLabel, FormGroup, IconButton, List, ListItem, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Stack, SvgIcon, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { colors } from '../../../app/theme';
 import {
@@ -33,6 +33,11 @@ function SwordsIcon(props) {
 
 const TABLE_HEADER_HEIGHT = 48;
 const TABLE_ROW_HEIGHT = 96;
+const MODE_BAR_Z_INDEX = 1300;
+
+const LINK_SELECTION_BG = 'rgba(250, 204, 21, 0.18)';
+const CONFLICT_SELECTION_BG = 'rgba(239, 68, 68, 0.16)';
+
 
 function transformToCss(transform) {
   if (!transform) return undefined;
@@ -92,14 +97,32 @@ function CardActions({ card, linked, linkModeActive, onToggleLink, onToggleLock,
   );
 }
 
-function AppearanceCard({ card, projection, linkModeActive, selectedForLink, selectableForLink, selectedForConflict, selectableForConflict, onToggleLink, onToggleLock, onOpenMenu, onBlockedDrag, dragListeners, dragAttributes, dragDisabled }) {
+function cardBackground({ played, selectedForLink, selectedForConflict }) {
+  if (selectedForLink) return LINK_SELECTION_BG;
+  if (selectedForConflict) return CONFLICT_SELECTION_BG;
+  if (played) return 'action.hover';
+  return 'background.paper';
+}
+
+function AppearanceCard({ card, projection, linkModeActive, selectedForLink, selectedForConflict, selectionModeActive, disabledByMode, onToggleLink, onToggleLock, onOpenMenu, onBlockedDrag, dragListeners, dragAttributes, dragDisabled }) {
   const linked = cardLinks(card, projection.links).length > 0;
   const conflicted = cardConflicts(card, projection.conflicts).length > 0;
   return (
-    <Card variant="outlined" data-testid={`appearance-card-${card.id}`} sx={{ height: '100%', opacity: card.played ? 0.55 : 1, borderStyle: 'solid', borderColor: 'divider', bgcolor: card.played ? 'action.hover' : 'background.paper', transition: 'transform 850ms ease, opacity 300ms ease, background-color 200ms ease' }}>
+    <Card
+      variant="outlined"
+      data-testid={`appearance-card-${card.id}`}
+      sx={{
+        height: '100%',
+        opacity: card.played ? 0.55 : disabledByMode ? 0.42 : 1,
+        borderStyle: 'solid',
+        borderColor: 'divider',
+        bgcolor: cardBackground({ played: card.played, selectedForLink, selectedForConflict }),
+        transition: 'opacity 180ms ease, background-color 180ms ease',
+      }}
+    >
       <CardContent sx={{ p: 1, height: '100%', '&:last-child': { pb: 1 } }}>
         <Stack direction="row" spacing={0.75} alignItems="flex-start" sx={{ height: '100%' }}>
-          <DragHandle onBlockedDrag={onBlockedDrag} dragListeners={dragListeners} dragAttributes={dragAttributes} dragDisabled={dragDisabled} />
+          {!selectionModeActive ? <DragHandle onBlockedDrag={onBlockedDrag} dragListeners={dragListeners} dragAttributes={dragAttributes} dragDisabled={dragDisabled} /> : null}
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
               <Typography fontWeight={800} noWrap>{cardTitle(card, projection)}</Typography>
@@ -107,7 +130,7 @@ function AppearanceCard({ card, projection, linkModeActive, selectedForLink, sel
               {(selectedForConflict || conflicted) ? <Chip size="small" icon={<SwordsIcon />} label="Conflit" color="error" variant="outlined" sx={{ height: 20 }} /> : null}
               {card.played ? <Chip size="small" label="Joué" color="success" sx={{ height: 20 }} /> : null}
             </Stack>
-            <CardActions card={card} linked={linked} linkModeActive={linkModeActive} onToggleLink={onToggleLink} onToggleLock={onToggleLock} onOpenMenu={onOpenMenu} />
+            {!selectionModeActive ? <CardActions card={card} linked={linked} linkModeActive={linkModeActive} onToggleLink={onToggleLink} onToggleLock={onToggleLock} onOpenMenu={onOpenMenu} /> : null}
           </Box>
         </Stack>
       </CardContent>
@@ -115,20 +138,31 @@ function AppearanceCard({ card, projection, linkModeActive, selectedForLink, sel
   );
 }
 
-function HoleCard({ card, projection, linkModeActive, selectedForLink, selectableForLink, onToggleLink, onToggleLock, onOpenMenu, onBlockedDrag, dragListeners, dragAttributes, dragDisabled }) {
+function HoleCard({ card, projection, linkModeActive, selectedForLink, selectionModeActive, disabledByMode, onToggleLink, onToggleLock, onOpenMenu, onBlockedDrag, dragListeners, dragAttributes, dragDisabled }) {
   const linked = cardLinks(card, projection.links).length > 0;
   return (
-    <Card variant="outlined" data-testid={`hole-card-${card.id}`} sx={{ height: '100%', opacity: card.played ? 0.55 : 1, borderStyle: 'solid', borderColor: 'divider', bgcolor: card.played ? 'action.hover' : 'background.paper', transition: 'transform 850ms ease, opacity 300ms ease, background-color 200ms ease' }}>
+    <Card
+      variant="outlined"
+      data-testid={`hole-card-${card.id}`}
+      sx={{
+        height: '100%',
+        opacity: card.played ? 0.55 : disabledByMode ? 0.42 : 1,
+        borderStyle: 'solid',
+        borderColor: 'divider',
+        bgcolor: cardBackground({ played: card.played, selectedForLink, selectedForConflict: false }),
+        transition: 'opacity 180ms ease, background-color 180ms ease',
+      }}
+    >
       <CardContent sx={{ p: 1, height: '100%', '&:last-child': { pb: 1 } }}>
         <Stack direction="row" spacing={0.75} alignItems="flex-start" sx={{ height: '100%' }}>
-          <DragHandle onBlockedDrag={onBlockedDrag} dragListeners={dragListeners} dragAttributes={dragAttributes} dragDisabled={dragDisabled} />
+          {!selectionModeActive ? <DragHandle onBlockedDrag={onBlockedDrag} dragListeners={dragListeners} dragAttributes={dragAttributes} dragDisabled={dragDisabled} /> : null}
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             <Stack direction="row" spacing={0.5} alignItems="center">
               <Typography fontWeight={800} noWrap>Trou</Typography>
               {card.appearanceIndex > 1 ? <Chip size="small" label={`R${card.appearanceIndex}`} sx={{ height: 20 }} /> : null}
               {card.played ? <Chip size="small" label="Joué" color="success" sx={{ height: 20 }} /> : null}
             </Stack>
-            <CardActions card={card} linked={linked} linkModeActive={linkModeActive} onToggleLink={onToggleLink} onToggleLock={onToggleLock} onOpenMenu={onOpenMenu} />
+            {!selectionModeActive ? <CardActions card={card} linked={linked} linkModeActive={linkModeActive} onToggleLink={onToggleLink} onToggleLock={onToggleLock} onOpenMenu={onOpenMenu} /> : null}
           </Box>
         </Stack>
       </CardContent>
@@ -138,17 +172,98 @@ function HoleCard({ card, projection, linkModeActive, selectedForLink, selectabl
 
 function SortableProjectedCard({ card, projection, instrument, linkMode, conflictMode, onToggleLink, onSelectConflict, onToggleLock, onOpenMenu, onBlockedDrag }) {
   const selectedForLink = Boolean(linkMode?.selectedIds?.has(card.id));
-  const selectableForLink = Boolean(linkMode?.active && linkMode.anchor?.instrumentId !== card.instrumentId && !card.played && !card.locked);
-  const selectedForConflict = Boolean(conflictMode?.active && (conflictMode.anchor?.id === card.id || conflictMode.target?.id === card.id));
-  const selectableForConflict = Boolean(conflictMode?.active && card.type === 'appearance' && conflictMode.anchor?.id !== card.id && conflictMode.anchor?.instrumentId !== card.instrumentId);
-  const dragDisabled = linkMode?.active || conflictMode?.active || !canDragCard(card, projection);
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id, data: { card, instrumentId: instrument.instrumentId } });
+  const linkColumnHasSelection = Boolean(linkMode?.active && linkMode.selectedInstrumentIds?.has(card.instrumentId));
+  const selectableForLink = Boolean(linkMode?.active && !card.played && !card.locked && (!linkColumnHasSelection || selectedForLink));
+  const selectedForConflict = Boolean(conflictMode?.selectedIds?.has(card.id));
+  const conflictColumnHasSelection = Boolean(conflictMode?.active && conflictMode.selectedInstrumentIds?.has(card.instrumentId));
+  const conflictHasTarget = Boolean(conflictMode?.target);
+  const selectableForConflict = Boolean(
+    conflictMode?.active
+    && card.type === 'appearance'
+    && !card.played
+    && !card.locked
+    && (!conflictColumnHasSelection || selectedForConflict)
+    && (!conflictHasTarget || selectedForConflict)
+  );
+  const selectionModeActive = Boolean(linkMode?.active || conflictMode?.active);
+  const disabledByMode = Boolean(
+    (linkMode?.active && !selectedForLink && !selectableForLink)
+    || (conflictMode?.active && !selectedForConflict && !selectableForConflict)
+  );
+  const dragDisabled = selectionModeActive || !canDragCard(card, projection);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id, data: { card, instrumentId: instrument.instrumentId }, disabled: dragDisabled });
+
+  function handleCardClick() {
+    if (linkMode?.active) {
+      if (selectedForLink || selectableForLink) onToggleLink(card);
+      return;
+    }
+    if (conflictMode?.active) {
+      if (selectedForConflict || selectableForConflict) onSelectConflict(card);
+    }
+  }
+
+  const modeClickable = Boolean((linkMode?.active && (selectedForLink || selectableForLink)) || (conflictMode?.active && (selectedForConflict || selectableForConflict)));
+  const modeCursor = selectionModeActive ? (modeClickable ? 'pointer' : 'not-allowed') : 'default';
+  const modeLabel = disabledByMode ? 'Carte non sélectionnable dans ce mode' : selectedForLink || selectedForConflict ? 'Désélectionner cette carte' : 'Sélectionner cette carte';
+
   return (
-    <Box ref={setNodeRef} onClick={conflictMode?.active && selectableForConflict ? () => onSelectConflict(card) : undefined} sx={{ height: '100%', transform: transformToCss(transform), transition, opacity: isDragging ? 0.7 : 1, cursor: conflictMode?.active && selectableForConflict ? 'crosshair' : 'default' }}>
+    <Box
+      ref={setNodeRef}
+      onClick={selectionModeActive ? handleCardClick : undefined}
+      role={selectionModeActive ? 'button' : undefined}
+      aria-label={selectionModeActive ? modeLabel : undefined}
+      aria-disabled={selectionModeActive && !modeClickable ? 'true' : undefined}
+      sx={{
+        height: '100%',
+        transform: transformToCss(transform),
+        transition: card.locked ? undefined : transition,
+        opacity: isDragging ? 0.7 : 1,
+        cursor: modeCursor,
+        pointerEvents: selectionModeActive && !modeClickable ? 'auto' : undefined,
+      }}
+    >
       {card.type === 'hole'
-        ? <HoleCard card={card} projection={projection} linkModeActive={linkMode?.active} conflictMode={conflictMode} selectedForLink={selectedForLink} selectableForLink={selectableForLink} selectedForConflict={selectedForConflict} selectableForConflict={selectableForConflict} onToggleLink={() => (conflictMode?.active ? onSelectConflict(card) : onToggleLink(card))} onToggleLock={() => onToggleLock(card)} onOpenMenu={(event) => onOpenMenu(event, card)} onBlockedDrag={() => onBlockedDrag(card)} dragListeners={listeners} dragAttributes={attributes} dragDisabled={dragDisabled} />
-        : <AppearanceCard card={card} projection={projection} linkModeActive={linkMode?.active} conflictMode={conflictMode} selectedForLink={selectedForLink} selectableForLink={selectableForLink} selectedForConflict={selectedForConflict} selectableForConflict={selectableForConflict} onToggleLink={() => (conflictMode?.active ? onSelectConflict(card) : onToggleLink(card))} onToggleLock={() => onToggleLock(card)} onOpenMenu={(event) => onOpenMenu(event, card)} onBlockedDrag={() => onBlockedDrag(card)} dragListeners={listeners} dragAttributes={attributes} dragDisabled={dragDisabled} />}
+        ? <HoleCard card={card} projection={projection} linkModeActive={linkMode?.active} selectedForLink={selectedForLink} selectionModeActive={selectionModeActive} disabledByMode={disabledByMode} onToggleLink={() => onToggleLink(card)} onToggleLock={() => onToggleLock(card)} onOpenMenu={(event) => onOpenMenu(event, card)} onBlockedDrag={() => onBlockedDrag(card)} dragListeners={listeners} dragAttributes={attributes} dragDisabled={dragDisabled} />
+        : <AppearanceCard card={card} projection={projection} linkModeActive={linkMode?.active} selectedForLink={selectedForLink} selectedForConflict={selectedForConflict} selectionModeActive={selectionModeActive} disabledByMode={disabledByMode} onToggleLink={() => onToggleLink(card)} onToggleLock={() => onToggleLock(card)} onOpenMenu={(event) => onOpenMenu(event, card)} onBlockedDrag={() => onBlockedDrag(card)} dragListeners={listeners} dragAttributes={attributes} dragDisabled={dragDisabled} />}
     </Box>
+  );
+}
+
+
+function ModeActionBar({ mode, selectedCount, canValidate, onCancel, onValidate }) {
+  const isLink = mode === 'link';
+  const title = isLink ? 'Mode link' : 'Mode conflict';
+  const helper = isLink
+    ? 'Sélectionne les cards à lier, une seule par colonne.'
+    : 'Sélectionne deux appearances de colonnes différentes.';
+  return (
+    <Paper
+      elevation={10}
+      sx={{
+        position: 'fixed',
+        right: { xs: 16, sm: 24 },
+        bottom: { xs: 16, sm: 24 },
+        zIndex: MODE_BAR_Z_INDEX,
+        p: 1.25,
+        minWidth: { xs: 'calc(100vw - 32px)', sm: 360 },
+        maxWidth: { xs: 'calc(100vw - 32px)', sm: 440 },
+        border: 1,
+        borderColor: isLink ? colors.state.linked : colors.state.conflict,
+        bgcolor: 'background.paper',
+      }}
+    >
+      <Stack spacing={1}>
+        <Box>
+          <Typography variant="subtitle2" fontWeight={900}>{title}</Typography>
+          <Typography variant="caption" color="text.secondary">{helper} {selectedCount ? `${selectedCount} sélectionnée(s).` : ''}</Typography>
+        </Box>
+        <Stack direction="row" spacing={1} justifyContent="flex-end">
+          <Button variant="outlined" onClick={onCancel}>Annuler</Button>
+          <Button variant="contained" disabled={!canValidate} onClick={onValidate}>Valider</Button>
+        </Stack>
+      </Stack>
+    </Paper>
   );
 }
 
@@ -339,17 +454,25 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
   );
 }
 
-export function JamTable({ projection, clientId, clientSequenceNumber, onTransaction, onOpenCallDrawer, onFeedback, onEditParticipant }) {
+export function JamTable({ projection, clientId, clientSequenceNumber, onTransaction, onOpenCallDrawer, onFeedback, onEditParticipant, onInteractionModeChange }) {
   const [openPlateauIndex, setOpenPlateauIndex] = useState(null);
   const [menuState, setMenuState] = useState({ anchorEl: null, card: null });
   const [confirmState, setConfirmState] = useState(null);
   const [linkMode, setLinkMode] = useState({ active: false, anchor: null, selectedIds: new Set() });
   const [conflictMode, setConflictMode] = useState({ active: false, anchor: null, target: null });
+  const [conflictScopeDialogOpen, setConflictScopeDialogOpen] = useState(false);
   const [playWithoutState, setPlayWithoutState] = useState({ open: false, sourceCard: null, selectedInstrumentIds: [] });
   const [pendingLinkConflictConfirm, setPendingLinkConflictConfirm] = useState(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const columns = projection?.columns ?? [];
   const jamId = projection?.jam?.jamId;
+  const interactionModeActive = Boolean(linkMode.active || conflictMode.active);
+
+  useEffect(() => {
+    onInteractionModeChange?.(interactionModeActive);
+    return () => onInteractionModeChange?.(false);
+  }, [interactionModeActive, onInteractionModeChange]);
+
   if (columns.length === 0) {
     return (
       <Alert severity="warning">
@@ -359,6 +482,11 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
   }
 
   const cardById = new Map(columns.flatMap((column) => column.cards.map((card) => [card.id, { card, column }])));
+  const linkSelectedInstrumentIds = new Set([...linkMode.selectedIds].map((id) => cardById.get(id)?.card?.instrumentId).filter(Boolean));
+  const conflictSelectedIds = new Set([conflictMode.anchor?.id, conflictMode.target?.id].filter(Boolean));
+  const conflictSelectedInstrumentIds = new Set([conflictMode.anchor?.instrumentId, conflictMode.target?.instrumentId].filter(Boolean));
+  const presentedLinkMode = linkMode.active ? { ...linkMode, selectedInstrumentIds: linkSelectedInstrumentIds } : linkMode;
+  const presentedConflictMode = conflictMode.active ? { ...conflictMode, selectedIds: conflictSelectedIds, selectedInstrumentIds: conflictSelectedInstrumentIds } : conflictMode;
   const hasCards = columns.some((column) => column.cards.length > 0);
   const maxRows = Math.max(1, ...columns.map((column) => column.cards.length));
   const rows = Array.from({ length: maxRows }, (_, plateauIndex) => ({
@@ -488,23 +616,43 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
       onFeedback?.('Conflit impossible : les trous ne sont pas concernés en V0');
       return;
     }
-    if (card.id === conflictMode.anchor.id) {
-      setConflictMode({ active: false, anchor: null, target: null });
+    if (card.played || card.locked) {
+      onFeedback?.('Conflit impossible : passage joué ou verrouillé');
+      return;
+    }
+    if (conflictMode.anchor?.id === card.id) {
+      setConflictMode((current) => ({ ...current, anchor: null, target: null }));
+      setConflictScopeDialogOpen(false);
+      return;
+    }
+    if (conflictMode.target?.id === card.id) {
+      setConflictMode((current) => ({ ...current, target: null }));
+      setConflictScopeDialogOpen(false);
+      return;
+    }
+    if (!conflictMode.anchor) {
+      setConflictMode((current) => ({ ...current, anchor: card, target: null }));
       return;
     }
     if (card.instrumentId === conflictMode.anchor.instrumentId) {
       onFeedback?.('Conflit impossible : choisis une autre colonne');
       return;
     }
-    if (card.played || card.locked) {
-      onFeedback?.('Conflit impossible : passage joué ou verrouillé');
+    if (conflictMode.target) {
+      onFeedback?.('Conflit impossible : désélectionne d’abord la cible actuelle');
       return;
     }
     setConflictMode((current) => ({ ...current, target: card }));
   }
 
   function cancelConflictMode() {
+    setConflictScopeDialogOpen(false);
     setConflictMode({ active: false, anchor: null, target: null });
+  }
+
+  function openConflictScopeDialog() {
+    if (!conflictMode.anchor || !conflictMode.target) return;
+    setConflictScopeDialogOpen(true);
   }
 
   function validateConflictMode(scope) {
@@ -516,6 +664,7 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
       if (transaction.events.some((event) => event.type === 'conflict_created')) onFeedback?.('Conflit créé');
       if (transaction.events.some((event) => event.type === 'conflict_removed')) onFeedback?.('Conflit supprimé');
     }
+    setConflictScopeDialogOpen(false);
     cancelConflictMode();
   }
 
@@ -529,31 +678,24 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
       setLinkMode({ active: true, anchor: card, selectedIds: new Set(initialCards.map((selectedCard) => selectedCard.id)) });
       return;
     }
-    if (card.id === linkMode.anchor.id) {
-      setLinkMode({ active: false, anchor: null, selectedIds: new Set() });
-      return;
-    }
-    if (card.instrumentId === linkMode.anchor.instrumentId) {
-      onFeedback?.('Link impossible : choisis une autre colonne');
-      return;
-    }
     if (card.played || card.locked) {
       onFeedback?.('Link impossible : passage joué ou verrouillé');
       return;
     }
     setLinkMode((current) => {
       const nextIds = new Set(current.selectedIds);
-      if (nextIds.has(card.id)) nextIds.delete(card.id);
-      else {
-        const sameInstrument = [...nextIds].map((id) => cardById.get(id)?.card).find((selectedCard) => selectedCard?.instrumentId === card.instrumentId);
-        if (sameInstrument) {
-          onFeedback?.('Link impossible : une seule cible par instrument');
-          return current;
-        }
-        nextIds.add(card.id);
+      if (nextIds.has(card.id)) {
+        nextIds.delete(card.id);
+        return { ...current, selectedIds: nextIds };
       }
-      nextIds.add(current.anchor.id);
-      return { ...current, selectedIds: nextIds };
+      const sameInstrument = [...nextIds].map((id) => cardById.get(id)?.card).find((selectedCard) => selectedCard?.instrumentId === card.instrumentId);
+      if (sameInstrument) {
+        onFeedback?.('Link impossible : une seule cible par instrument');
+        return current;
+      }
+      nextIds.add(card.id);
+      const anchorStillSelected = current.anchor && nextIds.has(current.anchor.id);
+      return { ...current, anchor: anchorStillSelected ? current.anchor : card, selectedIds: nextIds };
     });
   }
 
@@ -562,7 +704,8 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
   }
 
   function commitLinkMode(selectedCards, conflictsToRemove = []) {
-    const transaction = buildLinkModeTransaction({ jamId, clientId, clientSequenceNumber, projection, anchorCard: linkMode.anchor, selectedCards, conflictsToRemove });
+    const anchorCard = selectedCards.find((card) => card.id === linkMode.anchor?.id) ?? selectedCards[0];
+    const transaction = buildLinkModeTransaction({ jamId, clientId, clientSequenceNumber, projection, anchorCard, selectedCards, conflictsToRemove });
     if (transaction) {
       dispatch(transaction);
       const created = transaction.events.some((event) => event.type === 'link_created');
@@ -575,7 +718,10 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
 
   function validateLinkMode() {
     const selectedCards = [...linkMode.selectedIds].map((id) => cardById.get(id)?.card).filter(Boolean);
-    if (selectedCards.length < 1) return;
+    if (selectedCards.length < 2) {
+      onFeedback?.('Sélectionne au moins deux cards à lier');
+      return;
+    }
     if (selectedCards.some((card) => card.played || card.locked)) {
       onFeedback?.('Link impossible : passage joué ou verrouillé');
       return;
@@ -629,8 +775,8 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
   return (
     <>
       {!hasCards ? <Alert severity="info" sx={{ mb: 2 }}>Aucun participant</Alert> : null}
-      {conflictMode.active ? <Paper variant="outlined" sx={{ p: 1.25, mb: 2, borderColor: 'error.main', bgcolor: 'action.hover' }}><Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between"><Typography variant="body2" fontWeight={800}>Mode conflict : choisis une appearance cible, sans hole.</Typography><Button size="small" onClick={cancelConflictMode}>Annuler</Button></Stack></Paper> : null}
-      {linkMode.active ? <Paper variant="outlined" sx={{ p: 1.25, mb: 2, borderColor: 'primary.main', bgcolor: 'action.hover' }}><Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between"><Typography variant="body2" fontWeight={800}>Mode link : choisis au plus une card par autre instrument.</Typography><Stack direction="row" spacing={1}><Button size="small" onClick={cancelLinkMode}>Annuler</Button><Button size="small" variant="contained" onClick={validateLinkMode}>Valider</Button></Stack></Stack></Paper> : null}
+      {conflictMode.active ? <Alert severity="warning" sx={{ mb: 2 }}>Mode conflict : clique les cards pour sélectionner/désélectionner. Les actions sont en bas à droite.</Alert> : null}
+      {linkMode.active ? <Alert severity="info" sx={{ mb: 2 }}>Mode link : clique les cards pour sélectionner/désélectionner, une seule par colonne. Les actions sont en bas à droite.</Alert> : null}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <Box sx={{ overflowX: 'auto', pb: 2 }}>
           <Stack direction="row" spacing={1.25} alignItems="stretch" sx={{ minHeight: 360, width: 'max-content', pr: 1 }}>
@@ -651,7 +797,7 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
                       <Stack spacing={1}>
                         {column.cards.map((card) => (
                           <Box key={card.id} sx={{ height: TABLE_ROW_HEIGHT, display: 'flex', alignItems: 'stretch' }}>
-                            <SortableProjectedCard card={card} projection={projection} instrument={column.instrument} linkMode={linkMode} conflictMode={conflictMode} onToggleLink={selectCardForLink} onSelectConflict={selectConflictTarget} onToggleLock={toggleLock} onOpenMenu={openMenu} onBlockedDrag={() => onFeedback?.('Déplacement impossible : passage joué ou verrouillé')} />
+                            <SortableProjectedCard card={card} projection={projection} instrument={column.instrument} linkMode={presentedLinkMode} conflictMode={presentedConflictMode} onToggleLink={selectCardForLink} onSelectConflict={selectConflictTarget} onToggleLock={toggleLock} onOpenMenu={openMenu} onBlockedDrag={() => onFeedback?.('Déplacement impossible : passage joué ou verrouillé')} />
                           </Box>
                         ))}
                       </Stack>
@@ -666,6 +812,25 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
           </Stack>
         </Box>
       </DndContext>
+
+      {linkMode.active ? (
+        <ModeActionBar
+          mode="link"
+          selectedCount={linkMode.selectedIds.size}
+          canValidate={linkMode.selectedIds.size >= 2}
+          onCancel={cancelLinkMode}
+          onValidate={validateLinkMode}
+        />
+      ) : null}
+      {conflictMode.active ? (
+        <ModeActionBar
+          mode="conflict"
+          selectedCount={conflictSelectedIds.size}
+          canValidate={Boolean(conflictMode.anchor && conflictMode.target)}
+          onCancel={cancelConflictMode}
+          onValidate={openConflictScopeDialog}
+        />
+      ) : null}
 
       <Menu anchorEl={menuState.anchorEl} open={Boolean(menuState.anchorEl)} onClose={closeMenu}>
         {menuCard?.type === 'appearance' ? (
@@ -749,14 +914,14 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
         </DialogActions>
       </Dialog>
 
-      <Dialog open={Boolean(conflictMode.active && conflictMode.target)} onClose={() => setConflictMode((current) => ({ ...current, target: null }))}>
+      <Dialog open={conflictScopeDialogOpen} onClose={() => setConflictScopeDialogOpen(false)}>
         <DialogTitle>Ce conflit concerne quoi ?</DialogTitle>
         <DialogContent>
           <Typography mb={1}>“Seulement ce passage” bloque uniquement les cards sélectionnées.</Typography>
           <Typography>“Toute la soirée” bloque les participations entre elles pour les prochains rounds.</Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConflictMode((current) => ({ ...current, target: null }))}>Annuler</Button>
+          <Button onClick={() => setConflictScopeDialogOpen(false)}>Annuler</Button>
           <Button onClick={() => validateConflictMode('appearance')}>Seulement ce passage</Button>
           <Button variant="contained" onClick={() => validateConflictMode('participation')}>Toute la soirée</Button>
         </DialogActions>

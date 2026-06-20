@@ -1092,3 +1092,16 @@ Contient :
 - selected in link mode
 - selected in conflict mode
 - disabled/not selectable
+
+## Mise à jour — comportement des cards en mode link/conflict
+
+Quand le tableau est en mode link ou conflict :
+
+- la card entière est cliquable ;
+- les actions internes de card sont masquées ;
+- les boutons directs de la card ne sont pas visibles ;
+- la sélection/désélection se fait par clic sur toute la surface de la card ;
+- une card sélectionnée a un fond de couleur light correspondant au mode ;
+- les cards non sélectionnées d’une colonne déjà sélectionnée sont visuellement atténuées et non sélectionnables ;
+- cliquer une card déjà sélectionnée la désélectionne ;
+- après désélection, toutes les cards éligibles de la colonne redeviennent sélectionnables.

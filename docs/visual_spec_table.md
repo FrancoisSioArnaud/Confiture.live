@@ -1161,3 +1161,19 @@ Sauvegarde locale active. Les changements seront envoyés dès que possible.
 - snackbar si conséquence indirecte
 - dialog si destruction/choix
 - animation pour tout déplacement
+
+## Mise à jour — modes link/conflict : sélection par card et barre fixed bottom
+
+En mode link ou conflict, les actions de validation ne sont plus dans une bannière inline au-dessus du tableau.
+
+Règles UI :
+
+- les boutons `Valider` et `Annuler` du mode actif sont affichés dans une barre fixed bottom, au même emplacement fonctionnel que le bouton flottant d’ajout de participant ;
+- pendant un mode link/conflict actif, le bouton flottant `Ajouter un musicien` est masqué ;
+- les cards n’affichent plus leurs boutons internes pendant le mode : pas de drag handle, pas de bouton link, pas de lock, pas de menu secondaire ;
+- toute la card devient la zone cliquable de sélection/désélection ;
+- une card sélectionnée en mode link utilise le fond light de la couleur link ;
+- une card sélectionnée en mode conflict utilise le fond light de la couleur conflict ;
+- dès qu’une card d’une colonne est sélectionnée, les autres cards de la même colonne deviennent désactivées/non sélectionnables ;
+- cliquer à nouveau une card sélectionnée la désélectionne et rend les autres cards de sa colonne sélectionnables ;
+- le mode conflict suit les mêmes règles de sélection/désélection que le mode link, avec une couleur distincte.

@@ -22,6 +22,7 @@ export function JamDetailPage() {
   const [configOpen, setConfigOpen] = useState(false);
   const { enqueueFeedback } = useFeedback();
   const [participantDrawer, setParticipantDrawer] = useState({ open: false, mode: 'create', participantId: null });
+  const [tableInteractionModeActive, setTableInteractionModeActive] = useState(false);
   const clientSequenceRef = useRef(0);
   const projection = useJamStoreState((state) => state.projection);
   const transactions = useJamStoreState((state) => state.transactions);
@@ -96,6 +97,7 @@ export function JamDetailPage() {
           onOpenCallDrawer={(plateauIndex) => enqueueFeedback(`Appel du plateau ${plateauIndex + 1}`, 'info')}
           onFeedback={(message) => enqueueFeedback(message)}
           onEditParticipant={(participantId) => setParticipantDrawer({ open: true, mode: 'edit', participantId })}
+          onInteractionModeChange={setTableInteractionModeActive}
         />
       </Paper>
 
@@ -120,7 +122,7 @@ export function JamDetailPage() {
         onTransaction={applyOrganizerTransaction}
         onFeedback={(message) => enqueueFeedback(message)}
       />
-      <Fab color="primary" aria-label="Ajouter un musicien" disabled={!canEdit} onClick={() => setParticipantDrawer({ open: true, mode: 'create', participantId: null })} sx={{ position: 'fixed', right: 24, bottom: 24 }}><PersonAdd /></Fab>
+      {!tableInteractionModeActive ? <Fab color="primary" aria-label="Ajouter un musicien" disabled={!canEdit} onClick={() => setParticipantDrawer({ open: true, mode: 'create', participantId: null })} sx={{ position: 'fixed', right: 24, bottom: 24 }}><PersonAdd /></Fab> : null}
     </Stack>
   );
 }
