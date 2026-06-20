@@ -348,6 +348,8 @@ Règles :
 
 Si un déplacement manuel d’une card linkée crée un conflict avec une autre card, le moteur essaye d’abord de déplacer l’autre card conflictuelle. Si une card non-linkée décale une target linkée, le resolver conserve le déplacement manuel et réaligne le reste du groupe linké autour de la target décalée.
 
+Point d’implémentation obligatoire : la passe link ne doit jamais pré-réappliquer la stratégie `move_to_first` / `move_to_last` / `average_position` avant d’avoir pris en compte le drag manuel. Sinon, le link peut annuler la card déplacée avant que le resolver détecte l’intention utilisateur. Les links doivent être validés d’abord, puis alignés depuis les `resolvedPlateauIndex` après application du manual move.
+
 ### 7. `manual order` existant
 
 Le manual order représente les préférences d’ordre déjà enregistrées par drag.

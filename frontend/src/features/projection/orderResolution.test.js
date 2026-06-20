@@ -725,4 +725,108 @@ describe('orderResolution', () => {
     expect(getCardPlateauIndex(forward, 'instrument_guitar', guitarD)).not.toBe(0);
   });
 
+
+
+  it('keeps the moved linked card priority and moves the rest of the link group after a manual drag', () => {
+    const vocalA = 'appearance_participation_a_instrument_vocals_1';
+    const vocalB = 'appearance_participation_b_instrument_vocals_1';
+    const guitarA = 'appearance_participation_a_instrument_guitar_1';
+    const guitarC = 'appearance_participation_c_instrument_guitar_1';
+    const state = projectJamState({ transactions: [
+      tx(1, [{ type: 'jam_created', payload: { jamId: 'jam_1', name: 'Jam', indicativeDate: '2026-06-17', linkReorderStrategy: 'move_to_first' } }]),
+      instrument(2, 'instrument_vocals', 'Chant', 'a'),
+      instrument(3, 'instrument_guitar', 'Guitare', 'b'),
+      participantForInstrument(4, 'a', 'instrument_vocals', 'order_0'),
+      participantForInstrument(5, 'b', 'instrument_vocals', 'order_1'),
+      participantForInstrument(6, 'a', 'instrument_guitar', 'order_0'),
+      participantForInstrument(7, 'c', 'instrument_guitar', 'order_1'),
+      tx(8, [{ type: 'link_created', payload: {
+        linkId: 'link_a',
+        targets: [{ type: 'appearance', id: vocalA }, { type: 'appearance', id: guitarA }],
+        reorderStrategy: 'move_to_first',
+      } }]),
+      tx(9, [{ type: 'appearance_moved_between', payload: {
+        appearanceId: guitarA,
+        instrumentId: 'instrument_guitar',
+        afterTarget: { type: 'appearance', id: guitarC },
+        beforeTarget: null,
+        movedLinkedGroup: true,
+      } }]),
+    ] });
+
+    expect(columnIds(state)).toEqual([
+      [vocalB, vocalA],
+      [guitarC, guitarA],
+    ]);
+    expect(getCardPlateauIndex(state, 'instrument_vocals', vocalA)).toBe(getCardPlateauIndex(state, 'instrument_guitar', guitarA));
+  });
+
+  it('keeps an unrelated moved card priority when it displaces a linked target', () => {
+    const vocalA = 'appearance_participation_a_instrument_vocals_1';
+    const vocalB = 'appearance_participation_b_instrument_vocals_1';
+    const guitarA = 'appearance_participation_a_instrument_guitar_1';
+    const guitarC = 'appearance_participation_c_instrument_guitar_1';
+    const state = projectJamState({ transactions: [
+      tx(1, [{ type: 'jam_created', payload: { jamId: 'jam_1', name: 'Jam', indicativeDate: '2026-06-17', linkReorderStrategy: 'move_to_first' } }]),
+      instrument(2, 'instrument_vocals', 'Chant', 'a'),
+      instrument(3, 'instrument_guitar', 'Guitare', 'b'),
+      participantForInstrument(4, 'a', 'instrument_vocals', 'order_0'),
+      participantForInstrument(5, 'b', 'instrument_vocals', 'order_1'),
+      participantForInstrument(6, 'a', 'instrument_guitar', 'order_0'),
+      participantForInstrument(7, 'c', 'instrument_guitar', 'order_1'),
+      tx(8, [{ type: 'link_created', payload: {
+        linkId: 'link_a',
+        targets: [{ type: 'appearance', id: vocalA }, { type: 'appearance', id: guitarA }],
+        reorderStrategy: 'move_to_first',
+      } }]),
+      tx(9, [{ type: 'appearance_moved_between', payload: {
+        appearanceId: guitarC,
+        instrumentId: 'instrument_guitar',
+        afterTarget: null,
+        beforeTarget: { type: 'appearance', id: guitarA },
+        movedLinkedGroup: false,
+      } }]),
+    ] });
+
+    expect(columnIds(state)).toEqual([
+      [vocalB, vocalA],
+      [guitarC, guitarA],
+    ]);
+    expect(getCardPlateauIndex(state, 'instrument_vocals', vocalA)).toBe(getCardPlateauIndex(state, 'instrument_guitar', guitarA));
+  });
+
+  it('keeps an unrelated moved card priority when it displaces a linked target in the other linked column', () => {
+    const vocalA = 'appearance_participation_a_instrument_vocals_1';
+    const vocalB = 'appearance_participation_b_instrument_vocals_1';
+    const guitarA = 'appearance_participation_a_instrument_guitar_1';
+    const guitarC = 'appearance_participation_c_instrument_guitar_1';
+    const state = projectJamState({ transactions: [
+      tx(1, [{ type: 'jam_created', payload: { jamId: 'jam_1', name: 'Jam', indicativeDate: '2026-06-17', linkReorderStrategy: 'move_to_first' } }]),
+      instrument(2, 'instrument_vocals', 'Chant', 'a'),
+      instrument(3, 'instrument_guitar', 'Guitare', 'b'),
+      participantForInstrument(4, 'a', 'instrument_vocals', 'order_0'),
+      participantForInstrument(5, 'b', 'instrument_vocals', 'order_1'),
+      participantForInstrument(6, 'a', 'instrument_guitar', 'order_0'),
+      participantForInstrument(7, 'c', 'instrument_guitar', 'order_1'),
+      tx(8, [{ type: 'link_created', payload: {
+        linkId: 'link_a',
+        targets: [{ type: 'appearance', id: vocalA }, { type: 'appearance', id: guitarA }],
+        reorderStrategy: 'move_to_first',
+      } }]),
+      tx(9, [{ type: 'appearance_moved_between', payload: {
+        appearanceId: vocalB,
+        instrumentId: 'instrument_vocals',
+        afterTarget: null,
+        beforeTarget: { type: 'appearance', id: vocalA },
+        movedLinkedGroup: false,
+      } }]),
+    ] });
+
+    expect(columnIds(state)).toEqual([
+      [vocalB, vocalA],
+      [guitarC, guitarA],
+    ]);
+    expect(getCardPlateauIndex(state, 'instrument_vocals', vocalA)).toBe(getCardPlateauIndex(state, 'instrument_guitar', guitarA));
+  });
+
 });

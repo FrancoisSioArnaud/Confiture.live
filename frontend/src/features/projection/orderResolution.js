@@ -29,6 +29,10 @@ export function resolveOrderAfterTransaction(state, context = {}) {
 
   applyManualOrderHints(state);
 
+  // Validate active link constraints before resolving the visible order, but do
+  // not pre-move link targets here. Manual reorder events must keep priority:
+  // if the moved card displaces a linked target, the rest of the link group
+  // follows that displaced target during applyResolvedLinkAlignment().
   applyActiveLinks(state);
   assignAllResolvedColumnOrders(state);
   applyResolvedLinkAlignment(state, { anchor, anchorMode, manualMoveContext });
@@ -109,16 +113,11 @@ function applyLinkConstraint(state, link) {
   }
 
   link.suppressedByConflict = false;
-  const order = linkedOrder(targets.map(({ entity }) => entity), link.reorderStrategy);
-  targets.forEach(({ target, entity }) => {
-    if (isCardPlayed(entity) || isCardLocked(entity)) {
-      if (getPositionInRound(entity) !== order) {
-        addProjectionWarning(state, 'link_target_pinned', 'link could not move a played or locked target.', { linkId: link.linkId, target });
-      }
-      return;
-    }
-    setCardOrder(entity, order);
-  });
+  // Important: this pass only validates whether the link is usable. It must not
+  // mutate positionInRound/orderScore. Real alignment happens later from the
+  // resolved plateau indexes, after manual moves have been applied. Otherwise a
+  // manual drag involving a linked target can be immediately undone by the
+  // default link strategy before the resolver sees the user's intent.
 }
 
 function applyConflictConstraint(state, conflict, transactionAnchor) {
