@@ -96,7 +96,7 @@ describe('projectJamState', () => {
 
     const conflicted = projectJamState({ transactions: [
       ...base,
-      tx(5, [{ type: 'conflict_created', payload: { conflictId: 'conflict_1', scope: 'appearance', targetIds: ['appearance_a', 'hole_b'], reason: 'manual', anchorTargetId: 'appearance_a' } }]),
+      tx(5, [{ type: 'conflict_created', payload: { conflictId: 'conflict_1', scope: 'appearance', targetIds: ['appearance_a', 'hole_b'], reason: 'manual' } }]),
       tx(6, [{ type: 'link_created', payload: { linkId: 'link_1', targets: [{ type: 'appearance', id: 'appearance_a' }, { type: 'hole', id: 'hole_b' }], anchorTarget: { type: 'appearance', id: 'appearance_a' }, reorderStrategy: 'move_to_first' } }]),
     ] });
     expect(conflicted.links.link_1.suppressedByConflict).toBe(true);
@@ -125,7 +125,7 @@ describe('projectJamState', () => {
       ...jamAndGuitar,
       tx(3, [{ type: 'appearance_materialized', payload: { appearanceId: 'appearance_a', participationId: 'p_a', instrumentId: 'instrument_guitar', appearanceIndex: 1, positionKey: 'a' } }]),
       tx(4, [{ type: 'hole_added', payload: { holeId: 'hole_z', instrumentId: 'instrument_guitar', appearanceIndex: 1, reason: 'manual', afterTarget: null, beforeTarget: null, positionKey: 'z' } }]),
-      tx(5, [{ type: 'conflict_created', payload: { conflictId: 'conflict_1', scope: 'appearance', targetIds: ['appearance_a', 'hole_z'], reason: 'manual', anchorTargetId: 'appearance_a' } }]),
+      tx(5, [{ type: 'conflict_created', payload: { conflictId: 'conflict_1', scope: 'appearance', targetIds: ['appearance_a', 'hole_z'], reason: 'manual' } }]),
       tx(6, [{ type: 'link_created', payload: { linkId: 'link_1', targets: [{ type: 'appearance', id: 'appearance_a' }, { type: 'hole', id: 'hole_z' }], anchorTarget: { type: 'appearance', id: 'appearance_a' }, reorderStrategy: 'move_to_first' } }]),
       tx(7, [{ type: 'conflict_removed', payload: { conflictId: 'conflict_1' } }]),
     ] });

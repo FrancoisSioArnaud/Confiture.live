@@ -160,8 +160,15 @@ export function linkRemoved(payload) {
   return event(EVENT_TYPES.LINK_REMOVED, z.object({ linkId: id }).strict(), payload);
 }
 
+function normalizeUniqueIds(values) {
+  return [...values].sort((a, b) => a.localeCompare(b));
+}
+
+const uniqueIdArray = z.array(id).min(2).refine((values) => new Set(values).size === values.length, { message: 'Duplicate ids are not allowed.' });
+
 export function conflictCreated(payload) {
-  return event(EVENT_TYPES.CONFLICT_CREATED, z.object({ conflictId: id, scope: z.enum(['participation', 'appearance']), targetIds: z.array(id).min(2), reason: z.enum(['instrument_constraint', 'manual']), anchorTargetId: id }).strict(), payload);
+  const parsed = z.object({ conflictId: id, scope: z.enum(['participation', 'appearance']), targetIds: uniqueIdArray, reason: z.enum(['instrument_constraint', 'manual']) }).strict().parse(payload);
+  return { type: EVENT_TYPES.CONFLICT_CREATED, payload: { ...parsed, targetIds: normalizeUniqueIds(parsed.targetIds) } };
 }
 
 export function conflictRemoved(payload) {

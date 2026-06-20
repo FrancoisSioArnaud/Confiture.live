@@ -26,7 +26,7 @@ describe('projection engine business rules', () => {
         { type: 'participant_created', payload: { participantId: 'participant_nicolas', name: 'Nicolas' } },
         { type: 'participation_added', payload: { participationId: 'participation_nicolas_vocals', participantId: 'participant_nicolas', instrumentId: 'instrument_vocals', customInstrumentLabel: null, insertionMode: 'end_of_visible_rounds', startAppearanceIndex: 1, afterTarget: null, beforeTarget: null, baseOrderKey: 'a' } },
         { type: 'participation_added', payload: { participationId: 'participation_nicolas_guitar', participantId: 'participant_nicolas', instrumentId: 'instrument_guitar', customInstrumentLabel: null, insertionMode: 'end_of_visible_rounds', startAppearanceIndex: 1, afterTarget: null, beforeTarget: null, baseOrderKey: 'a' } },
-        { type: 'conflict_created', payload: { conflictId: 'conflict_nicolas_multi', scope: 'participation', targetIds: ['participation_nicolas_vocals', 'participation_nicolas_guitar'], reason: 'instrument_constraint', anchorTargetId: 'participation_nicolas_vocals' } },
+        { type: 'conflict_created', payload: { conflictId: 'conflict_nicolas_multi', scope: 'participation', targetIds: ['participation_nicolas_vocals', 'participation_nicolas_guitar'], reason: 'instrument_constraint' } },
       ]),
       tx(6, [{ type: 'link_created', payload: { linkId: 'link_contradictory', targets: [{ type: 'appearance', id: 'appearance_participation_nicolas_vocals_1' }, { type: 'appearance', id: 'appearance_participation_nicolas_guitar_1' }], anchorTarget: { type: 'appearance', id: 'appearance_participation_nicolas_vocals_1' }, reorderStrategy: 'move_to_first' } }]),
     ]);
@@ -67,7 +67,7 @@ describe('projection engine business rules', () => {
       tx(5, [{ type: 'appearance_materialized', payload: { appearanceId: 'appearance_anchor', participationId: 'participation_anchor', instrumentId: 'instrument_guitar', appearanceIndex: 1, positionKey: 'a' } }]),
       tx(6, [{ type: 'appearance_materialized', payload: { appearanceId: 'appearance_locked', participationId: 'participation_locked', instrumentId: 'instrument_guitar', appearanceIndex: 1, positionKey: 'a' } }]),
       tx(7, [{ type: 'appearance_locked', payload: { appearanceId: 'appearance_locked' } }]),
-      tx(8, [{ type: 'conflict_created', payload: { conflictId: 'conflict_appearance', scope: 'appearance', targetIds: ['appearance_anchor', 'appearance_locked'], reason: 'manual', anchorTargetId: 'appearance_anchor' } }]),
+      tx(8, [{ type: 'conflict_created', payload: { conflictId: 'conflict_appearance', scope: 'appearance', targetIds: ['appearance_anchor', 'appearance_locked'], reason: 'manual' } }]),
     ]);
 
     expect(state.conflicts.conflict_appearance.scope).toBe('appearance');

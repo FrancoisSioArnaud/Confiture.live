@@ -67,8 +67,8 @@ function removeLinkTx(sequence, linkId) {
   return tx(sequence, [{ type: 'link_removed', payload: { linkId } }], `transaction_remove_${linkId}`);
 }
 
-function conflictTx(sequence, conflictId, targetIds, anchorTargetId) {
-  return tx(sequence, [{ type: 'conflict_created', payload: { conflictId, scope: 'appearance', targetIds, reason: 'manual', anchorTargetId } }], `transaction_${conflictId}`);
+function conflictTx(sequence, conflictId, targetIds) {
+  return tx(sequence, [{ type: 'conflict_created', payload: { conflictId, scope: 'appearance', targetIds: [...targetIds].sort(), reason: 'manual' } }], `transaction_${conflictId}`);
 }
 
 function removeConflictTx(sequence, conflictId) {

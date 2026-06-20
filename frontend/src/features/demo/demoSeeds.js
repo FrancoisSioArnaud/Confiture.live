@@ -105,7 +105,7 @@ export function buildDemoSeedTransactions(seed) {
     return [
       ...remapSeedTransactions(buildDemoSeedTransactions('simple'), 'simple', seed, jamId),
       tx(seed, 11, jamId, 'Link Sarah Nicolas', [['link_created', { linkId: 'link_demo_links_sarah_nicolas', targets: [{ type: 'appearance', id: source }, { type: 'appearance', id: target }], reorderStrategy: 'move_to_first' }]]),
-      tx(seed, 12, jamId, 'Conflict Léa Paul', [['conflict_created', { conflictId: 'conflict_demo_links_lea_paul', scope: 'appearance', targetIds: ['appearance_participation_links_lea_vocals_1', 'appearance_participation_links_paul_guitar_1'], reason: 'manual', anchorTargetId: 'appearance_participation_links_lea_vocals_1' }]]),
+      tx(seed, 12, jamId, 'Conflict Léa Paul', [['conflict_created', { conflictId: 'conflict_demo_links_lea_paul', scope: 'appearance', targetIds: ['appearance_participation_links_lea_vocals_1', 'appearance_participation_links_paul_guitar_1'], reason: 'manual' }]]),
     ];
   }
   if (seed === 'multi') {
@@ -113,7 +113,7 @@ export function buildDemoSeedTransactions(seed) {
       ...baseSeed(seed, 'Jam multi-instruments', '2026-01-17', DEFAULT_INSTRUMENTS),
       participantTx(seed, 3, jamId, 'Nicolas', 'instrument_vocals', 1),
       tx(seed, 4, jamId, 'Nicolas guitare', [['participation_added', { participationId: 'participation_multi_nicolas_guitar', participantId: 'participant_multi_nicolas', instrumentId: 'instrument_guitar', customInstrumentLabel: null, insertionMode: 'end_of_visible_rounds', startAppearanceIndex: 1, afterTarget: null, beforeTarget: null, baseOrderKey: 'order_1' }]]),
-      tx(seed, 5, jamId, 'Conflit instruments Nicolas', [['conflict_created', { conflictId: 'conflict_demo_multi_nicolas', scope: 'participation', targetIds: ['participation_multi_nicolas_vocals', 'participation_multi_nicolas_guitar'], reason: 'instrument_constraint', anchorTargetId: 'participation_multi_nicolas_vocals' }]]),
+      tx(seed, 5, jamId, 'Conflit instruments Nicolas', [['conflict_created', { conflictId: 'conflict_demo_multi_nicolas', scope: 'participation', targetIds: ['participation_multi_nicolas_vocals', 'participation_multi_nicolas_guitar'], reason: 'instrument_constraint' }]]),
       participantTx(seed, 6, jamId, 'Hugo', 'instrument_other', 2, 'saxophone'),
     ];
   }
@@ -124,7 +124,7 @@ export function buildDemoSeedTransactions(seed) {
       tx(seed, 14, jamId, 'Verrouiller Sarah', [['appearance_locked', { appearanceId: 'appearance_participation_complex_sarah_vocals_1' }]]),
       tx(seed, 15, jamId, 'Plateau joué', [['plateau_played', { plateauIndex: 0, targets: [{ type: 'appearance', id: 'appearance_participation_complex_sarah_vocals_1' }, { type: 'appearance', id: 'appearance_participation_complex_nicolas_guitar_1' }, { type: 'appearance', id: 'appearance_participation_complex_tom_bass_1' }, { type: 'hole', id: 'hole_demo_complex_drums_1' }], playedAt: '2026-01-17T21:00:00.000Z' }]]),
       tx(seed, 16, jamId, 'Paul parti', [['participant_marked_left', { participantId: 'participant_complex_paul', confirmedDespiteFutureLockedAppearances: true }]]),
-      tx(seed, 17, jamId, 'Conflit actif démo', [['conflict_created', { conflictId: 'conflict_demo_complex_active', scope: 'appearance', targetIds: ['appearance_participation_complex_sarah_vocals_1', 'appearance_participation_complex_tom_bass_1'], reason: 'manual', anchorTargetId: 'appearance_participation_complex_sarah_vocals_1' }]]),
+      tx(seed, 17, jamId, 'Conflit actif démo', [['conflict_created', { conflictId: 'conflict_demo_complex_active', scope: 'appearance', targetIds: ['appearance_participation_complex_sarah_vocals_1', 'appearance_participation_complex_tom_bass_1'], reason: 'manual' }]]),
     ];
   }
   if (seed === 'sync') {

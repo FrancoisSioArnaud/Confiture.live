@@ -761,8 +761,7 @@ Feedback : dialog de scope + snackbar. Animation si déplacement.
     conflictId: "conflict_...",
     scope: "participation",
     targetIds: ["participation_a", "participation_b"],
-    reason: "instrument_constraint",
-    anchorTargetId: "participation_a"
+    reason: "instrument_constraint"
   }
 }
 ```
@@ -778,8 +777,7 @@ Pour conflict appearance :
     conflictId: "conflict_...",
     scope: "appearance",
     targetIds: ["appearance_a", "appearance_b"],
-    reason: "manual",
-    anchorTargetId: "appearance_a"
+    reason: "manual"
   }
 }
 ```

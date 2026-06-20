@@ -3,9 +3,8 @@ export function addConflict(state, payload) {
     id: payload.conflictId,
     conflictId: payload.conflictId,
     scope: payload.scope,
-    targetIds: [...payload.targetIds],
+    targetIds: [...payload.targetIds].sort((a, b) => String(a).localeCompare(String(b))),
     reason: payload.reason,
-    anchorTargetId: payload.anchorTargetId,
     status: 'active',
   };
 }

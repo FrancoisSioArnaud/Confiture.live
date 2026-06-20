@@ -11,6 +11,7 @@ describe('buildConflictModeTransaction', () => {
     const transaction = buildConflictModeTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 5, projection: { conflicts: {} }, anchorCard: anchor, targetCard: target, scope: 'appearance' });
     expect(transaction.events.map((event) => event.type)).toEqual(['conflict_created']);
     expect(transaction.events[0].payload).toMatchObject({ scope: 'appearance', reason: 'manual', targetIds: ['appearance_a', 'appearance_b'] });
+    expect(transaction.events[0].payload).not.toHaveProperty('anchorTargetId');
   });
 
   it('removes existing conflicts without conflict_updated', () => {
@@ -25,6 +26,15 @@ describe('buildConflictModeTransaction', () => {
     const sameColumnTarget = { ...target, instrumentId: anchor.instrumentId };
     const transaction = buildConflictModeTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 7, projection: { conflicts: {} }, anchorCard: anchor, targetCard: sameColumnTarget, scope: 'appearance' });
     expect(transaction).toBeNull();
+  });
+
+
+  it('normalizes targetIds so conflict creation is non-oriented', () => {
+    const forward = buildConflictModeTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 8, projection: { conflicts: {} }, anchorCard: anchor, targetCard: target, scope: 'appearance' });
+    const reverse = buildConflictModeTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 9, projection: { conflicts: {} }, anchorCard: target, targetCard: anchor, scope: 'appearance' });
+    expect(forward.events[0].payload.targetIds).toEqual(reverse.events[0].payload.targetIds);
+    expect(forward.events[0].payload).not.toHaveProperty('anchorTargetId');
+    expect(reverse.events[0].payload).not.toHaveProperty('anchorTargetId');
   });
 
 });

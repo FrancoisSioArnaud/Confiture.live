@@ -1609,7 +1609,7 @@ Priorité de stabilité :
 ```txt
 1. Ne jamais bouger played.
 2. Ne jamais bouger locked.
-3. Garder l’origin card / anchor de la dernière action.
+3. Garder l’intention de la dernière action de la dernière action.
 4. Résoudre le conflict en déplaçant la target non-anchor si elle est mobile.
 5. Respecter les links restants si cela ne recrée pas de conflict.
 6. Compléter avec manual order, round order, base order puis id stable.
@@ -2128,7 +2128,7 @@ La résolution est faite par le resolver global après application de la transac
 ```txt
 1. Ne jamais bouger played.
 2. Ne jamais bouger locked.
-3. Garder l’origin card / anchor si possible.
+3. Garder l’intention de la dernière action si possible.
 4. Déplacer l’autre target vers le slot valide le plus proche, en essayant d’abord les slots suivants puis les slots précédents si aucun slot suivant n’est disponible.
 5. Respecter les links actifs si cela ne viole pas le conflict.
 6. Refuser si aucun ordre valide n’existe.
@@ -2566,7 +2566,7 @@ Règles :
 - Teinte de fond différente selon le mode.
 - Cards sélectionnables mises en évidence.
 - Cards non sélectionnables désactivées visuellement.
-- Card d’origine toujours visible comme anchor/origin.
+- Card d’ouverture visible comme élément de sélection UI, sans effet métier d’anchor.
 - Boutons Valider / Annuler fixes et accessibles.
 ```
 
@@ -2606,11 +2606,11 @@ average_position choisit la position entière la plus proche de la moyenne, tie 
 Cette section renforce la règle de résolution d’ordre définie dans `order-resolution-hierarchy-spec.md`.
 
 - Les `links` et les `conflicts` sont uniquement **inter-colonnes** en V0. Ils ne peuvent pas être créés entre deux cards du même instrument.
-- Un `conflict` est une contrainte **bidirectionnelle** : le sens `A → C` ou `C → A` ne change pas l’interdiction de cohabitation. Le sens sert seulement à définir l’anchor préférée de la transaction.
+- Un `conflict` est une contrainte **bidirectionnelle** : le sens `A → C` ou `C → A` ne change pas l’interdiction de cohabitation. Le sens de création ne doit pas orienter la résolution ; seuls un drag manuel ou une autre dernière action utilisateur peuvent fournir une intention prioritaire.
 - À chaque transaction, le resolver doit vérifier les conflicts actifs dans les deux sens, quelle que soit la colonne touchée par l’action.
 - Une card ayant un link ou un conflict reste draggable tant qu’elle n’est ni `played` ni `locked`.
-- Après un drag, le resolver applique les conséquences : les cards linkées suivent la card déplacée si possible ; les conflicts qui deviennent actifs sur la nouvelle ligne déplacent la card non-anchor vers le slot valide le plus proche.
-- Si la card non-anchor conflictuelle ne peut pas descendre, le resolver peut chercher un slot valide au-dessus afin de résoudre immédiatement le conflict sans attendre l’ajout d’une autre participation.
+- Après un drag, le resolver applique les conséquences : les cards linkées suivent la card déplacée si possible ; les conflicts qui deviennent actifs sur la nouvelle ligne déplacent l’autre card conflictuelle vers le slot valide le plus proche.
+- Si la card conflictuelle à déplacer ne peut pas descendre, le resolver peut chercher un slot valide au-dessus afin de résoudre immédiatement le conflict sans attendre l’ajout d’une autre participation.
 - Aucune résolution induite ne peut déplacer une card `played` ou `locked`.
 
 

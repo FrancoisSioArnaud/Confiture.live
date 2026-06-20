@@ -147,8 +147,7 @@ describe('orderResolution', () => {
         conflictId: 'conflict_1',
         scope: 'appearance',
         targetIds: ['appearance_participation_a_guitar_1', 'appearance_participation_b_guitar_1'],
-        reason: 'same_musician',
-        anchorTargetId: 'appearance_participation_a_guitar_1',
+        reason: 'same_musician'
       } }]),
       tx(6, [{ type: 'link_created', payload: {
         linkId: 'link_1',
@@ -158,7 +157,7 @@ describe('orderResolution', () => {
       } }]),
     ] });
 
-    expect(state.conflicts.conflict_1).toMatchObject({ status: 'active', anchorTargetId: 'appearance_participation_a_guitar_1' });
+    expect(state.conflicts.conflict_1).toMatchObject({ status: 'active' });
     expect(state.links.link_1).toMatchObject({ status: 'active', suppressedByConflict: true });
     expect(state.appearances.appearance_participation_a_guitar_1.resolvedOrderKey).toBeDefined();
     expect(state.appearances.appearance_participation_b_guitar_1.resolvedOrderKey).toBeDefined();
@@ -304,8 +303,7 @@ describe('orderResolution', () => {
         conflictId: 'conflict_direct',
         scope: 'appearance',
         targetIds: ['appearance_participation_a_guitar_1', 'appearance_participation_b_guitar_1'],
-        reason: 'manual',
-        anchorTargetId: 'appearance_participation_a_guitar_1',
+        reason: 'manual'
       } }]),
       tx(6, [{ type: 'link_created', payload: {
         linkId: 'link_direct_conflict',
@@ -434,8 +432,7 @@ describe('orderResolution', () => {
         conflictId: 'conflict_a_c',
         scope: 'appearance',
         targetIds: [vocalA, guitarC],
-        reason: 'manual',
-        anchorTargetId: vocalA,
+        reason: 'manual'
       } }]),
     ] });
 
@@ -460,8 +457,7 @@ describe('orderResolution', () => {
         conflictId: 'conflict_c_a',
         scope: 'appearance',
         targetIds: [guitarC, vocalA],
-        reason: 'manual',
-        anchorTargetId: guitarC,
+        reason: 'manual'
       } }]),
     ] });
 
@@ -486,8 +482,7 @@ describe('orderResolution', () => {
         conflictId: 'conflict_b_d',
         scope: 'appearance',
         targetIds: [vocalB, guitarD],
-        reason: 'manual',
-        anchorTargetId: vocalB,
+        reason: 'manual'
       } }]),
     ] });
 
@@ -513,8 +508,7 @@ describe('orderResolution', () => {
         conflictId: 'conflict_a_c',
         scope: 'appearance',
         targetIds: [vocalA, guitarC],
-        reason: 'manual',
-        anchorTargetId: vocalA,
+        reason: 'manual'
       } }]),
       tx(9, [{ type: 'appearance_moved_between', payload: {
         appearanceId: guitarC,
@@ -550,8 +544,7 @@ describe('orderResolution', () => {
         conflictId: 'conflict_a_c_all_night',
         scope: 'participation',
         targetIds: ['participation_a_instrument_vocals', 'participation_c_instrument_guitar'],
-        reason: 'manual',
-        anchorTargetId: 'participation_a_instrument_vocals',
+        reason: 'manual'
       } }]),
       tx(9, [{ type: 'instrument_round_visibility_changed', payload: { instrumentId: 'instrument_vocals', visibleRoundCount: 2 } }]),
       tx(10, [{ type: 'instrument_round_visibility_changed', payload: { instrumentId: 'instrument_guitar', visibleRoundCount: 2 } }]),
@@ -584,8 +577,7 @@ describe('orderResolution', () => {
         conflictId: 'conflict_a_c_this_round',
         scope: 'appearance',
         targetIds: [vocalA1, guitarC1],
-        reason: 'manual',
-        anchorTargetId: vocalA1,
+        reason: 'manual'
       } }]),
       tx(9, [{ type: 'instrument_round_visibility_changed', payload: { instrumentId: 'instrument_vocals', visibleRoundCount: 2 } }]),
       tx(10, [{ type: 'instrument_round_visibility_changed', payload: { instrumentId: 'instrument_guitar', visibleRoundCount: 2 } }]),
@@ -616,8 +608,7 @@ describe('orderResolution', () => {
         conflictId: 'conflict_a_c',
         scope: 'appearance',
         targetIds: [vocalA, guitarC],
-        reason: 'manual',
-        anchorTargetId: vocalA,
+        reason: 'manual'
       } }]),
       tx(9, [{ type: 'appearance_moved_between', payload: {
         appearanceId: vocalA,
@@ -677,7 +668,7 @@ describe('orderResolution', () => {
         { type: 'participant_created', payload: { participantId: 'participant_a', name: 'A' } },
         { type: 'participation_added', payload: { participationId: 'participation_a_vocals', participantId: 'participant_a', instrumentId: 'instrument_vocals', customInstrumentLabel: null, insertionMode: 'end_of_visible_rounds', startAppearanceIndex: 1, afterTarget: null, beforeTarget: null, baseOrderKey: 'order_0' } },
         { type: 'participation_added', payload: { participationId: 'participation_a_guitar', participantId: 'participant_a', instrumentId: 'instrument_guitar', customInstrumentLabel: null, insertionMode: 'end_of_visible_rounds', startAppearanceIndex: 1, afterTarget: null, beforeTarget: null, baseOrderKey: 'order_0' } },
-        { type: 'conflict_created', payload: { conflictId: 'conflict_same_participant', scope: 'participation', targetIds: ['participation_a_vocals', 'participation_a_guitar'], reason: 'instrument_constraint', anchorTargetId: 'participation_a_vocals' } },
+        { type: 'conflict_created', payload: { conflictId: 'conflict_same_participant', scope: 'participation', targetIds: ['participation_a_vocals', 'participation_a_guitar'], reason: 'instrument_constraint' } },
       ]),
       participantForInstrument(5, 'b', 'instrument_guitar', 'order_1'),
     ] });
@@ -704,6 +695,34 @@ describe('orderResolution', () => {
     expect(state.appearances.appearance_participation_nico_vocals_1.participantId).toBe('participant_nico');
     expect(state.appearances.appearance_participation_nico_guitar_1.participantId).toBe('participant_nico');
     expect(state.participants[state.appearances.appearance_participation_nico_guitar_1.participantId].name).toBe('Nico');
+  });
+
+
+  it('resolves conflict creation symmetrically regardless of targetIds order', () => {
+    const vocalA = 'appearance_participation_a_instrument_vocals_1';
+    const guitarD = 'appearance_participation_d_instrument_guitar_1';
+    const baseTransactions = [
+      tx(1, [{ type: 'jam_created', payload: { jamId: 'jam_1', name: 'Jam', indicativeDate: '2026-06-17', linkReorderStrategy: 'move_to_first' } }]),
+      instrument(2, 'instrument_vocals', 'Chant', 'a'),
+      instrument(3, 'instrument_guitar', 'Guitare', 'b'),
+      participantForInstrument(4, 'a', 'instrument_vocals', 'order_0'),
+      participantForInstrument(5, 'b', 'instrument_vocals', 'order_1'),
+      participantForInstrument(6, 'd', 'instrument_guitar', 'order_0'),
+      participantForInstrument(7, 'c', 'instrument_guitar', 'order_1'),
+    ];
+
+    const forward = projectJamState({ transactions: [
+      ...baseTransactions,
+      tx(8, [{ type: 'conflict_created', payload: { conflictId: 'conflict_forward', scope: 'appearance', targetIds: [vocalA, guitarD], reason: 'manual' } }]),
+    ] });
+    const reverse = projectJamState({ transactions: [
+      ...baseTransactions,
+      tx(8, [{ type: 'conflict_created', payload: { conflictId: 'conflict_reverse', scope: 'appearance', targetIds: [guitarD, vocalA], reason: 'manual' } }]),
+    ] });
+
+    expect(columnIds(forward)).toEqual(columnIds(reverse));
+    expect(getCardPlateauIndex(forward, 'instrument_vocals', vocalA)).toBe(0);
+    expect(getCardPlateauIndex(forward, 'instrument_guitar', guitarD)).not.toBe(0);
   });
 
 });

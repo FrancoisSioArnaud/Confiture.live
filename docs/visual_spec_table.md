@@ -464,14 +464,14 @@ Il ne doit pas y avoir de drawer link.
 
 Il ne doit pas y avoir de link dans le menu trois-points.
 
-## 8.2 Anchor
+## 8.2 Card d’ouverture et sélection
 
-La card depuis laquelle le bouton link est cliqué devient l’anchor.
+La card depuis laquelle le mode link est ouvert sert uniquement à initialiser la sélection UI. Elle n’est pas une anchor métier et ne doit pas orienter la résolution du link.
 
 Règle :
 
 ```txt
-Recliquer sur le bouton link de l’anchor quitte le mode link.
+Le link est un groupe non orienté. Créer ou éditer le même groupe depuis n’importe quelle target doit produire le même résultat.
 ```
 
 ## 8.3 État visuel du tableau
@@ -480,10 +480,10 @@ En mode link :
 
 ```txt
 - le tableau change légèrement d’apparence
-- l’anchor est très visible
+- la sélection courante est très visible
 - les cards sélectionnables sont mises en évidence
 - les cards non sélectionnables sont atténuées
-- les cards déjà linkées à l’anchor apparaissent sélectionnées
+- les cards déjà linkées au groupe édité apparaissent sélectionnées
 ```
 
 ## 8.4 Sélection
@@ -1045,7 +1045,7 @@ Actions disponibles :
 - sélectionner/désélectionner cards
 - valider
 - annuler
-- recliquer link anchor pour quitter
+- quitter le mode link avec Annuler
 ```
 
 Actions désactivées :
@@ -1122,8 +1122,8 @@ Sauvegarde locale active. Les changements seront envoyés dès que possible.
 - déclenché uniquement par bouton link card
 - pas de drawer
 - pas de menu link
-- anchor claire
-- recliquer link anchor quitte
+- sélection courante claire
+- quitter le mode link avec Annuler
 - validation par barre d’action
 - stratégie de réorganisation depuis config jam
 ```
@@ -1195,4 +1195,4 @@ Règles du mode link :
 - ouvrir le mode link depuis une card déjà linkée pré-sélectionne les cards du link existant ;
 - désélectionner les autres cards du link doit permettre d’enregistrer la suppression du link ;
 - le bouton `Valider` ne doit pas être désactivé si la sélection courante correspond à une suppression de link existant ;
-- valider avec moins de deux cards sélectionnées supprime les links actifs associés à l’anchor, sans créer de nouveau link.
+- valider avec moins de deux cards dans le groupe édité supprime le link actif au lieu de créer un link invalide, sans créer de nouveau link.

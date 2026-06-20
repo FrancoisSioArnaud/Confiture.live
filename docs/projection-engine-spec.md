@@ -1085,12 +1085,12 @@ Ne pas implémenter dans le moteur V0 :
 Cette section renforce la règle de résolution d’ordre définie dans `order-resolution-hierarchy-spec.md`.
 
 - Les `links` et les `conflicts` sont uniquement **inter-colonnes** en V0. Ils ne peuvent pas être créés entre deux cards du même instrument.
-- Un `conflict` est une contrainte **bidirectionnelle** : le sens `A → C` ou `C → A` ne change pas l’interdiction de cohabitation. Le sens sert seulement à définir l’anchor préférée de la transaction.
+- Un `conflict` est une contrainte **bidirectionnelle** : le sens `A → C` ou `C → A` ne change pas l’interdiction de cohabitation. Le sens de création ne doit pas orienter la résolution ; seuls un drag manuel ou une autre dernière action utilisateur peuvent fournir une intention prioritaire.
 - À chaque transaction, le resolver doit vérifier les conflicts actifs dans les deux sens, quelle que soit la colonne touchée par l’action.
 - Une card ayant un link ou un conflict reste draggable tant qu’elle n’est ni `played` ni `locked`.
 - Un drag qui déplace une card non-linkée dans une zone contenant une target linkée est autorisé : le manual reorder est conservé, puis le groupe linké suit la target linkée décalée.
-- Après un drag, le resolver applique les conséquences : les cards linkées suivent la card déplacée ou la target linkée décalée si possible ; les conflicts qui deviennent actifs sur la nouvelle ligne déplacent la card non-anchor vers le slot valide le plus proche.
-- Si la card non-anchor conflictuelle ne peut pas descendre, le resolver peut chercher un slot valide au-dessus afin de résoudre immédiatement le conflict sans attendre l’ajout d’une autre participation.
+- Après un drag, le resolver applique les conséquences : les cards linkées suivent la card déplacée ou la target linkée décalée si possible ; les conflicts qui deviennent actifs sur la nouvelle ligne déplacent l’autre card conflictuelle vers le slot valide le plus proche.
+- Si la card conflictuelle à déplacer ne peut pas descendre, le resolver peut chercher un slot valide au-dessus afin de résoudre immédiatement le conflict sans attendre l’ajout d’une autre participation.
 - Aucune résolution induite ne peut déplacer une card `played` ou `locked`.
 
 

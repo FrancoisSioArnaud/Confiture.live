@@ -524,3 +524,93 @@ def test_link_created_rejects_less_than_two_targets(client):
 
     assert response.status_code == 400
     assert "at least two targets" in str(response.json())
+
+def test_conflict_created_accepts_non_oriented_payload_without_anchor(client):
+    create_jam_with_instruments(client, jam_id="jam_conflict_validation")
+
+    response = client.post("/api/jams/jam_conflict_validation/transactions/", {
+        "clientId": "client_1",
+        "baseServerSequenceNumber": 3,
+        "transaction": {
+            "transactionId": "transaction_conflict_without_anchor",
+            "jamId": "jam_conflict_validation",
+            "clientSequenceNumber": 2,
+            "schemaVersion": 1,
+            "events": [{
+                "eventId": "event_conflict_without_anchor",
+                "jamId": "jam_conflict_validation",
+                "type": "conflict_created",
+                "payload": {
+                    "conflictId": "conflict_without_anchor",
+                    "scope": "appearance",
+                    "targetIds": ["appearance_a", "appearance_b"],
+                    "reason": "manual",
+                },
+                "schemaVersion": 1,
+            }],
+        },
+    }, content_type="application/json")
+
+    assert response.status_code == 201
+    event = JamEvent.objects.get(jam__jam_id="jam_conflict_validation", event_id="event_conflict_without_anchor")
+    assert "anchorTargetId" not in event.payload
+
+
+def test_conflict_created_rejects_less_than_two_targets(client):
+    create_jam_with_instruments(client, jam_id="jam_conflict_invalid")
+
+    response = client.post("/api/jams/jam_conflict_invalid/transactions/", {
+        "clientId": "client_1",
+        "baseServerSequenceNumber": 3,
+        "transaction": {
+            "transactionId": "transaction_bad_conflict",
+            "jamId": "jam_conflict_invalid",
+            "clientSequenceNumber": 2,
+            "schemaVersion": 1,
+            "events": [{
+                "eventId": "event_bad_conflict",
+                "jamId": "jam_conflict_invalid",
+                "type": "conflict_created",
+                "payload": {
+                    "conflictId": "conflict_bad",
+                    "scope": "appearance",
+                    "targetIds": ["appearance_a"],
+                    "reason": "manual",
+                },
+                "schemaVersion": 1,
+            }],
+        },
+    }, content_type="application/json")
+
+    assert response.status_code == 400
+    assert "at least two targets" in str(response.json())
+
+
+def test_conflict_created_rejects_duplicate_targets(client):
+    create_jam_with_instruments(client, jam_id="jam_conflict_duplicate")
+
+    response = client.post("/api/jams/jam_conflict_duplicate/transactions/", {
+        "clientId": "client_1",
+        "baseServerSequenceNumber": 3,
+        "transaction": {
+            "transactionId": "transaction_duplicate_conflict",
+            "jamId": "jam_conflict_duplicate",
+            "clientSequenceNumber": 2,
+            "schemaVersion": 1,
+            "events": [{
+                "eventId": "event_duplicate_conflict",
+                "jamId": "jam_conflict_duplicate",
+                "type": "conflict_created",
+                "payload": {
+                    "conflictId": "conflict_duplicate",
+                    "scope": "appearance",
+                    "targetIds": ["appearance_a", "appearance_a"],
+                    "reason": "manual",
+                },
+                "schemaVersion": 1,
+            }],
+        },
+    }, content_type="application/json")
+
+    assert response.status_code == 400
+    assert "Duplicate target" in str(response.json())

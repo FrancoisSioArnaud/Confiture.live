@@ -111,9 +111,8 @@ function addInitialPairEvents(events, { projection, participations, linkedPairKe
           events.push(conflictCreated({
             conflictId: createId('conflict'),
             scope: 'participation',
-            targetIds: [left.participationId, right.participationId],
+            targetIds: [left.participationId, right.participationId].sort((a, b) => a.localeCompare(b)),
             reason: 'instrument_constraint',
-            anchorTargetId: left.participationId,
           }));
         }
       }

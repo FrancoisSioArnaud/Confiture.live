@@ -123,14 +123,14 @@ def build_demo_seed(seed):
         return [
             *_remap(build_demo_seed("simple"), "simple", seed),
             _tx(seed, 11, jam_id, "Link Sarah Nicolas", [("link_created", {"linkId": "link_demo_links_sarah_nicolas", "targets": [{"type": "appearance", "id": "appearance_participation_links_sarah_vocals_1"}, {"type": "appearance", "id": "appearance_participation_links_nicolas_guitar_1"}], "reorderStrategy": "move_to_first"})]),
-            _tx(seed, 12, jam_id, "Conflict Léa Paul", [("conflict_created", {"conflictId": "conflict_demo_links_lea_paul", "scope": "appearance", "targetIds": ["appearance_participation_links_lea_vocals_1", "appearance_participation_links_paul_guitar_1"], "reason": "manual", "anchorTargetId": "appearance_participation_links_lea_vocals_1"})]),
+            _tx(seed, 12, jam_id, "Conflict Léa Paul", [("conflict_created", {"conflictId": "conflict_demo_links_lea_paul", "scope": "appearance", "targetIds": ["appearance_participation_links_lea_vocals_1", "appearance_participation_links_paul_guitar_1"], "reason": "manual"})]),
         ]
     if seed == "multi":
         return [
             *_base(seed, "Jam multi-instruments", "2026-01-17", DEFAULT_INSTRUMENTS),
             _participant_tx(seed, 3, jam_id, "Nicolas", "instrument_vocals", 1),
             _tx(seed, 4, jam_id, "Nicolas guitare", [("participation_added", {"participationId": "participation_multi_nicolas_guitar", "participantId": "participant_multi_nicolas", "instrumentId": "instrument_guitar", "customInstrumentLabel": None, "insertionMode": "end_of_visible_rounds", "startAppearanceIndex": 1, "afterTarget": None, "beforeTarget": None, "baseOrderKey": "order_1"})]),
-            _tx(seed, 5, jam_id, "Conflit instruments Nicolas", [("conflict_created", {"conflictId": "conflict_demo_multi_nicolas", "scope": "participation", "targetIds": ["participation_multi_nicolas_vocals", "participation_multi_nicolas_guitar"], "reason": "instrument_constraint", "anchorTargetId": "participation_multi_nicolas_vocals"})]),
+            _tx(seed, 5, jam_id, "Conflit instruments Nicolas", [("conflict_created", {"conflictId": "conflict_demo_multi_nicolas", "scope": "participation", "targetIds": ["participation_multi_nicolas_vocals", "participation_multi_nicolas_guitar"], "reason": "instrument_constraint"})]),
             _participant_tx(seed, 6, jam_id, "Hugo", "instrument_other", 2, "saxophone"),
         ]
     if seed == "complex":

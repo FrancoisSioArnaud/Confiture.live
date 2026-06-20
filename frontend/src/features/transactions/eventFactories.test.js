@@ -3,6 +3,7 @@ import { EVENT_TYPES, FORBIDDEN_EVENT_TYPES, assertAllowedEventType } from '../.
 import { createTransaction } from './createTransaction';
 import {
   appearanceSkipped,
+  conflictCreated,
   holeAdded,
   jamCreated,
   linkCreated,
@@ -113,6 +114,15 @@ describe('event factories', () => {
       reorderStrategy: 'move_to_first',
     }).payload.targets).toHaveLength(2);
 
+    const conflict = conflictCreated({
+      conflictId: 'conflict_1',
+      scope: 'appearance',
+      targetIds: ['appearance_b', 'appearance_a'],
+      reason: 'manual',
+    });
+    expect(conflict.payload.targetIds).toEqual(['appearance_a', 'appearance_b']);
+    expect(conflict.payload).not.toHaveProperty('anchorTargetId');
+
     expect(appearanceSkipped({
       appearanceId: 'appearance_guitar_1',
       instrumentId: 'instrument_guitar',
@@ -138,6 +148,28 @@ describe('event factories', () => {
       afterTarget: null,
       beforeTarget: null,
       baseOrderKey: 'order_a',
+    })).toThrow();
+
+    expect(() => conflictCreated({
+      conflictId: 'conflict_bad',
+      scope: 'appearance',
+      targetIds: ['appearance_a'],
+      reason: 'manual',
+    })).toThrow();
+
+    expect(() => conflictCreated({
+      conflictId: 'conflict_bad_duplicate',
+      scope: 'appearance',
+      targetIds: ['appearance_a', 'appearance_a'],
+      reason: 'manual',
+    })).toThrow();
+
+    expect(() => conflictCreated({
+      conflictId: 'conflict_bad_anchor',
+      scope: 'appearance',
+      targetIds: ['appearance_a', 'appearance_b'],
+      reason: 'manual',
+      anchorTargetId: 'appearance_a',
     })).toThrow();
 
     expect(() => createTransaction({

@@ -147,7 +147,7 @@ function applyConflictConstraint(state, conflict, transactionAnchor) {
     });
 
   for (const [first, second] of conflictingPairs) {
-    const anchorEntity = chooseConflictAnchor(conflict, transactionAnchor, first, second);
+    const anchorEntity = chooseConflictAnchor(state, transactionAnchor, first, second);
     const preferredTarget = anchorEntity?.id === first.id ? second : first;
 
     if (moveConflictTargetAwayFromPlateau(state, preferredTarget, conflict)) return true;
@@ -195,10 +195,22 @@ function conflictTargetGroupsShareInstrument(groups) {
   return false;
 }
 
-function chooseConflictAnchor(conflict, transactionAnchor, first, second) {
+function chooseConflictAnchor(state, transactionAnchor, first, second) {
   if (entityMatchesTarget(first, transactionAnchor)) return first;
   if (entityMatchesTarget(second, transactionAnchor)) return second;
-  return first;
+  return compareGridOrder(state, first, second) <= 0 ? first : second;
+}
+
+function compareGridOrder(state, a, b) {
+  const plateauOrder = (getCardPlateauIndex(a) ?? Number.MAX_SAFE_INTEGER) - (getCardPlateauIndex(b) ?? Number.MAX_SAFE_INTEGER);
+  if (plateauOrder !== 0) return plateauOrder;
+
+  const instrumentOrder = String(state.instruments?.[a.instrumentId]?.orderKey ?? a.instrumentId ?? '').localeCompare(
+    String(state.instruments?.[b.instrumentId]?.orderKey ?? b.instrumentId ?? ''),
+  );
+  if (instrumentOrder !== 0) return instrumentOrder;
+
+  return compareBaseColumnOrder(a, b);
 }
 
 function entityMatchesTarget(entity, target) {
@@ -609,13 +621,6 @@ function participationAnchorTarget(payload = {}) {
   if (!payload.participationId) return null;
   const appearanceIndex = payload.startAppearanceIndex ?? 1;
   return cardTarget('appearance', `appearance_${payload.participationId}_${appearanceIndex}`);
-}
-
-function conflictAnchorTarget(payload = {}) {
-  if (!payload.anchorTargetId) return null;
-  if (payload.scope === 'participation') return { type: 'participation', id: payload.anchorTargetId };
-  if (String(payload.anchorTargetId).startsWith('hole_')) return cardTarget('hole', payload.anchorTargetId);
-  return cardTarget('appearance', payload.anchorTargetId);
 }
 
 function firstTarget(targets) {

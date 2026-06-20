@@ -3,7 +3,6 @@ export function addLink(state, payload) {
     id: payload.linkId,
     linkId: payload.linkId,
     targets: payload.targets.map((target) => ({ ...target })),
-    anchorTarget: payload.anchorTarget ? { ...payload.anchorTarget } : null,
     reorderStrategy: payload.reorderStrategy ?? state.jam?.linkReorderStrategy ?? 'move_to_first',
     status: 'active',
     suppressedByConflict: false,

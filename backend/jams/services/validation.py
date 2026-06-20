@@ -31,7 +31,7 @@ PAYLOAD_REQUIRED_FIELDS = {
     "hole_unlocked": {"holeId"},
     "link_created": {"linkId", "targets", "reorderStrategy"},
     "link_removed": {"linkId"},
-    "conflict_created": {"conflictId", "scope", "targetIds", "reason", "anchorTargetId"},
+    "conflict_created": {"conflictId", "scope", "targetIds", "reason"},
     "conflict_removed": {"conflictId"},
     "plateau_played": {"plateauIndex", "targets", "playedAt"},
     "plateau_unplayed": {"plateauIndex", "targets"},
@@ -81,6 +81,19 @@ def validate_event_payload_shape(event_type, payload, field_name):
                 if target_key in seen_targets:
                     raise ValidationError({f"{field_name}.targets[{target_index}]": "Duplicate target in link."})
                 seen_targets.add(target_key)
+    if event_type == "conflict_created":
+        target_ids = payload.get("targetIds")
+        if not isinstance(target_ids, list):
+            raise ValidationError({f"{field_name}.targetIds": "Must be an array."})
+        if len(target_ids) < 2:
+            raise ValidationError({f"{field_name}.targetIds": "A conflict must contain at least two targets."})
+        seen_target_ids = set()
+        for target_index, target_id in enumerate(target_ids):
+            if not isinstance(target_id, str) or not target_id:
+                raise ValidationError({f"{field_name}.targetIds[{target_index}]": "Must be a non-empty string."})
+            if target_id in seen_target_ids:
+                raise ValidationError({f"{field_name}.targetIds[{target_index}]": "Duplicate target in conflict."})
+            seen_target_ids.add(target_id)
 
 
 def validate_target(value, field_name):

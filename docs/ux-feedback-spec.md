@@ -373,14 +373,14 @@ Ce musicien a déjà joué. Tu peux le marquer comme parti.
 Entrée mode link :
 
 - changement visuel du tableau ;
-- card anchor mise en avant ;
+- card d’ouverture mise en avant ;
 - targets compatibles mises en évidence ;
 - barre sticky : `Annuler` / `Valider le link`.
 
 Sortie sans enregistrer :
 
 - bouton Annuler ;
-- recliquer sur le bouton link de la card anchor.
+- recliquer sur le bouton link de la card d’ouverture.
 
 Validation :
 
@@ -394,7 +394,7 @@ Validation :
 Entrée mode conflict :
 
 - changement visuel distinct du mode link ;
-- anchor mise en avant ;
+- sélection mise en avant ;
 - conflicts existants visibles ;
 - targets sélectionnables.
 

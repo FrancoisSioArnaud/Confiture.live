@@ -324,17 +324,16 @@ Règles :
 Quand le tableau est en mode link :
 
 ```txt
-- la card anchor est mise en évidence
 - les cards sélectionnées sont clairement actives
 - les cards non sélectionnables sont atténuées
 ```
 
-La card anchor est celle depuis laquelle le mode link a été lancé.
+La card depuis laquelle le mode link a été lancé sert uniquement à ouvrir le mode et à précharger le groupe édité. Elle n’est pas une anchor métier.
 
 Règle importante :
 
 ```txt
-Recliquer sur le bouton link de la card anchor sort du mode link.
+Le link est non orienté ; la résolution ne dépend pas de la card depuis laquelle le mode a été ouvert.
 ```
 
 ## 4.8 État sélectionnée en mode conflict
@@ -342,9 +341,8 @@ Recliquer sur le bouton link de la card anchor sort du mode link.
 Quand le tableau est en mode conflict :
 
 ```txt
-- la card anchor est mise en évidence
 - les cards sélectionnées pour conflit sont actives
-- les cards déjà en conflict avec l’anchor sont indiquées
+- les cards déjà en conflict avec la sélection courante sont indiquées
 - les cards non sélectionnables sont atténuées
 ```
 
@@ -365,15 +363,14 @@ action directe sur la card
 Fonction :
 
 ```txt
-- si aucun mode link actif : active le mode link avec cette card comme anchor
-- si mode link actif avec cette card comme anchor : quitte le mode link
-- si mode link actif avec une autre anchor : sélectionne/désélectionne cette card si elle est éligible
+- si aucun mode link actif : ouvre le mode link depuis cette card et précharge son groupe linké éventuel
+- si mode link actif : sélectionne/désélectionne cette card si elle est éligible
 ```
 
 Éligibilité d’une cible link :
 
 ```txt
-- autre colonne que l’anchor
+- autre colonne que les cards déjà sélectionnées
 - appearance ou hole
 - non played
 - non locked
@@ -784,9 +781,9 @@ UI :
 Même règle que pour appearance :
 
 ```txt
-- active le mode link avec le hole comme anchor
+- ouvre le mode link depuis le hole
 - indique l’état lié/non lié
-- permet de sortir du mode link si le hole est l’anchor
+- permet de désélectionner le hole si le mode link est actif
 ```
 
 Un link peut cibler :

@@ -10,6 +10,10 @@ function sameColumn(anchorCard, targetCard) {
   return Boolean(anchorCard?.instrumentId && targetCard?.instrumentId && anchorCard.instrumentId === targetCard.instrumentId);
 }
 
+function normalizeTargetIds(targetIds) {
+  return [...new Set(targetIds.filter(Boolean).map(String))].sort((a, b) => a.localeCompare(b));
+}
+
 export function activeConflictsBetween(anchorCard, targetCard, conflicts) {
   return Object.values(conflicts ?? {}).filter((conflict) => {
     if (!isUsableActiveConflict(conflict)) return false;
@@ -23,13 +27,12 @@ export function buildConflictModeTransaction({ jamId, clientId, clientSequenceNu
   const existing = activeConflictsBetween(anchorCard, targetCard, projection.conflicts);
   const events = existing.map((conflict) => conflictRemoved({ conflictId: conflict.conflictId }));
   if (existing.length === 0) {
-    const targetIds = scope === 'participation' ? [anchorCard.participationId, targetCard.participationId] : [anchorCard.id, targetCard.id];
+    const targetIds = normalizeTargetIds(scope === 'participation' ? [anchorCard.participationId, targetCard.participationId] : [anchorCard.id, targetCard.id]);
     events.push(conflictCreated({
       conflictId: createId('conflict'),
       scope,
       targetIds,
       reason: 'manual',
-      anchorTargetId: scope === 'participation' ? anchorCard.participationId : anchorCard.id,
     }));
   }
   if (events.length === 0) return null;
