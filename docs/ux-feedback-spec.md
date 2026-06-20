@@ -429,3 +429,13 @@ Ne pas :
 - afficher des messages techniques comme `event saved` ;
 - bloquer l’organisateur en cas de réseau instable ;
 - utiliser des toasts longs pour expliquer des règles complexes : préférer un dialog si confirmation nécessaire.
+
+
+### Redo et link contre conflit
+
+- Le bouton redo est affiché à côté du bouton undo.
+- Si aucune transaction n’est redoable, le bouton redo est disabled.
+- Après redo valide : snackbar `Action rétablie`.
+- Si un link manuel contredit un conflict actif, afficher un dialog avant mutation.
+- Confirmation : `Désactiver le conflit et créer le link`.
+- Annulation : aucune transaction n’est créée.

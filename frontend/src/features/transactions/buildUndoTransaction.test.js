@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildLinearUndoTransaction, getLatestUndoableTransaction } from './buildUndoTransaction';
+import { buildLinearRedoTransaction, buildLinearUndoTransaction, getLatestRedoableTransaction, getLatestUndoableTransaction } from './buildUndoTransaction';
 
 function transaction(transactionId, clientSequenceNumber, events = [{ type: 'jam_updated', payload: { name: `Jam ${clientSequenceNumber}` } }]) {
   return { transactionId, jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber, events };
@@ -26,4 +26,18 @@ describe('buildUndoTransaction', () => {
     expect(undo.events[0].type).toBe('transaction_reverted');
     expect(undo.events[0].payload.targetTransactionId).toBe('tx_2');
   });
+
+  it('builds transaction_redone for the latest linearly undone transaction', () => {
+    const transactions = [
+      transaction('tx_1', 1),
+      transaction('tx_2', 2),
+      transaction('undo_1', 3, [{ type: 'transaction_reverted', payload: { targetTransactionId: 'tx_2', targetClientSequenceNumber: 2, reason: 'organizer_undo' } }]),
+    ];
+    expect(getLatestRedoableTransaction(transactions).transactionId).toBe('tx_2');
+    const redo = buildLinearRedoTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 4, transactions });
+    expect(redo.events).toHaveLength(1);
+    expect(redo.events[0].type).toBe('transaction_redone');
+    expect(redo.events[0].payload.targetTransactionId).toBe('tx_2');
+  });
+
 });

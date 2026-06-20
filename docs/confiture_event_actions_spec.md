@@ -2526,3 +2526,53 @@ Cette section renforce la règle de résolution d’ordre définie dans `order-r
 - Marquer un plateau joué doit figer toutes les colonnes visibles sur cette ligne. Les instruments sans card reçoivent un hole joué `played_empty_slot` avant `plateau_played`.
 - Dans le menu secondaire d’une card appearance, l’UI affiche une seule action participant : `Supprimer participant` si le participant n’a jamais joué, sinon `Musicien parti`.
 - Les appearances explicitement matérialisées par une création de link multi-instruments doivent hériter du `participantId` de leur participation afin d’afficher le vrai nom du musicien, jamais le fallback “Musicien”.
+
+
+## Addendum — redo V0
+
+Le redo est représenté par un event dédié `transaction_redone`.
+
+Règles :
+
+- `undo` = `transaction_reverted` ;
+- `redo` = `transaction_redone` ;
+- le redo cible une transaction complète précédemment annulée ;
+- le redo est linéaire : seule la dernière transaction redoable peut être rétablie ;
+- si une nouvelle action métier est enregistrée après un undo, la pile redo est invalidée ;
+- le redo ne duplique pas les events métier : la projection réactive la transaction cible au moment du replay ;
+- l’event log conserve l’historique complet des undo/redo.
+
+Payload :
+
+```js
+{
+  targetTransactionId: "transaction_x",
+  targetClientSequenceNumber: 12,
+  reason: "organizer_redo"
+}
+```
+
+## Addendum — link manuel contre conflit actif
+
+Quand l’organisateur crée manuellement un link entre deux cards qui ont déjà un conflict actif, l’UI ne doit pas refuser silencieusement.
+
+Comportement V0 :
+
+1. afficher un dialog explicite ;
+2. proposer `Désactiver le conflit et créer le link` ;
+3. si confirmé, enregistrer dans la même transaction les `conflict_removed` nécessaires puis `link_created` ;
+4. si annulé, ne rien modifier.
+
+Le conflict reste prioritaire dans le resolver tant qu’il existe. Le link manuel devient possible uniquement parce que l’utilisateur accepte explicitement de supprimer le conflict contradictoire.
+
+## Addendum — doublon de nom participant à l’ajout
+
+Si un organisateur saisit le nom d’un participant déjà existant dans le drawer d’ajout, l’UI doit proposer d’ajouter les instruments sélectionnés au participant existant au lieu de créer un doublon.
+
+Exemple :
+
+- `Léo` existe déjà à la guitare ;
+- l’organisateur saisit `Léo` avec `Basse` ;
+- l’UI propose `Ajouter Basse à Léo`.
+
+Si l’organisateur veut deux participants distincts, il doit changer le nom. La création d’un participant distinct avec le même nom reste refusée.

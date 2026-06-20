@@ -122,12 +122,33 @@ function addInitialPairEvents(events, { projection, participations, linkedPairKe
   });
 }
 
-export function validateParticipantDraft({ draft, projection, participantId = null, instruments }) {
+export function findDuplicateParticipantByName(projection, name, participantId = null) {
+  const normalizedName = String(name ?? '').trim().toLowerCase();
+  if (!normalizedName) return null;
+  return Object.values(projection.participants ?? {}).find((participant) => (
+    participant.status !== 'removed'
+    && participant.participantId !== participantId
+    && String(participant.name ?? '').trim().toLowerCase() === normalizedName
+  )) ?? null;
+}
+
+export function activeInstrumentIdsForParticipant(projection, participantId) {
+  return Object.values(projection.participations ?? {})
+    .filter((participation) => participation.participantId === participantId && participation.status === 'active')
+    .map((participation) => participation.instrumentId);
+}
+
+export function missingInstrumentIdsForParticipant(projection, participantId, selectedInstrumentIds) {
+  const existing = new Set(activeInstrumentIdsForParticipant(projection, participantId));
+  return selectedInstrumentIds.filter((instrumentId) => !existing.has(instrumentId));
+}
+
+export function validateParticipantDraft({ draft, projection, participantId = null, instruments, allowDuplicateName = false }) {
   const parsed = participantDraftSchema.safeParse(draft);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Formulaire invalide' };
   const name = parsed.data.name.trim();
-  const duplicate = Object.values(projection.participants ?? {}).some((participant) => participant.status !== 'removed' && participant.participantId !== participantId && participant.name.trim() === name);
-  if (duplicate) return { ok: false, error: 'Un musicien porte déjà ce nom dans cette jam.' };
+  const duplicateParticipant = findDuplicateParticipantByName(projection, name, participantId);
+  if (duplicateParticipant && !allowDuplicateName) return { ok: false, error: 'Un musicien porte déjà ce nom dans cette jam.', duplicateParticipant };
   const selectedOtherInstrument = instruments.find((instrument) => parsed.data.selectedInstrumentIds.includes(instrument.instrumentId) && instrument.label.trim().toLowerCase() === 'autre');
   if (selectedOtherInstrument && !parsed.data.customInstrumentLabels[selectedOtherInstrument.instrumentId]?.trim()) return { ok: false, error: 'Précise l’instrument “Autre”.' };
   return { ok: true, draft: { ...parsed.data, name, initialLinkedInstrumentPairs: parsed.data.initialLinkedInstrumentPairs ?? [] } };
@@ -203,6 +224,34 @@ export function buildEditParticipantTransaction({ jamId, clientId, clientSequenc
   addInitialPairEvents(events, { projection, participations: selectedParticipations, linkedPairKeys: new Set(validation.draft.initialLinkedInstrumentPairs), linkReorderStrategy: projection.jam?.linkReorderStrategy ?? 'move_to_last' });
   if (events.length === 0) return { ok: true, transaction: null };
   return { ok: true, transaction: createTransaction({ jamId, clientId, clientSequenceNumber, label: 'Modifier participant', events }) };
+}
+
+export function buildAddInstrumentsToExistingParticipantTransaction({ jamId, clientId, clientSequenceNumber, projection, existingParticipantId, draft, instruments }) {
+  const participant = projection.participants?.[existingParticipantId];
+  if (!participant || participant.status === 'removed') return { ok: false, error: 'Participant existant introuvable.' };
+  const validation = validateParticipantDraft({ draft: { ...draft, name: participant.name }, projection, participantId: existingParticipantId, instruments, allowDuplicateName: true });
+  if (!validation.ok) return validation;
+  const editableInstrumentIds = editableInstrumentIdSet(instruments);
+  const existingInstrumentIds = activeInstrumentIdsForParticipant(projection, existingParticipantId).filter((instrumentId) => editableInstrumentIds.has(instrumentId));
+  const mergedInstrumentIds = [...new Set([...existingInstrumentIds, ...validation.draft.selectedInstrumentIds])]
+    .sort((left, right) => instruments.findIndex((instrument) => instrument.instrumentId === left) - instruments.findIndex((instrument) => instrument.instrumentId === right));
+  const missingInstrumentIds = missingInstrumentIdsForParticipant(projection, existingParticipantId, validation.draft.selectedInstrumentIds);
+  if (missingInstrumentIds.length === 0) return { ok: false, error: 'Ce musicien joue déjà les instruments sélectionnés.' };
+  return buildEditParticipantTransaction({
+    jamId,
+    clientId,
+    clientSequenceNumber,
+    projection,
+    participantId: existingParticipantId,
+    instruments,
+    confirmedRemovedParticipationIds: [],
+    draft: {
+      ...validation.draft,
+      name: participant.name,
+      selectedInstrumentIds: mergedInstrumentIds,
+      initialLinkedInstrumentPairs: validation.draft.initialLinkedInstrumentPairs ?? [],
+    },
+  });
 }
 
 export function impactedRemovedParticipations({ projection, participantId, selectedInstrumentIds, instruments = null }) {

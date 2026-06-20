@@ -2,8 +2,11 @@ import { Alert, Box, Button, Checkbox, Divider, Drawer, FormControlLabel, FormGr
 import { useEffect, useMemo, useState } from 'react';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import {
+  buildAddInstrumentsToExistingParticipantTransaction,
   buildCreateParticipantTransaction,
   buildEditParticipantTransaction,
+  findDuplicateParticipantByName,
+  missingInstrumentIdsForParticipant,
   impactedRemovedParticipations,
   validateParticipantDraft,
 } from '../utils/buildParticipantDrawerTransaction';
@@ -152,12 +155,42 @@ export function ParticipantDrawer({ open, mode = 'create', projection, participa
     }
   }
 
+  async function addInstrumentsToExistingParticipant() {
+    if (isSaving || !duplicateParticipant) return;
+    const result = buildAddInstrumentsToExistingParticipantTransaction({
+      jamId: projection.jam?.jamId,
+      clientId,
+      clientSequenceNumber,
+      projection,
+      existingParticipantId: duplicateParticipant.participantId,
+      draft,
+      instruments,
+    });
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setIsSaving(true);
+    try {
+      if (result.transaction) {
+        await Promise.resolve(onTransaction(result.transaction));
+        onFeedback?.('Instrument ajouté au musicien existant');
+      }
+      onClose();
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   const selected = new Set(draft.selectedInstrumentIds);
+  const instrumentById = new Map(instruments.map((instrument) => [instrument.instrumentId, instrument]));
+  const duplicateParticipant = mode === 'create' ? findDuplicateParticipantByName(projection, draft.name) : null;
+  const duplicateMissingInstrumentIds = duplicateParticipant ? missingInstrumentIdsForParticipant(projection, duplicateParticipant.participantId, draft.selectedInstrumentIds) : [];
+  const duplicateMissingLabels = duplicateMissingInstrumentIds.map((instrumentId) => instrumentById.get(instrumentId)?.label ?? instrumentId);
   const initialLinkedPairs = mode === 'edit' ? initialLinkedPairsFor(projection, editableActiveParticipations) : [];
   const hasChanges = draftHasChanges({ mode, draft, participant, activeParticipations: editableActiveParticipations, initialLinkedPairs });
   const isLeftParticipant = mode === 'edit' && participant?.status === 'left';
   const pairOptions = selectedInstrumentPairs(draft.selectedInstrumentIds);
-  const instrumentById = new Map(instruments.map((instrument) => [instrument.instrumentId, instrument]));
   const selectedLinkedPairs = new Set(draft.initialLinkedInstrumentPairs);
   const editableActiveByInstrument = new Set(editableActiveParticipations.map((participation) => participation.instrumentId));
 
@@ -172,6 +205,11 @@ export function ParticipantDrawer({ open, mode = 'create', projection, participa
             </Box>
             {isLeftParticipant ? <Alert severity="warning">Ce musicien est marqué parti : tu peux corriger son nom ou retirer un instrument visible, mais pas ajouter de nouvel instrument.</Alert> : null}
             <TextField label="Nom du musicien" value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} error={Boolean(error)} helperText={error} fullWidth autoFocus />
+            {duplicateParticipant ? (
+              <Alert severity="info" action={duplicateMissingInstrumentIds.length > 0 ? <Button color="inherit" size="small" onClick={addInstrumentsToExistingParticipant} disabled={isSaving}>Ajouter {duplicateMissingLabels.join(' + ')} à {duplicateParticipant.name}</Button> : null}>
+                Un participant nommé {duplicateParticipant.name} existe déjà. {duplicateMissingInstrumentIds.length > 0 ? `Tu peux ajouter ${duplicateMissingLabels.join(' + ')} à ce participant existant.` : 'Ce participant joue déjà les instruments sélectionnés.'} Si tu veux créer deux participants distincts, change le nom.
+              </Alert>
+            ) : null}
             <Box>
               <Typography variant="subtitle1" fontWeight={800}>Instruments</Typography>
               <FormGroup>

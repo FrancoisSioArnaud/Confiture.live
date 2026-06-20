@@ -1,5 +1,5 @@
-import { ArrowBack, PersonAdd, Settings, Undo } from '@mui/icons-material';
-import { Alert, Box, Button, CircularProgress, Fab, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material';
+import { ArrowBack, PersonAdd, Redo, Settings, Undo } from '@mui/icons-material';
+import { Alert, Box, CircularProgress, Fab, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
@@ -7,7 +7,7 @@ import { getJam } from '../../../shared/api/jamsApi';
 import { SyncStatusIndicator } from '../../../shared/components/SyncStatusIndicator';
 import { useFeedback } from '../../../shared/feedback/FeedbackProvider';
 import { jamStore } from '../../jam/jamStore';
-import { buildLinearUndoTransaction, getLatestUndoableTransaction } from '../../transactions/buildUndoTransaction';
+import { buildLinearRedoTransaction, buildLinearUndoTransaction, getLatestRedoableTransaction, getLatestUndoableTransaction } from '../../transactions/buildUndoTransaction';
 import { getNextClientSequenceNumber, getLatestClientSequenceNumber } from '../../sync/clientSequence';
 import { useSyncStatus } from '../../sync/syncStatus';
 import { getOrCreateClientId } from '../../sync/clientIdentity';
@@ -28,6 +28,7 @@ export function JamDetailPage() {
   const syncStatus = useSyncStatus(jamId);
   const nextClientSequenceNumber = getNextClientSequenceNumber(transactions, clientId);
   const undoTarget = getLatestUndoableTransaction(transactions);
+  const redoTarget = getLatestRedoableTransaction(transactions);
   const { data, isLoading, isError, error } = useQuery({ queryKey: ['jam', jamId], queryFn: () => getJam(jamId, { includeSnapshot: 'true' }) });
 
 
@@ -81,6 +82,7 @@ export function JamDetailPage() {
           </Box>
           <SyncStatusIndicator status={syncStatus.status} />
           <Tooltip title={undoTarget && canEdit ? 'Annuler la dernière action' : 'Aucune action à annuler'}><span><IconButton aria-label="Undo" disabled={!undoTarget || !canEdit} onClick={() => { const transaction = buildLinearUndoTransaction({ jamId, clientId, clientSequenceNumber: nextClientSequenceNumber, transactions }); if (!transaction) { enqueueFeedback('Undo impossible : aucune action à annuler', 'warning'); return; } applyOrganizerTransaction(transaction); enqueueFeedback('Action annulée'); }}><Undo /></IconButton></span></Tooltip>
+          <Tooltip title={redoTarget && canEdit ? 'Rétablir la dernière action annulée' : 'Aucune action à rétablir'}><span><IconButton aria-label="Redo" disabled={!redoTarget || !canEdit} onClick={() => { const transaction = buildLinearRedoTransaction({ jamId, clientId, clientSequenceNumber: nextClientSequenceNumber, transactions }); if (!transaction) { enqueueFeedback('Redo impossible : aucune action à rétablir', 'warning'); return; } applyOrganizerTransaction(transaction); enqueueFeedback('Action rétablie'); }}><Redo /></IconButton></span></Tooltip>
           <Tooltip title={canEdit ? 'Configuration' : 'Configuration indisponible'}><span><IconButton aria-label="Configuration" disabled={!canEdit} onClick={() => setConfigOpen(true)}><Settings /></IconButton></span></Tooltip>
         </Stack>
       </Paper>
@@ -97,7 +99,6 @@ export function JamDetailPage() {
         />
       </Paper>
 
-      <Button component={RouterLink} to="/" variant="text">Retour aux jams</Button>
 
       <JamConfigDialog
         open={configOpen}

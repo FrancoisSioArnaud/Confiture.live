@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildCreateParticipantTransaction, buildEditParticipantTransaction, validateParticipantDraft } from './buildParticipantDrawerTransaction';
+import { buildAddInstrumentsToExistingParticipantTransaction, buildCreateParticipantTransaction, buildEditParticipantTransaction, missingInstrumentIdsForParticipant, validateParticipantDraft } from './buildParticipantDrawerTransaction';
 
 vi.mock('../../../shared/utils/createId', () => {
   let counter = 0;
@@ -51,8 +51,6 @@ describe('buildParticipantDrawerTransaction', () => {
     expect(link.payload.targets).toHaveLength(2);
     expect(result.transaction.events.some((event) => event.type === 'conflict_created')).toBe(false);
   });
-
-
 
   it('does not remove participations on hidden instruments from the standard drawer', () => {
     const projection = {
@@ -106,5 +104,18 @@ describe('buildParticipantDrawerTransaction', () => {
     const result = buildEditParticipantTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 3, projection, participantId: 'participant_1', instruments, confirmedRemovedParticipationIds: ['participation_vocals'], draft: { name: 'Nicolas', selectedInstrumentIds: ['instrument_guitar'], initialLinkedInstrumentPairs: [], customInstrumentLabels: {} } });
     expect(result.ok).toBe(true);
     expect(result.transaction.events.map((event) => event.type)).toEqual(['participant_updated', 'participation_added', 'participation_removed']);
+  });
+
+  it('builds an edit transaction to add selected instruments to an existing participant with the same name', () => {
+    const projection = {
+      ...emptyProjection,
+      participants: { participant_leo: { participantId: 'participant_leo', name: 'Léo', status: 'active' } },
+      participations: { participation_leo_guitar: { participationId: 'participation_leo_guitar', participantId: 'participant_leo', instrumentId: 'instrument_guitar', status: 'active', startAppearanceIndex: 1, baseOrderKey: 'order_0' } },
+    };
+    expect(missingInstrumentIdsForParticipant(projection, 'participant_leo', ['instrument_guitar', 'instrument_vocals'])).toEqual(['instrument_vocals']);
+    const result = buildAddInstrumentsToExistingParticipantTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 9, projection, existingParticipantId: 'participant_leo', instruments, draft: { name: 'Léo', selectedInstrumentIds: ['instrument_vocals'], initialLinkedInstrumentPairs: [], customInstrumentLabels: {} } });
+    expect(result.ok).toBe(true);
+    expect(result.transaction.events.map((event) => event.type)).toEqual(['participation_added', 'conflict_created']);
+    expect(result.transaction.events.find((event) => event.type === 'participation_added').payload.participantId).toBe('participant_leo');
   });
 });

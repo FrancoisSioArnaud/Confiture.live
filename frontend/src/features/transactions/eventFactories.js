@@ -179,3 +179,7 @@ export function plateauUnplayed(payload) {
 export function transactionReverted(payload) {
   return event(EVENT_TYPES.TRANSACTION_REVERTED, z.object({ targetTransactionId: id, targetClientSequenceNumber: z.number().int().positive(), reason: z.literal('organizer_undo') }).strict(), payload);
 }
+
+export function transactionRedone(payload) {
+  return event(EVENT_TYPES.TRANSACTION_REDONE, z.object({ targetTransactionId: id, targetClientSequenceNumber: z.number().int().positive(), reason: z.literal('organizer_redo') }).strict(), payload);
+}

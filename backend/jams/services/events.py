@@ -31,4 +31,5 @@ ALLOWED_EVENT_TYPES = frozenset({
     "plateau_played",
     "plateau_unplayed",
     "transaction_reverted",
+    "transaction_redone",
 })

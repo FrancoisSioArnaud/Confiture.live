@@ -8,6 +8,7 @@ import {
   linkCreated,
   participantCreated,
   participationAdded,
+  transactionRedone,
   transactionReverted,
 } from './eventFactories';
 
@@ -46,6 +47,7 @@ describe('event factories', () => {
       'plateau_played',
       'plateau_unplayed',
       'transaction_reverted',
+      'transaction_redone',
     ]);
     FORBIDDEN_EVENT_TYPES.forEach((type) => expect(() => assertAllowedEventType(type)).toThrow());
   });
@@ -123,6 +125,7 @@ describe('event factories', () => {
     }).payload.replacement.mode).toBe('hole');
 
     expect(transactionReverted({ targetTransactionId: 'transaction_1', targetClientSequenceNumber: 6, reason: 'organizer_undo' }).type).toBe(EVENT_TYPES.TRANSACTION_REVERTED);
+    expect(transactionRedone({ targetTransactionId: 'transaction_1', targetClientSequenceNumber: 6, reason: 'organizer_redo' }).type).toBe(EVENT_TYPES.TRANSACTION_REDONE);
   });
 
   it('rejects malformed critical payloads and forbidden events', () => {

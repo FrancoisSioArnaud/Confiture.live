@@ -36,6 +36,7 @@ PAYLOAD_REQUIRED_FIELDS = {
     "plateau_played": {"plateauIndex", "targets", "playedAt"},
     "plateau_unplayed": {"plateauIndex", "targets"},
     "transaction_reverted": {"targetTransactionId", "targetClientSequenceNumber", "reason"},
+    "transaction_redone": {"targetTransactionId", "targetClientSequenceNumber", "reason"},
 }
 
 ENUM_FIELDS = {
@@ -48,6 +49,7 @@ ENUM_FIELDS = {
     "conflict_created.scope": {"participation", "appearance"},
     "conflict_created.reason": {"instrument_constraint", "manual"},
     "transaction_reverted.reason": {"organizer_undo"},
+    "transaction_redone.reason": {"organizer_redo"},
 }
 
 

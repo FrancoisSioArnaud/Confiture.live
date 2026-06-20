@@ -139,6 +139,7 @@ export function applyEvent(state, event) {
       break;
     }
     case 'transaction_reverted':
+    case 'transaction_redone':
       break;
     default:
       addProjectionWarning(state, 'unknown_event_type', `Unknown event type ${event.type}.`, { event });

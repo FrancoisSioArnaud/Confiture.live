@@ -1087,3 +1087,18 @@ Cette section renforce la règle de résolution d’ordre définie dans `order-r
 - Après un drag, le resolver applique les conséquences : les cards linkées suivent la card déplacée ou la target linkée décalée si possible ; les conflicts qui deviennent actifs sur la nouvelle ligne déplacent la card non-anchor vers le slot valide le plus proche.
 - Si la card non-anchor conflictuelle ne peut pas descendre, le resolver peut chercher un slot valide au-dessus afin de résoudre immédiatement le conflict sans attendre l’ajout d’une autre participation.
 - Aucune résolution induite ne peut déplacer une card `played` ou `locked`.
+
+
+### Redo linéaire
+
+La projection doit interpréter `transaction_redone` comme une réactivation linéaire d’une transaction undo.
+
+Pipeline :
+
+1. `transaction_reverted` retire uniquement la dernière transaction active ciblée ;
+2. cette transaction devient redoable ;
+3. `transaction_redone` réactive uniquement la dernière transaction redoable ciblée ;
+4. toute nouvelle action métier après un undo invalide la pile redo ;
+5. les events undo/redo restent dans l’historique mais ne sont pas appliqués comme events métier.
+
+Le replay de l’event log reste déterministe : l’état final dépend uniquement des transactions actives après résolution undo/redo linéaire.

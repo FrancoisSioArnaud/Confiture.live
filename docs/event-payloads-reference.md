@@ -955,3 +955,23 @@ Cette section renforce la règle de résolution d’ordre définie dans `order-r
 - Après un drag, le resolver applique les conséquences : les cards linkées suivent la card déplacée si possible ; les conflicts qui deviennent actifs sur la nouvelle ligne déplacent la card non-anchor vers le slot valide le plus proche.
 - Si la card non-anchor conflictuelle ne peut pas descendre, le resolver peut chercher un slot valide au-dessus afin de résoudre immédiatement le conflict sans attendre l’ajout d’une autre participation.
 - Aucune résolution induite ne peut déplacer une card `played` ou `locked`.
+
+
+### Addendum `transaction_redone`
+
+`transaction_redone` rétablit linéairement une transaction précédemment annulée par `transaction_reverted`.
+
+```js
+{
+  type: "transaction_redone",
+  payload: {
+    targetTransactionId: "transaction_x",
+    targetClientSequenceNumber: 12,
+    reason: "organizer_redo"
+  }
+}
+```
+
+Le payload est volontairement symétrique à `transaction_reverted`, avec `reason: "organizer_redo"`.
+
+Un `transaction_redone` non linéaire est ignoré par la projection et génère un warning déterministe.

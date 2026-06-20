@@ -31,6 +31,7 @@ export const EVENT_TYPES = Object.freeze({
   PLATEAU_PLAYED: 'plateau_played',
   PLATEAU_UNPLAYED: 'plateau_unplayed',
   TRANSACTION_REVERTED: 'transaction_reverted',
+  TRANSACTION_REDONE: 'transaction_redone',
 });
 
 export const ALLOWED_EVENT_TYPES = Object.freeze(Object.values(EVENT_TYPES));

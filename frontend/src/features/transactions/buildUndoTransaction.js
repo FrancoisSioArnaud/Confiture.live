@@ -1,29 +1,19 @@
-import { transactionReverted } from './eventFactories';
+import { transactionRedone, transactionReverted } from './eventFactories';
 import { createTransaction } from './createTransaction';
+import { buildActiveTransactions } from '../projection/undo';
 
-function isUndoTransaction(transaction) {
-  return transaction.events?.some((event) => event.type === 'transaction_reverted');
+function isUndoRedoTransaction(transaction) {
+  return transaction.events?.some((event) => event.type === 'transaction_reverted' || event.type === 'transaction_redone');
 }
 
 export function getLatestUndoableTransaction(transactions = []) {
-  const active = [];
-  const reverted = new Set();
-  [...transactions]
-    .sort((a, b) => (a.clientSequenceNumber ?? 0) - (b.clientSequenceNumber ?? 0))
-    .forEach((transaction) => {
-      const revertEvent = transaction.events?.find((event) => event.type === 'transaction_reverted');
-      if (!revertEvent) {
-        if (!reverted.has(transaction.transactionId)) active.push(transaction);
-        return;
-      }
-      const targetTransactionId = revertEvent.payload.targetTransactionId;
-      const index = active.findIndex((candidate) => candidate.transactionId === targetTransactionId);
-      if (index === active.length - 1) {
-        active.pop();
-        reverted.add(targetTransactionId);
-      }
-    });
-  return [...active].reverse().find((transaction) => !isUndoTransaction(transaction)) ?? null;
+  const { activeTransactions } = buildActiveTransactions([...transactions].sort((a, b) => (a.clientSequenceNumber ?? 0) - (b.clientSequenceNumber ?? 0)));
+  return [...activeTransactions].reverse().find((transaction) => !isUndoRedoTransaction(transaction)) ?? null;
+}
+
+export function getLatestRedoableTransaction(transactions = []) {
+  const { redoableTransactions } = buildActiveTransactions([...transactions].sort((a, b) => (a.clientSequenceNumber ?? 0) - (b.clientSequenceNumber ?? 0)));
+  return redoableTransactions.at(-1) ?? null;
 }
 
 export function buildLinearUndoTransaction({ jamId, clientId, clientSequenceNumber, transactions }) {
@@ -38,6 +28,22 @@ export function buildLinearUndoTransaction({ jamId, clientId, clientSequenceNumb
       targetTransactionId: target.transactionId,
       targetClientSequenceNumber: target.clientSequenceNumber,
       reason: 'organizer_undo',
+    })],
+  });
+}
+
+export function buildLinearRedoTransaction({ jamId, clientId, clientSequenceNumber, transactions }) {
+  const target = getLatestRedoableTransaction(transactions);
+  if (!target) return null;
+  return createTransaction({
+    jamId,
+    clientId,
+    clientSequenceNumber,
+    label: 'Rétablir action',
+    events: [transactionRedone({
+      targetTransactionId: target.transactionId,
+      targetClientSequenceNumber: target.clientSequenceNumber,
+      reason: 'organizer_redo',
     })],
   });
 }

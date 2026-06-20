@@ -430,3 +430,13 @@ Ne pas implémenter :
 - instruments favoris globaux ;
 - historique détaillé dans le drawer ;
 - merge multi-client.
+
+
+### Doublon de nom à l’ajout
+
+Dans le drawer d’ajout, si le nom saisi correspond à un participant existant, l’UI doit afficher une proposition claire :
+
+- ajouter les instruments sélectionnés au participant existant ;
+- ou changer le nom pour créer un participant distinct.
+
+La création d’un nouveau participant avec exactement le même nom reste interdite. L’action `Ajouter l’instrument à ce participant` produit une transaction d’édition du participant existant avec `participation_added` pour les instruments manquants.

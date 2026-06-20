@@ -26,4 +26,13 @@ describe('buildLinkModeTransaction', () => {
     expect(transaction).toBeNull();
   });
 
+
+  it('can remove contradictory conflicts and create the requested manual link in one transaction', () => {
+    const projection = { jam: { linkReorderStrategy: 'move_to_first' }, links: {}, conflicts: { conflict_1: { conflictId: 'conflict_1', status: 'active', scope: 'participation', targetIds: ['participation_1', 'participation_2'] } } };
+    const anchorCard = { type: 'appearance', id: 'appearance_1', participationId: 'participation_1', instrumentId: 'instrument_vocals' };
+    const targetCard = { type: 'appearance', id: 'appearance_2', participationId: 'participation_2', instrumentId: 'instrument_guitar' };
+    const transaction = buildLinkModeTransaction({ jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 5, projection, anchorCard, selectedCards: [anchorCard, targetCard], conflictsToRemove: [projection.conflicts.conflict_1] });
+    expect(transaction.events.map((event) => event.type)).toEqual(['conflict_removed', 'link_created']);
+  });
+
 });
