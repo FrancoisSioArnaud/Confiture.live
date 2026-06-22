@@ -27,7 +27,7 @@ appearanceId = appearance_${participationId}_${appearanceIndex}
 
 `appearance_{uuid}` est interdit pour les appearances calculées ou futures. Les holes, links, conflicts, transactions et events peuvent rester en `{type}_{uuid}`.
 
-Noms d’events canoniques côté resolver : `participant_marked_left`, `instrument_visibility_changed`, `instrument_round_visibility_changed`, `plateau_played`, `plateau_unplayed`. Les anciens alias comme `participant_marked_left`, `instrument_round_visibility_changed` et `plateauIndex` sont uniquement des concepts legacy/migration, jamais des sources de vérité du resolver.
+Noms d’events canoniques côté resolver : `participant_marked_left`, `instrument_visibility_changed`, `instrument_round_visibility_changed`, `plateau_played`, `plateau_unplayed`. Les anciens alias `participant_left`, `round_revealed`, `column_hidden`, `column_shown` et `plateauIndex` sont uniquement des concepts legacy/migration. `plateauIndex` ne peut exister que comme intention UI migrée vers `visualIndex`, jamais comme source de vérité du resolver.
 
 ## 2. Enveloppe de transaction
 

@@ -348,6 +348,8 @@ Quand l’organisateur marque une ligne affichée comme jouée, l’UI travaille
 
 Si une colonne visible n’a aucune card sur ce `playedResolvedRow`, l’UI/projection crée un vrai hole métier `reason: played_empty_slot` avec `targetResolvedRow = playedResolvedRow`, puis l’inclut dans `plateau_played.targets`.
 
+Si une contrainte visible ↔ hidden est ignorée par le resolver visible, la projection produit de manière déterministe un warning `hidden_column_constraint_ignored` `severity: info`; ce warning n’implique aucun déplacement visible.
+
 À distinguer strictement :
 
 ```txt

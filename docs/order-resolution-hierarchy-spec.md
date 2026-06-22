@@ -80,10 +80,20 @@ Noms obsolètes ou interdits dans le chemin critique du resolver :
 
 ```txt
 participant_left
-instrument_round_visibility_changed
+round_revealed
+column_hidden / column_shown
 plateauIndex comme vérité resolver
 positionInRound comme vérité resolver
 round-first / appearanceIndex sort
+```
+
+Alias de migration autorisés uniquement en entrée legacy :
+
+```txt
+participant_left -> participant_marked_left
+round_revealed -> instrument_round_visibility_changed
+column_hidden / column_shown -> instrument_visibility_changed
+plateauIndex -> visualIndex côté UI, jamais côté resolver
 ```
 
 La projection rejoue les transactions dans l’ordre :
@@ -786,11 +796,12 @@ Règles canoniques :
 - Montrer à nouveau une colonne relance le resolver avec ses cards redevenues visibles.
 ```
 
-Politique de warning :
+Politique de warning déterministe :
 
 ```txt
-- Projection organisateur normale : pas de warning obligatoire quand une contrainte est ignorée uniquement parce qu’une colonne est hidden.
-- Mode debug/admin ou tests détaillés : produire `hidden_column_constraint_ignored` avec `severity: info`.
+- Si un link/conflict actif traverse au moins une colonne hidden et au moins une colonne visible, produire toujours `hidden_column_constraint_ignored` avec `severity: info`.
+- Si un link/conflict implique uniquement des colonnes hidden, il est ignoré sans warning dans la projection organisateur normale.
+- Les tests golden doivent attendre le warning `hidden_column_constraint_ignored` pour le cas visible <-> hidden.
 - Si une contrainte hidden référence une target réellement manquante ou supprimée, produire plutôt `missing_target`.
 ```
 
@@ -1204,7 +1215,8 @@ Noms obsolètes acceptés uniquement en migration de données locales récentes 
 
 ```txt
 participant_left -> participant_marked_left
-instrument_round_visibility_changed -> instrument_round_visibility_changed
+round_revealed -> instrument_round_visibility_changed
+column_hidden / column_shown -> instrument_visibility_changed
 plateauIndex -> visualIndex côté UI, jamais côté resolver
 ```
 
@@ -1535,7 +1547,7 @@ Chaque fixture doit vérifier explicitement :
 
 Les fixtures doivent être suffisamment petites pour être relues à la main. Une fixture illisible ne verrouille pas le comportement.
 
-Règle de merge : ces noms ne sont pas de simples exemples. Chaque fixture obligatoire doit exister en test avec un `expected` exact : `layoutByCardId`, `orderedCardIdsByColumnId`, `visibleResolvedRows`, `projectionWarnings`. Les résultats attendus sont documentés dans `docs/order-resolution-golden-fixtures.md`. Une réécriture du resolver ne peut pas être considérée terminée tant que ces fixtures golden ne passent pas.
+Règle de merge : ces noms ne sont pas de simples exemples. Chaque fixture obligatoire doit exister en test avec un `input` et un `expected` exact : `layoutByCardId`, `orderedCardIdsByColumnId`, `visibleResolvedRows`, `projectionWarnings`. Les résultats attendus JSON sont documentés dans `docs/order-resolution-golden-fixtures.md`. Une réécriture du resolver ne peut pas être considérée terminée tant que ces fixtures golden ne passent pas.
 
 
 ---

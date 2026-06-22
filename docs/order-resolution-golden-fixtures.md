@@ -122,24 +122,500 @@ But : une card poussée qui est linkée transmet son déplacement à son link gr
 
 ---
 
-## Fixtures 03 à 15 — expected exact obligatoire
+## Fixtures 03 à 15 — `input` / `expected` exacts obligatoires
 
-Ces fixtures doivent être implémentées avec les mêmes champs exacts que les deux exemples précédents. Le tableau ci-dessous verrouille le résultat attendu ; les tests doivent traduire chaque ligne en input/output JSON explicite.
+Les fixtures ci-dessous doivent être transcrites en tests exécutables. Les champs de warning non listés ici (`transactionId`, `eventId`, `message`, etc.) doivent être testés par le catalogue fermé des warnings ; dans les fixtures golden, le comparateur peut normaliser les warnings sur `type`, `reason`, `severity`, `cardIds`, `linkIds`, `conflictIds` et `columnIds`.
 
-| Fixture | Input minimal | Expected exact |
-|---|---|---|
-| `fixture_03_indirect_priority_chain` | A pousse B ; B link C ; C pousse D ; D link E | A/B/C/D/E présents ; B et C alignés ; D et E alignés ; aucune collision ; priorité propagée dans l’ordre `user_move > pushed > linked > pushed > linked`. |
-| `fixture_04_link_fixed_target` | A libre row 1, B locked row 3, link A-B | A prend `resolvedRow: 3`, B reste `3`, warning `[]`. |
-| `fixture_05_link_fixed_impossible` | A locked row 1, B played row 3, link A-B | A reste `1`, B reste `3`, warning `{ type: "link_unresolvable", reason: "linked_cards_fixed_on_different_rows" }`. |
-| `fixture_06_conflict_mobile_repair` | A row 1, B row 1, conflict A-B, aucun fixed | Une des deux cards bouge vers le slot disponible le moins coûteux ; aucune même row ; warning `[]`; tie-break par previous order puis id. |
-| `fixture_07_conflict_fixed_impossible` | A played row 1, B locked row 1, conflict A-B | A reste `1`, B reste `1`, warning `{ type: "conflict_unresolvable", reason: "conflicted_cards_fixed_on_same_row" }`. |
-| `fixture_08_rounds_mixed_valid` | Colonne voice : A round 1 row 1, B round 2 déplacée row 1, A poussée row 2 | Layout final peut avoir B round 2 avant A round 1 ; warning `[]`. |
-| `fixture_09_hidden_column_ignored` | A visible link B hidden ; B aurait imposé row 5 | A garde sa row visible ; B absent du layout visible ; aucun déplacement visible ; warning optionnel `hidden_column_constraint_ignored` seulement en mode debug. |
-| `fixture_10_skip_delinks_only_target` | A-B-C link group ; skip B | B est retirée du link group pour cette appearance et repoussée seule ; A et C restent alignées ; warning `[]`. |
-| `fixture_11_visual_index_global_not_local_rank` | visibleResolvedRows attendues `[1, 3, 7]` avec cards sur colonnes différentes | visualIndex map `{1:1,3:2,7:3}` ; aucune reconstruction par rang local ; cellules vides visuelles non persistées. |
-| `fixture_12_same_event_log_same_projection` | même input rejoué deux fois avec arrays mélangés | `layoutByCardId`, `orderedCardIdsByColumnId`, `visibleResolvedRows`, `projectionWarnings` strictement égaux. |
-| `fixture_13_link_removed_no_magic_restore` | A-B link a déplacé B ; link_removed | B reste sur le layout courant sauf autre contrainte ; ne revient pas à son ordre pré-link. |
-| `fixture_14_conflict_removed_no_magic_restore` | conflict a poussé B ; conflict_removed | B reste sur le layout courant sauf autre contrainte ; ne revient pas à son ordre pré-conflict. |
-| `fixture_15_participation_conflict_expansion` | participation P1 visible r1/r2 et P2 visible r1/r2 avec conflict scope participation | Expansion en 4 paires concrètes ; aucune paire sur même resolvedRow si réparable ; warning `[]`. |
+---
 
-Règle de test : les fixtures 03 à 15 ne peuvent pas rester sous forme de tableau dans le code. Le fichier de tests doit contenir les `input` et `expected` JSON exacts pour chaque fixture, en reprenant les expected ci-dessus comme contrat.
+## fixture_03_indirect_priority_chain
+
+But : A pousse B ; B link C ; C pousse D ; D link E. La priorité se propage sur deux links.
+
+```js
+{
+  name: "fixture_03_indirect_priority_chain",
+  input: {
+    cards: [
+      { cardId: "A_v1", columnId: "voice", baseOrder: 1 },
+      { cardId: "B_v1", columnId: "voice", baseOrder: 2 },
+      { cardId: "D_g1", columnId: "guitar", baseOrder: 1 },
+      { cardId: "C_g1", columnId: "guitar", baseOrder: 2 },
+      { cardId: "E_b1", columnId: "bass", baseOrder: 1 }
+    ],
+    links: [
+      { linkId: "link_B_C", targetCardIds: ["B_v1", "C_g1"], active: true, reorderStrategy: "move_to_first", createdAtOrder: 10 },
+      { linkId: "link_D_E", targetCardIds: ["D_g1", "E_b1"], active: true, reorderStrategy: "move_to_first", createdAtOrder: 11 }
+    ],
+    conflicts: [],
+    hiddenColumnIds: [],
+    previousLayout: { byCardId: {
+      A_v1: { cardId: "A_v1", columnId: "voice", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      B_v1: { cardId: "B_v1", columnId: "voice", resolvedRow: 2, visualIndex: 2, cardIndexInColumn: 2 },
+      D_g1: { cardId: "D_g1", columnId: "guitar", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      C_g1: { cardId: "C_g1", columnId: "guitar", resolvedRow: 2, visualIndex: 2, cardIndexInColumn: 2 },
+      E_b1: { cardId: "E_b1", columnId: "bass", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 }
+    }},
+    transactionContext: { intent: "move", anchorCardId: "A_v1", afterTargetCardId: "B_v1", beforeTargetCardId: null, affectedCardIds: ["A_v1"] },
+    config: {}
+  },
+  expected: {
+    layoutByCardId: {
+      B_v1: { resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      C_g1: { resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      A_v1: { resolvedRow: 2, visualIndex: 2, cardIndexInColumn: 2 },
+      D_g1: { resolvedRow: 2, visualIndex: 2, cardIndexInColumn: 2 },
+      E_b1: { resolvedRow: 2, visualIndex: 2, cardIndexInColumn: 1 }
+    },
+    orderedCardIdsByColumnId: { voice: ["B_v1", "A_v1"], guitar: ["C_g1", "D_g1"], bass: ["E_b1"] },
+    visibleResolvedRows: [1, 2],
+    projectionWarnings: []
+  }
+}
+```
+
+---
+
+## fixture_04_link_fixed_target
+
+But : une target locked impose sa row au groupe linké.
+
+```js
+{
+  name: "fixture_04_link_fixed_target",
+  input: {
+    cards: [
+      { cardId: "A_v1", columnId: "voice", baseOrder: 1 },
+      { cardId: "B_g1", columnId: "guitar", baseOrder: 3, locked: true }
+    ],
+    links: [{ linkId: "link_A_B", targetCardIds: ["A_v1", "B_g1"], active: true, reorderStrategy: "move_to_first", createdAtOrder: 10 }],
+    conflicts: [],
+    hiddenColumnIds: [],
+    previousLayout: { byCardId: {
+      A_v1: { cardId: "A_v1", columnId: "voice", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      B_g1: { cardId: "B_g1", columnId: "guitar", resolvedRow: 3, visualIndex: 2, cardIndexInColumn: 1 }
+    }},
+    transactionContext: { intent: "link_created", anchorCardId: null, affectedCardIds: ["A_v1", "B_g1"] },
+    config: {}
+  },
+  expected: {
+    layoutByCardId: {
+      A_v1: { resolvedRow: 3, visualIndex: 1, cardIndexInColumn: 1 },
+      B_g1: { resolvedRow: 3, visualIndex: 1, cardIndexInColumn: 1 }
+    },
+    orderedCardIdsByColumnId: { voice: ["A_v1"], guitar: ["B_g1"] },
+    visibleResolvedRows: [3],
+    projectionWarnings: []
+  }
+}
+```
+
+---
+
+## fixture_05_link_fixed_impossible
+
+But : deux fixed rows différentes rendent le link localement insoluble.
+
+```js
+{
+  name: "fixture_05_link_fixed_impossible",
+  input: {
+    cards: [
+      { cardId: "A_v1", columnId: "voice", baseOrder: 1, locked: true },
+      { cardId: "B_g1", columnId: "guitar", baseOrder: 3, played: true }
+    ],
+    links: [{ linkId: "link_A_B", targetCardIds: ["A_v1", "B_g1"], active: true, reorderStrategy: "move_to_first", createdAtOrder: 10 }],
+    conflicts: [],
+    hiddenColumnIds: [],
+    previousLayout: { byCardId: {
+      A_v1: { cardId: "A_v1", columnId: "voice", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      B_g1: { cardId: "B_g1", columnId: "guitar", resolvedRow: 3, visualIndex: 2, cardIndexInColumn: 1 }
+    }},
+    transactionContext: { intent: "link_created", anchorCardId: null, affectedCardIds: ["A_v1", "B_g1"] },
+    config: {}
+  },
+  expected: {
+    layoutByCardId: {
+      A_v1: { resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      B_g1: { resolvedRow: 3, visualIndex: 2, cardIndexInColumn: 1 }
+    },
+    orderedCardIdsByColumnId: { voice: ["A_v1"], guitar: ["B_g1"] },
+    visibleResolvedRows: [1, 3],
+    projectionWarnings: [{ type: "link_unresolvable", reason: "linked_cards_fixed_on_different_rows", severity: "warning", cardIds: ["A_v1", "B_g1"], linkIds: ["link_A_B"] }]
+  }
+}
+```
+
+---
+
+## fixture_06_conflict_mobile_repair
+
+But : à coût égal, la card au tri stable le plus faible garde sa row et l’autre descend au slot disponible le plus proche.
+
+```js
+{
+  name: "fixture_06_conflict_mobile_repair",
+  input: {
+    cards: [
+      { cardId: "A_v1", columnId: "voice", baseOrder: 1 },
+      { cardId: "B_g1", columnId: "guitar", baseOrder: 1 }
+    ],
+    links: [],
+    conflicts: [{ conflictId: "conflict_A_B", scope: "appearance", targetCardIds: ["A_v1", "B_g1"], reason: "manual", active: true, createdAtOrder: 10 }],
+    hiddenColumnIds: [],
+    previousLayout: { byCardId: {
+      A_v1: { cardId: "A_v1", columnId: "voice", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      B_g1: { cardId: "B_g1", columnId: "guitar", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 }
+    }},
+    transactionContext: { intent: "conflict_created", anchorCardId: null, affectedCardIds: ["A_v1", "B_g1"] },
+    config: {}
+  },
+  expected: {
+    layoutByCardId: {
+      A_v1: { resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      B_g1: { resolvedRow: 2, visualIndex: 2, cardIndexInColumn: 1 }
+    },
+    orderedCardIdsByColumnId: { voice: ["A_v1"], guitar: ["B_g1"] },
+    visibleResolvedRows: [1, 2],
+    projectionWarnings: []
+  }
+}
+```
+
+---
+
+## fixture_07_conflict_fixed_impossible
+
+But : conflict entre deux fixed cards même row produit un warning, sans déplacer.
+
+```js
+{
+  name: "fixture_07_conflict_fixed_impossible",
+  input: {
+    cards: [
+      { cardId: "A_v1", columnId: "voice", baseOrder: 1, played: true },
+      { cardId: "B_g1", columnId: "guitar", baseOrder: 1, locked: true }
+    ],
+    links: [],
+    conflicts: [{ conflictId: "conflict_A_B", scope: "appearance", targetCardIds: ["A_v1", "B_g1"], reason: "manual", active: true, createdAtOrder: 10 }],
+    hiddenColumnIds: [],
+    previousLayout: { byCardId: {
+      A_v1: { cardId: "A_v1", columnId: "voice", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      B_g1: { cardId: "B_g1", columnId: "guitar", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 }
+    }},
+    transactionContext: { intent: "conflict_created", anchorCardId: null, affectedCardIds: ["A_v1", "B_g1"] },
+    config: {}
+  },
+  expected: {
+    layoutByCardId: {
+      A_v1: { resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      B_g1: { resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 }
+    },
+    orderedCardIdsByColumnId: { voice: ["A_v1"], guitar: ["B_g1"] },
+    visibleResolvedRows: [1],
+    projectionWarnings: [{ type: "conflict_unresolvable", reason: "conflicted_cards_fixed_on_same_row", severity: "warning", cardIds: ["A_v1", "B_g1"], conflictIds: ["conflict_A_B"] }]
+  }
+}
+```
+
+---
+
+## fixture_08_rounds_mixed_valid
+
+But : une round 2 peut passer avant une round 1. Le round n’ajoute aucun coût.
+
+```js
+{
+  name: "fixture_08_rounds_mixed_valid",
+  input: {
+    cards: [
+      { cardId: "A_v1", columnId: "voice", baseOrder: 1, appearanceIndex: 1 },
+      { cardId: "B_v2", columnId: "voice", baseOrder: 2, appearanceIndex: 2 }
+    ],
+    links: [],
+    conflicts: [],
+    hiddenColumnIds: [],
+    previousLayout: { byCardId: {
+      A_v1: { cardId: "A_v1", columnId: "voice", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      B_v2: { cardId: "B_v2", columnId: "voice", resolvedRow: 2, visualIndex: 2, cardIndexInColumn: 2 }
+    }},
+    transactionContext: { intent: "move", anchorCardId: "B_v2", afterTargetCardId: null, beforeTargetCardId: "A_v1", affectedCardIds: ["B_v2"] },
+    config: {}
+  },
+  expected: {
+    layoutByCardId: {
+      B_v2: { resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      A_v1: { resolvedRow: 2, visualIndex: 2, cardIndexInColumn: 2 }
+    },
+    orderedCardIdsByColumnId: { voice: ["B_v2", "A_v1"] },
+    visibleResolvedRows: [1, 2],
+    projectionWarnings: []
+  }
+}
+```
+
+---
+
+## fixture_09_hidden_column_ignored
+
+But : une contrainte visible ↔ hidden ne déplace jamais la card visible et produit un warning info déterministe.
+
+```js
+{
+  name: "fixture_09_hidden_column_ignored",
+  input: {
+    cards: [
+      { cardId: "A_v1", columnId: "voice", baseOrder: 2 },
+      { cardId: "B_g1", columnId: "guitar", baseOrder: 5, hidden: true }
+    ],
+    links: [{ linkId: "link_A_B", targetCardIds: ["A_v1", "B_g1"], active: true, reorderStrategy: "move_to_first", createdAtOrder: 10 }],
+    conflicts: [],
+    hiddenColumnIds: ["guitar"],
+    previousLayout: { byCardId: {
+      A_v1: { cardId: "A_v1", columnId: "voice", resolvedRow: 2, visualIndex: 1, cardIndexInColumn: 1 },
+      B_g1: { cardId: "B_g1", columnId: "guitar", resolvedRow: 5, visualIndex: 2, cardIndexInColumn: 1 }
+    }},
+    transactionContext: { intent: "neutral", anchorCardId: null, affectedCardIds: ["A_v1", "B_g1"] },
+    config: {}
+  },
+  expected: {
+    layoutByCardId: {
+      A_v1: { resolvedRow: 2, visualIndex: 1, cardIndexInColumn: 1 }
+    },
+    orderedCardIdsByColumnId: { voice: ["A_v1"] },
+    visibleResolvedRows: [2],
+    projectionWarnings: [{ type: "hidden_column_constraint_ignored", reason: "hidden_column_not_resolved", severity: "info", cardIds: ["A_v1", "B_g1"], linkIds: ["link_A_B"], columnIds: ["guitar"] }]
+  }
+}
+```
+
+---
+
+## fixture_10_skip_delinks_only_target
+
+But : skip B dans un groupe A-B-C retire seulement B du groupe pour cette appearance ; A et C restent alignées.
+
+```js
+{
+  name: "fixture_10_skip_delinks_only_target",
+  input: {
+    cards: [
+      { cardId: "A_v1", columnId: "voice", baseOrder: 1 },
+      { cardId: "B_g1", columnId: "guitar", baseOrder: 1 },
+      { cardId: "C_b1", columnId: "bass", baseOrder: 1 }
+    ],
+    links: [{ linkId: "link_A_C_after_skip", targetCardIds: ["A_v1", "C_b1"], active: true, reorderStrategy: "move_to_first", createdAtOrder: 11 }],
+    conflicts: [],
+    hiddenColumnIds: [],
+    previousLayout: { byCardId: {
+      A_v1: { cardId: "A_v1", columnId: "voice", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      B_g1: { cardId: "B_g1", columnId: "guitar", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      C_b1: { cardId: "C_b1", columnId: "bass", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 }
+    }},
+    transactionContext: { intent: "skip", anchorCardId: "B_g1", affectedCardIds: ["A_v1", "B_g1", "C_b1"], preferredResolvedRow: 2, metadata: { skippedAppearanceId: "B_g1" } },
+    config: {}
+  },
+  expected: {
+    layoutByCardId: {
+      A_v1: { resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      C_b1: { resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      B_g1: { resolvedRow: 2, visualIndex: 2, cardIndexInColumn: 1 }
+    },
+    orderedCardIdsByColumnId: { voice: ["A_v1"], guitar: ["B_g1"], bass: ["C_b1"] },
+    visibleResolvedRows: [1, 2],
+    projectionWarnings: []
+  }
+}
+```
+
+---
+
+## fixture_11_visual_index_global_not_local_rank
+
+But : le `visualIndex` est une compression globale des `resolvedRows`, pas un rang local par colonne.
+
+```js
+{
+  name: "fixture_11_visual_index_global_not_local_rank",
+  input: {
+    cards: [
+      { cardId: "A_v1", columnId: "voice", baseOrder: 1 },
+      { cardId: "B_g1", columnId: "guitar", baseOrder: 7 },
+      { cardId: "C_b1", columnId: "bass", baseOrder: 3 }
+    ],
+    links: [],
+    conflicts: [],
+    hiddenColumnIds: [],
+    previousLayout: { byCardId: {
+      A_v1: { cardId: "A_v1", columnId: "voice", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      B_g1: { cardId: "B_g1", columnId: "guitar", resolvedRow: 7, visualIndex: 3, cardIndexInColumn: 1 },
+      C_b1: { cardId: "C_b1", columnId: "bass", resolvedRow: 3, visualIndex: 2, cardIndexInColumn: 1 }
+    }},
+    transactionContext: { intent: "neutral", anchorCardId: null, affectedCardIds: [] },
+    config: {}
+  },
+  expected: {
+    layoutByCardId: {
+      A_v1: { resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      C_b1: { resolvedRow: 3, visualIndex: 2, cardIndexInColumn: 1 },
+      B_g1: { resolvedRow: 7, visualIndex: 3, cardIndexInColumn: 1 }
+    },
+    orderedCardIdsByColumnId: { voice: ["A_v1"], guitar: ["B_g1"], bass: ["C_b1"] },
+    visibleResolvedRows: [1, 3, 7],
+    projectionWarnings: []
+  }
+}
+```
+
+---
+
+## fixture_12_same_event_log_same_projection
+
+But : l’ordre des arrays en entrée ne doit pas changer la sortie.
+
+```js
+{
+  name: "fixture_12_same_event_log_same_projection",
+  input: {
+    variants: ["normal_order", "arrays_shuffled"],
+    cards: [
+      { cardId: "B_g1", columnId: "guitar", baseOrder: 1 },
+      { cardId: "A_v1", columnId: "voice", baseOrder: 1 }
+    ],
+    links: [{ linkId: "link_A_B", targetCardIds: ["B_g1", "A_v1"], active: true, reorderStrategy: "move_to_first", createdAtOrder: 10 }],
+    conflicts: [],
+    hiddenColumnIds: [],
+    previousLayout: { byCardId: {
+      A_v1: { cardId: "A_v1", columnId: "voice", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      B_g1: { cardId: "B_g1", columnId: "guitar", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 }
+    }},
+    transactionContext: { intent: "neutral", anchorCardId: null, affectedCardIds: ["A_v1", "B_g1"] },
+    config: {}
+  },
+  expected: {
+    layoutByCardId: {
+      A_v1: { resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      B_g1: { resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 }
+    },
+    orderedCardIdsByColumnId: { voice: ["A_v1"], guitar: ["B_g1"] },
+    visibleResolvedRows: [1],
+    projectionWarnings: []
+  }
+}
+```
+
+---
+
+## fixture_13_link_removed_no_magic_restore
+
+But : supprimer un link ne remet pas une card à son ancien ordre pré-link.
+
+```js
+{
+  name: "fixture_13_link_removed_no_magic_restore",
+  input: {
+    cards: [
+      { cardId: "A_v1", columnId: "voice", baseOrder: 1 },
+      { cardId: "B_g1", columnId: "guitar", baseOrder: 3 }
+    ],
+    links: [],
+    conflicts: [],
+    hiddenColumnIds: [],
+    previousLayout: { byCardId: {
+      A_v1: { cardId: "A_v1", columnId: "voice", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      B_g1: { cardId: "B_g1", columnId: "guitar", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 }
+    }},
+    transactionContext: { intent: "neutral", anchorCardId: null, affectedCardIds: ["A_v1", "B_g1"], metadata: { removedLinkId: "link_A_B" } },
+    config: {}
+  },
+  expected: {
+    layoutByCardId: {
+      A_v1: { resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      B_g1: { resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 }
+    },
+    orderedCardIdsByColumnId: { voice: ["A_v1"], guitar: ["B_g1"] },
+    visibleResolvedRows: [1],
+    projectionWarnings: []
+  }
+}
+```
+
+---
+
+## fixture_14_conflict_removed_no_magic_restore
+
+But : supprimer un conflict ne remet pas une card à son ancien ordre pré-conflict.
+
+```js
+{
+  name: "fixture_14_conflict_removed_no_magic_restore",
+  input: {
+    cards: [
+      { cardId: "A_v1", columnId: "voice", baseOrder: 1 },
+      { cardId: "B_g1", columnId: "guitar", baseOrder: 1 }
+    ],
+    links: [],
+    conflicts: [],
+    hiddenColumnIds: [],
+    previousLayout: { byCardId: {
+      A_v1: { cardId: "A_v1", columnId: "voice", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      B_g1: { cardId: "B_g1", columnId: "guitar", resolvedRow: 2, visualIndex: 2, cardIndexInColumn: 1 }
+    }},
+    transactionContext: { intent: "neutral", anchorCardId: null, affectedCardIds: ["A_v1", "B_g1"], metadata: { removedConflictId: "conflict_A_B" } },
+    config: {}
+  },
+  expected: {
+    layoutByCardId: {
+      A_v1: { resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      B_g1: { resolvedRow: 2, visualIndex: 2, cardIndexInColumn: 1 }
+    },
+    orderedCardIdsByColumnId: { voice: ["A_v1"], guitar: ["B_g1"] },
+    visibleResolvedRows: [1, 2],
+    projectionWarnings: []
+  }
+}
+```
+
+---
+
+## fixture_15_participation_conflict_expansion
+
+But : un conflict `scope: participation` est étendu en toutes les paires concrètes visibles et toutes sont séparées si c’est réparable.
+
+```js
+{
+  name: "fixture_15_participation_conflict_expansion",
+  input: {
+    cards: [
+      { cardId: "P1_v1", columnId: "voice", participationId: "participation_P1", baseOrder: 1, appearanceIndex: 1 },
+      { cardId: "P1_v2", columnId: "voice", participationId: "participation_P1", baseOrder: 2, appearanceIndex: 2 },
+      { cardId: "P2_g1", columnId: "guitar", participationId: "participation_P2", baseOrder: 1, appearanceIndex: 1 },
+      { cardId: "P2_g2", columnId: "guitar", participationId: "participation_P2", baseOrder: 2, appearanceIndex: 2 }
+    ],
+    links: [],
+    conflicts: [{ conflictId: "conflict_P1_P2", scope: "participation", targetParticipationIds: ["participation_P1", "participation_P2"], reason: "instrument_constraint", active: true, createdAtOrder: 10 }],
+    hiddenColumnIds: [],
+    previousLayout: { byCardId: {
+      P1_v1: { cardId: "P1_v1", columnId: "voice", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      P1_v2: { cardId: "P1_v2", columnId: "voice", resolvedRow: 2, visualIndex: 2, cardIndexInColumn: 2 },
+      P2_g1: { cardId: "P2_g1", columnId: "guitar", resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      P2_g2: { cardId: "P2_g2", columnId: "guitar", resolvedRow: 2, visualIndex: 2, cardIndexInColumn: 2 }
+    }},
+    transactionContext: { intent: "conflict_created", anchorCardId: null, affectedCardIds: ["P1_v1", "P1_v2", "P2_g1", "P2_g2"], metadata: { expandedConflictPairs: [["P1_v1", "P2_g1"], ["P1_v1", "P2_g2"], ["P1_v2", "P2_g1"], ["P1_v2", "P2_g2"]] } },
+    config: {}
+  },
+  expected: {
+    layoutByCardId: {
+      P1_v1: { resolvedRow: 1, visualIndex: 1, cardIndexInColumn: 1 },
+      P1_v2: { resolvedRow: 2, visualIndex: 2, cardIndexInColumn: 2 },
+      P2_g1: { resolvedRow: 3, visualIndex: 3, cardIndexInColumn: 1 },
+      P2_g2: { resolvedRow: 4, visualIndex: 4, cardIndexInColumn: 2 }
+    },
+    orderedCardIdsByColumnId: { voice: ["P1_v1", "P1_v2"], guitar: ["P2_g1", "P2_g2"] },
+    visibleResolvedRows: [1, 2, 3, 4],
+    projectionWarnings: []
+  }
+}
+```
+
+Règle de test finale : les fixtures 01 à 15 doivent exister comme données exécutables dans le code. Aucune fixture obligatoire ne doit rester seulement sous forme de description prose ou de tableau.
