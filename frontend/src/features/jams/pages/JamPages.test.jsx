@@ -60,13 +60,11 @@ describe('jam pages', () => {
   });
 
   it('creates a jam locally, navigates immediately, and keeps the create transaction pending if backend creation fails', async () => {
-    vi.useFakeTimers();
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     jamsApi.createJam.mockRejectedValueOnce(new Error('server down'));
 
     renderPage(<NewJamPage />);
-    await user.type(screen.getByPlaceholderText('Nom de la jam'), 'Jam en panne');
-    await user.click(screen.getByRole('button', { name: /créer la jam/i }));
+    await userEvent.type(screen.getByPlaceholderText('Nom de la jam'), 'Jam en panne');
+    await userEvent.click(screen.getByRole('button', { name: /créer la jam/i }));
 
     await waitFor(() => expect(mockedNavigate).toHaveBeenCalledWith(expect.stringMatching(/^\/jams\/jam_/)));
     await waitFor(() => expect(jamsApi.createJam).toHaveBeenCalled());
@@ -74,8 +72,6 @@ describe('jam pages', () => {
     const { transaction } = jamsApi.createJam.mock.calls[0][0];
     await expect(getLocalTransactions(transaction.jamId)).resolves.toHaveLength(1);
     expect((await getPendingTransactions(transaction.jamId))[0]).toMatchObject({ transactionId: transaction.transactionId, status: 'retrying' });
-    vi.clearAllTimers();
-    vi.useRealTimers();
   });
 
   it('creates a jam locally, then syncs the create transaction when backend creation succeeds', async () => {

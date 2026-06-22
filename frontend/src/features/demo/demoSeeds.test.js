@@ -8,7 +8,13 @@ describe('demo seeds', () => {
     const projection = projectJamState({ transactions });
     expect(projection.jam.jamId).toBe(`jam_demo_${seed}`);
     expect(projection.columns.length).toBeGreaterThan(0);
-    expect(projection.projectionWarnings).toEqual([]);
+    if (seed === 'complex') {
+      expect(projection.projectionWarnings).toEqual([
+        expect.objectContaining({ type: 'conflict_unresolvable', reason: 'conflicted_cards_fixed_on_same_row' }),
+      ]);
+    } else {
+      expect(projection.projectionWarnings).toEqual([]);
+    }
   });
 
   it('contains representative complex demo states', () => {

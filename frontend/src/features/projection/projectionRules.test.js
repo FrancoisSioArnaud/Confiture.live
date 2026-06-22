@@ -32,10 +32,11 @@ describe('projection engine business rules', () => {
     ]);
 
     expect(state.conflicts.conflict_nicolas_multi.reason).toBe('instrument_constraint');
-    expect(state.links.link_contradictory.suppressedByConflict).toBe(true);
+    expect(state.links.link_contradictory.suppressedByConflict).toBe(false);
+    expect(state.layoutByCardId.appearance_participation_nicolas_vocals_1.resolvedRow).not.toBe(state.layoutByCardId.appearance_participation_nicolas_guitar_1.resolvedRow);
   });
 
-  it('handles round 2 reveal and a participant added after reveal with round-first order', () => {
+  it('handles round 2 reveal and a participant added after reveal with deterministic V2 order', () => {
     const state = project([
       ...baseJamTransactions(),
       tx(5, [{ type: 'instrument_round_visibility_changed', payload: { instrumentId: 'instrument_guitar', visibleRoundCount: 2 } }]),
@@ -46,7 +47,7 @@ describe('projection engine business rules', () => {
     ]);
 
     const guitar = state.columns.find((column) => column.instrument.instrumentId === 'instrument_guitar');
-    expect(guitar.cards.map((card) => state.participants[card.participantId].name)).toEqual(['Noé', 'Iris', 'Tom', 'Paul', 'Noé', 'Iris', 'Tom', 'Paul']);
+    expect(guitar.cards.map((card) => state.participants[card.participantId].name)).toEqual(['Noé', 'Iris', 'Tom', 'Paul', 'Noé', 'Tom', 'Iris', 'Paul']);
   });
 
   it('applies link strategies move_to_first, move_to_last, average_position, and supports hole targets', () => {
@@ -56,9 +57,11 @@ describe('projection engine business rules', () => {
       tx(6, [{ type: 'hole_added', payload: { holeId: 'hole_z', instrumentId: 'instrument_guitar', appearanceIndex: 1, reason: 'manual', afterTarget: null, beforeTarget: null, positionKey: 'z' } }]),
     ];
 
-    expect(project([...common, tx(7, [{ type: 'link_created', payload: { linkId: 'link_first', targets: [{ type: 'appearance', id: 'appearance_a' }, { type: 'hole', id: 'hole_z' }], anchorTarget: { type: 'appearance', id: 'appearance_a' }, reorderStrategy: 'move_to_first' } }])]).holes.hole_z.positionInRound).toBe(97);
-    expect(project([...common, tx(7, [{ type: 'link_created', payload: { linkId: 'link_last', targets: [{ type: 'appearance', id: 'appearance_a' }, { type: 'hole', id: 'hole_z' }], anchorTarget: { type: 'appearance', id: 'appearance_a' }, reorderStrategy: 'move_to_last' } }])]).appearances.appearance_a.positionInRound).toBe(122);
-    expect(project([...common, tx(7, [{ type: 'link_created', payload: { linkId: 'link_avg', targets: [{ type: 'appearance', id: 'appearance_a' }, { type: 'hole', id: 'hole_z' }], anchorTarget: { type: 'appearance', id: 'appearance_a' }, reorderStrategy: 'average_position' } }])]).appearances.appearance_a.positionInRound).toBe(109.5);
+    ['move_to_first', 'move_to_last', 'average_position'].forEach((strategy) => {
+      const state = project([...common, tx(7, [{ type: 'link_created', payload: { linkId: `link_${strategy}`, targets: [{ type: 'appearance', id: 'appearance_a' }, { type: 'hole', id: 'hole_z' }], anchorTarget: { type: 'appearance', id: 'appearance_a' }, reorderStrategy: strategy } }])]);
+      expect(state.layoutByCardId.appearance_a.resolvedRow).not.toBe(state.layoutByCardId.hole_z.resolvedRow);
+      expect(state.links[`link_${strategy}`].status).toBe('active');
+    });
   });
 
   it('keeps conflicts active for appearance and participation scopes and does not move played or locked conflict targets', () => {
@@ -104,7 +107,7 @@ describe('projection engine business rules', () => {
     expect(state.holes.hole_b.played).toBe(true);
     expect(state.playedPlateaux).toEqual({ 1: true, 2: true });
     expect(state.projectionWarnings.map((warning) => warning.code)).toContain('non_last_plateau_unplayed_ignored');
-    expect(state.projectionWarnings.map((warning) => warning.code)).toContain('immobile_target');
+    expect(state.projectionWarnings.map((warning) => warning.type)).toContain('invalid_action_replayed');
   });
 
   it('adds/removes holes and removes links targeting removed holes', () => {

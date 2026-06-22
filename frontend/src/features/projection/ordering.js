@@ -32,14 +32,17 @@ export function orderBetween(afterEntity, beforeEntity, fallback) {
 }
 
 export function sortByColumnOrder(a, b) {
-  const resolvedOrder = (a.resolvedColumnOrder ?? Number.MAX_SAFE_INTEGER) - (b.resolvedColumnOrder ?? Number.MAX_SAFE_INTEGER);
-  if (resolvedOrder !== 0) return resolvedOrder;
+  const visualOrder = (a.visualIndex ?? Number.MAX_SAFE_INTEGER) - (b.visualIndex ?? Number.MAX_SAFE_INTEGER);
+  if (visualOrder !== 0) return visualOrder;
 
-  const roundOrder = getCardRoundIndex(a) - getCardRoundIndex(b);
-  if (roundOrder !== 0) return roundOrder;
+  const resolvedRowOrder = (a.resolvedRow ?? Number.MAX_SAFE_INTEGER) - (b.resolvedRow ?? Number.MAX_SAFE_INTEGER);
+  if (resolvedRowOrder !== 0) return resolvedRowOrder;
 
-  const positionOrder = getPositionInRound(a) - getPositionInRound(b);
-  if (positionOrder !== 0) return positionOrder;
+  const cardIndexOrder = (a.cardIndexInColumn ?? Number.MAX_SAFE_INTEGER) - (b.cardIndexInColumn ?? Number.MAX_SAFE_INTEGER);
+  if (cardIndexOrder !== 0) return cardIndexOrder;
+
+  const fallbackOrder = getPositionInRound(a) - getPositionInRound(b);
+  if (fallbackOrder !== 0) return fallbackOrder;
 
   return String(a.id).localeCompare(String(b.id));
 }

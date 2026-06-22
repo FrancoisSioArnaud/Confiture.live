@@ -53,6 +53,44 @@ function targetFor(card) {
   return { type: card.type, id: card.id };
 }
 
+
+function cardResolvedRow(card) {
+  return card?.resolvedRow ?? null;
+}
+
+function visualRowsForProjection(projection, columns) {
+  const cardRows = columns
+    .flatMap((column) => column.cards ?? [])
+    .map(cardResolvedRow)
+    .filter(Number.isFinite);
+  const resolvedRows = (projection?.visibleResolvedRows?.length ? projection.visibleResolvedRows : [...new Set(cardRows)].sort((a, b) => a - b));
+  if (resolvedRows.length === 0) {
+    const maxRows = Math.max(1, ...columns.map((column) => column.cards?.length ?? 0));
+    return Array.from({ length: maxRows }, (_, index) => ({
+      visualIndex: index + 1,
+      plateauIndex: index,
+      resolvedRow: index + 1,
+      cells: columns.map((column) => ({ column, card: column.cards?.[index] ?? null })),
+    }));
+  }
+  return resolvedRows.map((resolvedRow, index) => {
+    const visualIndex = index + 1;
+    return {
+      visualIndex,
+      plateauIndex: index,
+      resolvedRow,
+      cells: columns.map((column) => ({
+        column,
+        card: (column.cards ?? []).find((card) => cardResolvedRow(card) === resolvedRow) ?? null,
+      })),
+    };
+  });
+}
+
+function cardsForVisualRow(row) {
+  return row.cells.map(({ card }) => card).filter(Boolean);
+}
+
 function cardTitle(card, projection) {
   if (card.type === 'hole') return 'Trou';
   return projection.participants[card.participantId]?.name ?? 'Musicien';
@@ -279,22 +317,23 @@ function PlateauRail({ rows, projection, onOpenCallDrawer, onTogglePlateauPlayed
         </Box>
         <Stack spacing={1}>
           {rows.map((row) => {
-            const played = row.targets.length > 0 && row.targets.every((target) => (target.type === 'appearance' ? projection.appearances[target.id]?.played : projection.holes[target.id]?.played));
+            const targets = cardsForVisualRow(row).map(targetFor).filter(Boolean);
+            const played = targets.length > 0 && targets.every((target) => (target.type === 'appearance' ? projection.appearances[target.id]?.played : projection.holes[target.id]?.played));
             return (
-              <Box key={row.plateauIndex} sx={{ height: TABLE_ROW_HEIGHT, display: 'flex', alignItems: 'stretch' }}>
+              <Box key={row.visualIndex} sx={{ height: TABLE_ROW_HEIGHT, display: 'flex', alignItems: 'stretch' }}>
                 <Paper variant="outlined" sx={{ p: 1, width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <Typography variant="subtitle2" fontWeight={900}>Plateau {row.plateauIndex + 1}</Typography>
+                  <Typography variant="subtitle2" fontWeight={900}>Plateau {row.visualIndex}</Typography>
                   <Stack direction="row" spacing={0.5} alignItems="center">
                     <Tooltip title={played ? 'Ce plateau est déjà joué.' : 'Appeler ce plateau'}>
                       <span>
-                        <IconButton size="small" aria-label="Appeler plateau" color="primary" onClick={() => onOpenCallDrawer?.(row.plateauIndex)} disabled={played}>
+                        <IconButton size="small" aria-label="Appeler plateau" color="primary" onClick={() => onOpenCallDrawer?.(row.visualIndex)} disabled={played}>
                           <Campaign fontSize="small" />
                         </IconButton>
                       </span>
                     </Tooltip>
                     <Tooltip title={played ? 'Plateau joué' : 'Marquer comme joué'}>
                       <span>
-                        <IconButton size="small" aria-label={played ? 'Plateau joué' : 'Marquer comme joué'} color={played ? 'success' : 'primary'} onClick={() => onTogglePlateauPlayed(row.plateauIndex, row.targets, played)} disabled={row.targets.length === 0}>
+                        <IconButton size="small" aria-label={played ? 'Plateau joué' : 'Marquer comme joué'} color={played ? 'success' : 'primary'} onClick={() => onTogglePlateauPlayed(row, targets, played)} disabled={targets.length === 0}>
                           <CheckCircle fontSize="small" />
                         </IconButton>
                       </span>
@@ -310,16 +349,18 @@ function PlateauRail({ rows, projection, onOpenCallDrawer, onTogglePlateauPlayed
   );
 }
 
-function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSequenceNumber, onClose, onTransaction, onFeedback }) {
+function CallDrawer({ open, visualIndex, projection, jamId, clientId, clientSequenceNumber, onClose, onTransaction, onFeedback }) {
   const theme = useTheme();
   const isTabletUp = useMediaQuery(theme.breakpoints.up('sm'));
   const [missingCard, setMissingCard] = useState(null);
   const [pendingDelinkAction, setPendingDelinkAction] = useState(null);
   const columns = projection?.columns ?? [];
-  const rowCards = columns.map((column) => ({ column, card: column.cards[plateauIndex] ?? null }));
+  const row = visualRowsForProjection(projection, columns).find((candidate) => candidate.visualIndex === visualIndex) ?? null;
+  const resolvedRow = row?.resolvedRow ?? visualIndex;
+  const rowCards = row?.cells ?? columns.map((column) => ({ column, card: null }));
   const targets = rowCards.map(({ card }) => targetFor(card)).filter(Boolean);
   const alreadyPlayed = targets.length > 0 && targets.every((target) => (target.type === 'appearance' ? projection.appearances[target.id]?.played : projection.holes[target.id]?.played));
-  const replacementCandidates = missingCard ? replacementCandidatesForCallDrawer({ projection, sourceCard: missingCard, plateauIndex }) : [];
+  const replacementCandidates = missingCard ? replacementCandidatesForCallDrawer({ projection, sourceCard: missingCard, visualIndex, resolvedRow }) : [];
   const missingCardLinked = missingCard ? cardLinks(missingCard, projection.links).length > 0 : false;
   const missingInstrument = missingCard ? columns.find((column) => column.instrument.instrumentId === missingCard.instrumentId)?.instrument : null;
   const withoutMusicianLabel = `Plateau sans ${missingInstrument?.label ?? 'instrument'}`;
@@ -338,7 +379,7 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
   }
 
   function markPlayed() {
-    onTransaction?.(buildTogglePlateauPlayedTransaction({ jamId, clientId, clientSequenceNumber, plateauIndex, targets, played: false, projection }));
+    onTransaction?.(buildTogglePlateauPlayedTransaction({ jamId, clientId, clientSequenceNumber, plateauIndex: visualIndex - 1, visualIndex, playedResolvedRow: resolvedRow, targets, played: false, projection }));
     close();
   }
 
@@ -347,7 +388,7 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
       onFeedback?.('Impossible de modifier ce passage.');
       return;
     }
-    onTransaction?.(buildSkipWithReplacementTransaction({ jamId, clientId, clientSequenceNumber, projection, sourceCard: missingCard, replacementCard, plateauIndex, confirmedDelink }));
+    onTransaction?.(buildSkipWithReplacementTransaction({ jamId, clientId, clientSequenceNumber, projection, sourceCard: missingCard, replacementCard, visualIndex, resolvedRow, confirmedDelink }));
     onFeedback?.('Passage repoussé et remplaçant sélectionné');
     setMissingCard(null);
     setPendingDelinkAction(null);
@@ -367,7 +408,7 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
       onFeedback?.('Impossible de modifier ce passage.');
       return;
     }
-    onTransaction?.(buildSkipWithoutMusicianTransaction({ jamId, clientId, clientSequenceNumber, projection, sourceCard: missingCard, plateauIndex, confirmedDelink, instrumentLabel: missingInstrument?.label }));
+    onTransaction?.(buildSkipWithoutMusicianTransaction({ jamId, clientId, clientSequenceNumber, projection, sourceCard: missingCard, visualIndex, resolvedRow, confirmedDelink, instrumentLabel: missingInstrument?.label }));
     onFeedback?.(`${withoutMusicianLabel} préparé`);
     setMissingCard(null);
     setPendingDelinkAction(null);
@@ -389,7 +430,7 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
   return (
     <Drawer anchor={isTabletUp ? 'right' : 'bottom'} open={open} onClose={close} PaperProps={{ sx: { width: { xs: '100%', sm: 440 }, height: { xs: '100%', sm: '100%' }, maxWidth: '100%' } }}>
       <Box sx={{ p: 2, pb: 10, height: '100%', overflowY: 'auto' }}>
-        <Typography variant="h6" fontWeight={900}>Appel plateau {plateauIndex == null ? '' : plateauIndex + 1}</Typography>
+        <Typography variant="h6" fontWeight={900}>Appel plateau {visualIndex ?? ''}</Typography>
         <Typography variant="body2" color="text.secondary" mb={2}>Instruments visibles dans l’ordre de la jam.</Typography>
         <List>
           {rowCards.map(({ column, card }) => {
@@ -461,7 +502,7 @@ function CallDrawer({ open, plateauIndex, projection, jamId, clientId, clientSeq
 }
 
 export function JamTable({ projection, clientId, clientSequenceNumber, onTransaction, onOpenCallDrawer, onFeedback, onEditParticipant, onInteractionModeChange }) {
-  const [openPlateauIndex, setOpenPlateauIndex] = useState(null);
+  const [openVisualIndex, setOpenVisualIndex] = useState(null);
   const [menuState, setMenuState] = useState({ anchorEl: null, card: null });
   const [confirmState, setConfirmState] = useState(null);
   const [linkMode, setLinkMode] = useState({ active: false, anchor: null, selectedIds: new Set() });
@@ -494,11 +535,7 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
   const presentedLinkMode = linkMode.active ? { ...linkMode, selectedInstrumentIds: linkSelectedInstrumentIds } : linkMode;
   const presentedConflictMode = conflictMode.active ? { ...conflictMode, selectedIds: conflictSelectedIds, selectedInstrumentIds: conflictSelectedInstrumentIds } : conflictMode;
   const hasCards = columns.some((column) => column.cards.length > 0);
-  const maxRows = Math.max(1, ...columns.map((column) => column.cards.length));
-  const rows = Array.from({ length: maxRows }, (_, plateauIndex) => ({
-    plateauIndex,
-    targets: columns.map((column) => targetFor(column.cards[plateauIndex])).filter(Boolean),
-  }));
+  const rows = visualRowsForProjection(projection, columns);
 
   function dispatch(transaction) {
     if (transaction) onTransaction?.(transaction);
@@ -513,16 +550,16 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
     return playedIndexes.length > 0 ? Math.max(...playedIndexes) : null;
   }
 
-  function togglePlateauPlayed(plateauIndex, targets, played) {
+  function togglePlateauPlayed(row, targets, played) {
     if (played) {
-      if (latestPlayedPlateauIndex() !== plateauIndex) {
+      if (latestPlayedPlateauIndex() !== row.plateauIndex) {
         onFeedback?.('Plateau unplayed impossible : seul le dernier plateau joué peut être annulé');
         return;
       }
-      setConfirmState({ kind: 'plateau-unplayed', plateauIndex, targets, title: 'Remettre ce plateau à venir ?', description: 'Seul le dernier plateau joué peut être remis à venir. Les positions des cards seront conservées.', confirmLabel: 'Remettre à venir' });
+      setConfirmState({ kind: 'plateau-unplayed', row, targets, title: 'Remettre ce plateau à venir ?', description: 'Seul le dernier plateau joué peut être remis à venir. Les positions des cards seront conservées.', confirmLabel: 'Remettre à venir' });
       return;
     }
-    dispatch(buildTogglePlateauPlayedTransaction({ jamId, clientId, clientSequenceNumber, plateauIndex, targets, played, projection }));
+    dispatch(buildTogglePlateauPlayedTransaction({ jamId, clientId, clientSequenceNumber, plateauIndex: row.plateauIndex, visualIndex: row.visualIndex, playedResolvedRow: row.resolvedRow, targets, played, projection }));
   }
 
   function toggleLock(card) {
@@ -587,7 +624,7 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
       onFeedback?.('Participant supprimé');
     }
     if (kind === 'plateau-unplayed') {
-      dispatch(buildTogglePlateauPlayedTransaction({ jamId, clientId, clientSequenceNumber, plateauIndex: confirmState.plateauIndex, targets: confirmState.targets, played: true, projection }));
+      dispatch(buildTogglePlateauPlayedTransaction({ jamId, clientId, clientSequenceNumber, plateauIndex: confirmState.row.plateauIndex, visualIndex: confirmState.row.visualIndex, playedResolvedRow: confirmState.row.resolvedRow, targets: confirmState.targets, played: true, projection }));
       onFeedback?.('Plateau remis à venir');
     }
     setConfirmState(null);
@@ -794,7 +831,7 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <Box sx={{ overflowX: 'auto', pb: 2 }}>
           <Stack direction="row" spacing={1.25} alignItems="stretch" sx={{ minHeight: 360, width: 'max-content', pr: 1 }}>
-            <PlateauRail rows={rows} projection={projection} onOpenCallDrawer={(plateauIndex) => { setOpenPlateauIndex(plateauIndex); onOpenCallDrawer?.(plateauIndex); }} onTogglePlateauPlayed={togglePlateauPlayed} />
+            <PlateauRail rows={rows} projection={projection} onOpenCallDrawer={(visualIndex) => { setOpenVisualIndex(visualIndex); onOpenCallDrawer?.(visualIndex); }} onTogglePlateauPlayed={togglePlateauPlayed} />
             {columns.map((column) => {
               return (
                 <Box key={column.instrument.instrumentId} sx={{ width: { xs: 236, sm: 272 }, flex: '0 0 auto' }}>
@@ -804,11 +841,18 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
                     </Box>
                     <SortableContext items={column.cards.map((card) => card.id)} strategy={verticalListSortingStrategy}>
                       <Stack spacing={1}>
-                        {column.cards.map((card) => (
-                          <Box key={card.id} sx={{ height: TABLE_ROW_HEIGHT, display: 'flex', alignItems: 'stretch', width: '100%' }}>
-                            <SortableProjectedCard card={card} projection={projection} instrument={column.instrument} linkMode={presentedLinkMode} conflictMode={presentedConflictMode} onToggleLink={selectCardForLink} onSelectConflict={selectConflictTarget} onToggleLock={toggleLock} onOpenMenu={openMenu} onBlockedDrag={() => onFeedback?.('Déplacement impossible : passage joué ou verrouillé')} />
-                          </Box>
-                        ))}
+                        {rows.map((row) => {
+                          const card = row.cells.find((cell) => cell.column.instrument.instrumentId === column.instrument.instrumentId)?.card ?? null;
+                          return (
+                            <Box key={`${column.instrument.instrumentId}-${row.visualIndex}`} sx={{ height: TABLE_ROW_HEIGHT, display: 'flex', alignItems: 'stretch', width: '100%' }}>
+                              {card ? (
+                                <SortableProjectedCard card={card} projection={projection} instrument={column.instrument} linkMode={presentedLinkMode} conflictMode={presentedConflictMode} onToggleLink={selectCardForLink} onSelectConflict={selectConflictTarget} onToggleLock={toggleLock} onOpenMenu={openMenu} onBlockedDrag={() => onFeedback?.('Déplacement impossible : passage joué ou verrouillé')} />
+                              ) : (
+                                <Paper variant="outlined" data-testid={`empty-cell-${column.instrument.instrumentId}-${row.visualIndex}`} sx={{ width: '100%', height: '100%', borderStyle: 'dashed', bgcolor: 'background.default' }} />
+                              )}
+                            </Box>
+                          );
+                        })}
                       </Stack>
                     </SortableContext>
                     <Box sx={{ pt: 1 }}>
@@ -879,13 +923,13 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
       </Menu>
 
       <CallDrawer
-        open={openPlateauIndex != null}
-        plateauIndex={openPlateauIndex}
+        open={openVisualIndex != null}
+        visualIndex={openVisualIndex}
         projection={projection}
         jamId={jamId}
         clientId={clientId}
         clientSequenceNumber={clientSequenceNumber}
-        onClose={() => setOpenPlateauIndex(null)}
+        onClose={() => setOpenVisualIndex(null)}
         onTransaction={dispatch}
         onFeedback={onFeedback}
       />

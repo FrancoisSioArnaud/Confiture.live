@@ -227,18 +227,8 @@ function markParticipant(state, participantId, status, eventId) {
   });
 }
 
-function recordManualMoveIntent(state, event, target, payload) {
-  const entity = getTargetEntity(state, target);
-  if (!entity) {
+function recordManualMoveIntent(state, _event, target, payload) {
+  if (!getTargetEntity(state, target)) {
     addProjectionWarning(state, 'missing_target', 'move targets a missing card.', { target, payload });
-    return;
   }
-  entity.manualOrderHint = {
-    target: { ...target },
-    afterTarget: payload.afterTarget ? { ...payload.afterTarget } : null,
-    beforeTarget: payload.beforeTarget ? { ...payload.beforeTarget } : null,
-    transactionId: event.transactionId ?? null,
-    eventId: event.eventId ?? null,
-    eventIndexInTransaction: event.eventIndexInTransaction ?? 0,
-  };
 }

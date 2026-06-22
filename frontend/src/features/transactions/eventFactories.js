@@ -105,7 +105,7 @@ export function appearanceRemoved(payload) {
 }
 
 export function appearanceLocked(payload) {
-  return event(EVENT_TYPES.APPEARANCE_LOCKED, z.object({ appearanceId: id }).strict(), payload);
+  return event(EVENT_TYPES.APPEARANCE_LOCKED, z.object({ appearanceId: id, preferredResolvedRow: z.number().positive().optional() }).strict(), payload);
 }
 
 export function appearanceUnlocked(payload) {
@@ -133,6 +133,8 @@ export function holeAdded(payload) {
     afterTarget: nullableTarget,
     beforeTarget: nullableTarget,
     positionKey: orderKey,
+    preferredResolvedRow: z.number().positive().optional(),
+    targetResolvedRow: z.number().positive().optional(),
   }).strict(), payload);
 }
 
@@ -145,7 +147,7 @@ export function holeMovedBetween(payload) {
 }
 
 export function holeLocked(payload) {
-  return event(EVENT_TYPES.HOLE_LOCKED, z.object({ holeId: id }).strict(), payload);
+  return event(EVENT_TYPES.HOLE_LOCKED, z.object({ holeId: id, preferredResolvedRow: z.number().positive().optional() }).strict(), payload);
 }
 
 export function holeUnlocked(payload) {
@@ -176,11 +178,11 @@ export function conflictRemoved(payload) {
 }
 
 export function plateauPlayed(payload) {
-  return event(EVENT_TYPES.PLATEAU_PLAYED, z.object({ plateauIndex: z.number().int().nonnegative(), targets: z.array(target), playedAt: isoDate }).strict(), payload);
+  return event(EVENT_TYPES.PLATEAU_PLAYED, z.object({ plateauIndex: z.number().int().nonnegative(), visualIndex: z.number().int().positive().optional(), playedResolvedRow: z.number().positive().optional(), targetResolvedRow: z.number().positive().optional(), targets: z.array(target), playedAt: isoDate }).strict(), payload);
 }
 
 export function plateauUnplayed(payload) {
-  return event(EVENT_TYPES.PLATEAU_UNPLAYED, z.object({ plateauIndex: z.number().int().nonnegative(), targets: z.array(target) }).strict(), payload);
+  return event(EVENT_TYPES.PLATEAU_UNPLAYED, z.object({ plateauIndex: z.number().int().nonnegative(), visualIndex: z.number().int().positive().optional(), playedResolvedRow: z.number().positive().optional(), targetResolvedRow: z.number().positive().optional(), targets: z.array(target) }).strict(), payload);
 }
 
 export function transactionReverted(payload) {

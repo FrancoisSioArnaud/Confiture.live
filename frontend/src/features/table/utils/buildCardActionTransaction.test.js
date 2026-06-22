@@ -5,7 +5,7 @@ describe('buildCardActionTransaction', () => {
   const base = { jamId: 'jam_1', clientId: 'client_1', clientSequenceNumber: 7 };
 
   it('creates lock and unlock events for appearances and holes', () => {
-    expect(buildToggleLockTransaction({ ...base, card: { type: 'appearance', id: 'appearance_1', locked: false } }).events[0]).toMatchObject({ type: 'appearance_locked', payload: { appearanceId: 'appearance_1' } });
+    expect(buildToggleLockTransaction({ ...base, card: { type: 'appearance', id: 'appearance_1', locked: false, resolvedRow: 4 } }).events[0]).toMatchObject({ type: 'appearance_locked', payload: { appearanceId: 'appearance_1', preferredResolvedRow: 4 } });
     expect(buildToggleLockTransaction({ ...base, card: { type: 'hole', id: 'hole_1', locked: true } }).events[0]).toMatchObject({ type: 'hole_unlocked', payload: { holeId: 'hole_1' } });
   });
 

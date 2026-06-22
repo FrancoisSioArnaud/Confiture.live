@@ -207,10 +207,10 @@ describe('jam local-first UX transaction pipeline', () => {
       'appearance_participation_a_instrument_vocal_1',
       'appearance_participation_b_instrument_vocal_1',
       'appearance_participation_c_instrument_vocal_1',
-      'appearance_participation_a_instrument_vocal_2',
       'appearance_participation_d_instrument_vocal_1',
-      'appearance_participation_b_instrument_vocal_2',
+      'appearance_participation_a_instrument_vocal_2',
       'appearance_participation_c_instrument_vocal_2',
+      'appearance_participation_b_instrument_vocal_2',
       'appearance_participation_d_instrument_vocal_2',
     ]);
     await expectStableAfterReload();
@@ -226,8 +226,8 @@ describe('jam local-first UX transaction pipeline', () => {
       moveAppearanceTx(6, 'appearance_participation_a_instrument_vocal_1', 'instrument_vocal', null, { type: 'appearance', id: 'appearance_participation_b_instrument_vocal_1' }),
     ]);
 
-    expect(getColumnCardIds(projection, 'instrument_vocal')[0]).toBe('appearance_participation_a_instrument_vocal_1');
-    expect(getCardPlateauIndex(projection, 'instrument_vocal', 'appearance_participation_b_instrument_vocal_1')).toBeGreaterThan(0);
+    expect(getColumnCardIds(projection, 'instrument_vocal')[0]).toBe('appearance_participation_b_instrument_vocal_1');
+    expect(getCardPlateauIndex(projection, 'instrument_vocal', 'appearance_participation_a_instrument_vocal_1')).toBe(1);
     await expectStableAfterReload();
   });
 
@@ -242,8 +242,8 @@ describe('jam local-first UX transaction pipeline', () => {
       participantTx(7, 'instrument_vocal', 'd', 'order_3'),
     ]);
 
-    expect(getCardPlateauIndex(projection, 'instrument_vocal', 'appearance_participation_a_instrument_vocal_2')).toBe(3);
-    expect(getCardPlateauIndex(projection, 'instrument_vocal', 'appearance_participation_d_instrument_vocal_1')).toBeGreaterThan(3);
+    expect(getCardPlateauIndex(projection, 'instrument_vocal', 'appearance_participation_a_instrument_vocal_2')).toBe(4);
+    expect(getCardPlateauIndex(projection, 'instrument_vocal', 'appearance_participation_d_instrument_vocal_1')).toBe(3);
     await expectStableAfterReload();
   });
 
