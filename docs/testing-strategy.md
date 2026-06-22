@@ -156,6 +156,76 @@ Invariants obligatoires à vérifier dans les tests pertinents :
 Ces tests doivent être indépendants de React et tester le moteur de projection comme une fonction pure.
 
 
+### Fixtures canoniques resolver
+
+Créer un fichier de fixtures pur, par exemple :
+
+```txt
+frontend/src/features/projection/__fixtures__/orderResolutionFixtures.js
+```
+
+Chaque fixture doit contenir :
+
+```js
+{
+  name: "fixture_02_push_link_chain",
+  input: {
+    cards: [],
+    links: [],
+    conflicts: [],
+    hiddenColumnIds: [],
+    previousLayout: {},
+    transactionContext: {},
+    config: {}
+  },
+  expected: {
+    layoutByCardId: {},
+    orderedCardIdsByColumnId: {},
+    visibleResolvedRows: [],
+    projectionWarnings: []
+  }
+}
+```
+
+Fixtures obligatoires :
+
+```txt
+fixture_01_drag_simple_push
+fixture_02_push_link_chain
+fixture_03_indirect_priority_chain
+fixture_04_link_fixed_target
+fixture_05_link_fixed_impossible
+fixture_06_conflict_mobile_repair
+fixture_07_conflict_fixed_impossible
+fixture_08_rounds_mixed_valid
+fixture_09_hidden_column_ignored
+fixture_10_skip_delinks_only_target
+fixture_11_visual_index_global_not_local_rank
+fixture_12_same_event_log_same_projection
+fixture_13_link_removed_no_magic_restore
+fixture_14_conflict_removed_no_magic_restore
+fixture_15_participation_conflict_expansion
+```
+
+Ces fixtures doivent être petites et lisibles à la main. Elles verrouillent le contrat d’entrée/sortie du resolver, pas seulement le rendu UI.
+
+### Tests de contrat d’intégration resolver
+
+Ajouter des tests purs pour :
+
+```txt
+- `buildTransactionContext()` respecte la table event → context ;
+- `validateTransactionBeforeApply()` retourne des reasons stables ;
+- `previousLayout` de transaction N+1 vient du layout produit par transaction N ;
+- `resolvedRow` n’est jamais lu depuis un event comme vérité finale ;
+- les anciens champs d’ordre sont fallback uniquement ;
+- `scope: participation` est étendu en paires de cardIds visibles ;
+- `buildColumns()` consomme `layoutByCardId` et ne recalcule pas les contraintes ;
+- le tableau UI utilise `visibleResolvedRows` / `visualIndex` global, pas le rang local.
+```
+
+
+
 ### Pipeline locale UX → replay
 
 Ajouter des tests d'intégration frontend qui traversent le chemin local-first réaliste :

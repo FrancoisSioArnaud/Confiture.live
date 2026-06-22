@@ -1213,3 +1213,23 @@ Règles du mode link :
 - désélectionner les autres cards du link doit permettre d’enregistrer la suppression du link ;
 - le bouton `Valider` ne doit pas être désactivé si la sélection courante correspond à une suppression de link existant ;
 - valider avec moins de deux cards dans le groupe édité supprime le link actif au lieu de créer un link invalide, sans créer de nouveau link.
+
+
+---
+
+## Contrat d’affichage des plateaux avec le resolver
+
+Le tableau visuel doit consommer le layout produit par le resolver.
+
+Règles non négociables :
+
+```txt
+- afficher les lignes globales à partir de `visibleResolvedRows` / `visualIndex` ;
+- une card est placée dans la ligne dont le `resolvedRow` correspond ;
+- une colonne sans card sur une ligne globale affiche une cellule vide visuelle ;
+- cette cellule vide ne crée pas de `hole` métier ;
+- le rang local d’une card dans sa colonne ne définit jamais un plateau ;
+- les composants React ne recalculent pas les links, conflicts, `resolvedRow` ou targetRow.
+```
+
+Le front peut utiliser `cardIndexInColumn` pour mapper une liste et poser des keys React, mais jamais pour déterminer “même plateau”.

@@ -11,7 +11,7 @@ Lis d’abord toute la documentation suivante avant de modifier le code :
 
 Objectif : implémenter un moteur frontend pur et déterministe de résolution d’ordre, basé sur un solver de contraintes discrètes.
 
-Les sections `4.1` à `4.15` de `docs/order-resolution-hierarchy-spec.md` sont normatives. Elles doivent être appliquées telles quelles : hiérarchie hard/conditional/soft, politique refus vs warning, format des `projectionWarnings`, séparation `resolvedRow`/`visualIndex`/`cardIndexInColumn`, stratégie de collision, scoring chiffré, propagation chiffrée, choix de `targetRow`, ordre exact des passes, conditions d’arrêt, colonnes hidden, holes, `appearance_skipped`, validations UI pré-transaction et invariants de tests.
+Les sections `4.1` à `4.27` de `docs/order-resolution-hierarchy-spec.md` sont normatives. Elles doivent être appliquées telles quelles : hiérarchie hard/conditional/soft, politique refus vs warning, format des `projectionWarnings`, séparation `resolvedRow`/`visualIndex`/`cardIndexInColumn`, stratégie de collision, scoring chiffré, propagation chiffrée, choix de `targetRow`, ordre exact des passes, conditions d’arrêt, colonnes hidden, holes, `appearance_skipped`, validations UI pré-transaction, invariants de tests, contrat d’entrée/sortie, mapping event→context, previousLayout, IDs, expansion des conflicts participation, traitement legacy, contrat UI et fixtures canoniques.
 
 Créer ou remplacer le module :
 
@@ -42,6 +42,18 @@ Ancienne logique à supprimer :
 ```
 
 Implémentation attendue :
+
+0. Verrouiller le contrat d’intégration avant de coder l’algorithme :
+   - `resolveOrderAfterTransaction(input)` reçoit exactement `cards`, `links`, `conflicts`, `hiddenColumnIds`, `previousLayout`, `transactionContext`, `config` ;
+   - il retourne `layoutByCardId`, `orderedCardIdsByColumnId`, `visibleResolvedRows`, `projectionWarnings` ;
+   - `resolvedRow` est calculé par le resolver et stockable seulement en projection/snapshot dérivable, jamais comme vérité d’event ;
+   - chaque transaction reçoit comme `previousLayout` le layout produit par la transaction active précédente pendant le replay ;
+   - créer une table pure `buildTransactionContext(transaction, projectedState, previousLayout)` conforme à la section 4.19 ;
+   - créer une fonction pure `validateTransactionBeforeApply(state, transaction)` conforme à la section 4.22 ;
+   - appliquer strictement la convention des IDs de la section 4.23 ;
+   - étendre les conflicts `scope: participation` en paires de cardIds visibles selon la section 4.24 ;
+   - traiter les anciens champs d’ordre comme fallback uniquement, jamais comme contraintes finales ;
+   - faire consommer `layoutByCardId` par `buildColumns()` sans logique concurrente dans l’UI.
 
 1. Ajouter `orderResolution.js` avec au minimum :
    - `resolveOrderAfterTransaction(state, context)` ;
@@ -111,9 +123,26 @@ Implémentation attendue :
    - les holes utilisent le même pipeline que les appearances pour collisions, push, lock, played et links explicites ;
    - `appearance_skipped` délinke ponctuellement puis repousse seulement l’appearance ciblée ;
    - ajouter les validations UI/pré-transaction nécessaires sans déplacer la logique de résolution dans les composants ;
-   - faire passer tous les invariants de tests listés en section 4.15.
+   - faire passer tous les invariants de tests listés en section 4.15 et les fixtures canoniques de la section 4.27.
 
-7. Ajouter ou mettre à jour les tests :
+7. Ajouter les fixtures canoniques avant ou avec les tests :
+   - `fixture_01_drag_simple_push` ;
+   - `fixture_02_push_link_chain` ;
+   - `fixture_03_indirect_priority_chain` ;
+   - `fixture_04_link_fixed_target` ;
+   - `fixture_05_link_fixed_impossible` ;
+   - `fixture_06_conflict_mobile_repair` ;
+   - `fixture_07_conflict_fixed_impossible` ;
+   - `fixture_08_rounds_mixed_valid` ;
+   - `fixture_09_hidden_column_ignored` ;
+   - `fixture_10_skip_delinks_only_target` ;
+   - `fixture_11_visual_index_global_not_local_rank` ;
+   - `fixture_12_same_event_log_same_projection` ;
+   - `fixture_13_link_removed_no_magic_restore` ;
+   - `fixture_14_conflict_removed_no_magic_restore` ;
+   - `fixture_15_participation_conflict_expansion`.
+
+8. Ajouter ou mettre à jour les tests :
    - même event log rejoué deux fois → même projection exacte ;
    - drag simple qui pousse une card mobile ;
    - drag qui pousse une card linkée et propage son link ;
@@ -150,5 +179,13 @@ Implémentation attendue :
    - aucune logique de plateau basée sur la nième card d’une colonne ;
    - score égal départagé par ordre précédent, ordre de création, puis id ;
    - undo/redo linéaire puis replay cohérent.
+
+Interdictions spécifiques :
+
+- ne pas faire `return` dès que `detectStructuralImpossibleCases()` retourne des warnings ; collecter les warnings, ignorer seulement les contraintes impossibles et continuer les réparations possibles ;
+- ne pas implémenter “déplacer la non-anchor” pour les conflicts ; choisir la card ou le groupe au coût minimal ;
+- ne pas utiliser `appearanceIndex`, `positionInRound`, `cardIndexInColumn` ou le rang local UI pour aligner les plateaux ;
+- ne pas faire dépendre le résultat de l’ordre de parcours des objets JavaScript sans tri stable explicite ;
+- ne pas répartir les validations pré-transaction dans plusieurs composants React.
 
 Livrable attendu : code + tests + mise à jour éventuelle des exports/imports, sans réintroduire de logique d’ordre dans les composants React.
