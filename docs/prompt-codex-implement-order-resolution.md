@@ -8,10 +8,11 @@ Lis d’abord toute la documentation suivante avant de modifier le code :
 - `docs/v0-round-order-and-no-between-cards.md`
 - `docs/event-payloads-reference.md`
 - `docs/testing-strategy.md`
+- `docs/order-resolution-golden-fixtures.md`
 
 Objectif : implémenter un moteur frontend pur et déterministe de résolution d’ordre, basé sur un solver de contraintes discrètes.
 
-Les sections `4.1` à `4.27` de `docs/order-resolution-hierarchy-spec.md` sont normatives. Elles doivent être appliquées telles quelles : hiérarchie hard/conditional/soft, politique refus vs warning, format des `projectionWarnings`, séparation `resolvedRow`/`visualIndex`/`cardIndexInColumn`, stratégie de collision, scoring chiffré, propagation chiffrée, choix de `targetRow`, ordre exact des passes, conditions d’arrêt, colonnes hidden, holes, `appearance_skipped`, validations UI pré-transaction, invariants de tests, contrat d’entrée/sortie, mapping event→context, previousLayout, IDs, expansion des conflicts participation, traitement legacy, contrat UI et fixtures canoniques.
+Les sections `4.1` à `4.29` de `docs/order-resolution-hierarchy-spec.md` sont normatives. Elles doivent être appliquées telles quelles : hiérarchie hard/conditional/soft, politique refus vs warning, format des `projectionWarnings`, séparation `resolvedRow`/`visualIndex`/`cardIndexInColumn`, stratégie de collision, scoring chiffré, propagation chiffrée, choix de `targetRow`, ordre exact des passes, conditions d’arrêt, colonnes hidden, holes, `appearance_skipped`, validations UI pré-transaction, invariants de tests, contrat d’entrée/sortie, mapping event→context, previousLayout, IDs, expansion des conflicts participation, traitement legacy, contrat UI, fixtures canoniques, schémas JSDoc, fonctions pures obligatoires, DoD, property-based tests et suppression explicite de l’ancien resolver.
 
 Créer ou remplacer le module :
 
@@ -50,7 +51,7 @@ Implémentation attendue :
    - chaque transaction reçoit comme `previousLayout` le layout produit par la transaction active précédente pendant le replay ;
    - créer une table pure `buildTransactionContext(transaction, projectedState, previousLayout)` conforme à la section 4.19 ;
    - créer une fonction pure `validateTransactionBeforeApply(state, transaction)` conforme à la section 4.22 ;
-   - appliquer strictement la convention des IDs de la section 4.23 ;
+   - appliquer strictement la convention des IDs de la section 4.23 : `appearanceId = appearance_{participationId}_{appearanceIndex}` ;
    - étendre les conflicts `scope: participation` en paires de cardIds visibles selon la section 4.24 ;
    - traiter les anciens champs d’ordre comme fallback uniquement, jamais comme contraintes finales ;
    - faire consommer `layoutByCardId` par `buildColumns()` sans logique concurrente dans l’UI.
@@ -124,9 +125,9 @@ Implémentation attendue :
    - les holes utilisent le même pipeline que les appearances pour collisions, push, lock, played et links explicites ;
    - `appearance_skipped` délinke ponctuellement puis repousse seulement l’appearance ciblée ;
    - ajouter les validations UI/pré-transaction nécessaires sans déplacer la logique de résolution dans les composants ;
-   - faire passer tous les invariants de tests listés en section 4.15 et les fixtures canoniques de la section 4.27.
+   - faire passer tous les invariants de tests listés en section 4.15 et les fixtures canoniques de la section 4.27 et `docs/order-resolution-golden-fixtures.md`.
 
-7. Ajouter les fixtures canoniques avant ou avec les tests :
+7. Ajouter les fixtures canoniques avant ou avec les tests, avec expected exact conforme à `docs/order-resolution-golden-fixtures.md` :
    - `fixture_01_drag_simple_push` ;
    - `fixture_02_push_link_chain` ;
    - `fixture_03_indirect_priority_chain` ;
@@ -192,3 +193,12 @@ Interdictions spécifiques :
 - ne pas arrêter tout le resolver pour un link/conflict local insoluble : isoler la contrainte, warning, puis continuer les réparations possibles.
 
 Livrable attendu : code + tests + mise à jour éventuelle des exports/imports, sans réintroduire de logique d’ordre dans les composants React.
+
+
+8. Respecter la Definition of Done resolver avant de considérer la tâche terminée :
+   - créer les typedefs/JSDoc obligatoires ;
+   - isoler les fonctions pures listées en section 4.29 ;
+   - supprimer le vieux resolver du chemin critique ;
+   - faire passer les fixtures golden exactes ;
+   - faire passer les invariants et property-based tests listés dans `docs/testing-strategy.md` ;
+   - garantir que `buildColumns()` utilise `visibleResolvedRows` et jamais le rang local de colonne.

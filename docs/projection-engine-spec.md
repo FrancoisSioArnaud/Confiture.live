@@ -33,12 +33,13 @@ Ce fichier doit être lu avec :
 - `visual_spec_table.md` ;
 - `visual_spec_table_cards.md` ;
 - `event-payloads-reference.md` ;
-- `order-resolution-hierarchy-spec.md`.
+- `order-resolution-hierarchy-spec.md`;
+- `order-resolution-golden-fixtures.md`.
 
 En cas de conflit, l’ordre de priorité est :
 
 1. `event-payloads-reference.md` pour les payloads ;
-2. `order-resolution-hierarchy-spec.md` pour la hiérarchie d’ordre et la résolution des contraintes ;
+2. `order-resolution-hierarchy-spec.md` pour la hiérarchie d’ordre, la résolution des contraintes, les contrats JSDoc et la table event → context ;
 3. ce fichier pour les règles générales de projection ;
 4. `confiture_event_actions_spec.md` pour les règles produit d’action ;
 5. les fichiers visuels pour le rendu UI.
@@ -151,7 +152,7 @@ Le resolver officiel est spécifié dans :
 docs/order-resolution-hierarchy-spec.md
 ```
 
-Les sections `4.1` à `4.27` de cette spec sont normatives pour la projection : targetRow des links, ordre exact des passes, limites d’arrêt, colonnes hidden, holes, skip, validations UI et invariants de tests.
+Les sections `4.1` à `4.29` de cette spec sont normatives pour la projection : targetRow des links, ordre exact des passes, limites d’arrêt, colonnes hidden, holes, skip, validations UI et invariants de tests.
 
 ---
 
@@ -261,7 +262,7 @@ Règles :
 - L’UI affiche les plateaux via `visibleResolvedRows` / `visualIndex` global, jamais via le rang local dans chaque colonne.
 ```
 
-Le mapping event → `transactionContext`, le contrat d’entrée/sortie, la convention d’IDs et les fixtures canoniques sont définis dans `docs/order-resolution-hierarchy-spec.md`, sections `4.16` à `4.27`.
+Le mapping event → `transactionContext`, le contrat d’entrée/sortie, la convention d’IDs déterministes, les schémas JSDoc, le contrat buildColumns et la DoD sont définis dans `docs/order-resolution-hierarchy-spec.md`, sections `4.16` à `4.29`. Les expected exacts des fixtures sont dans `docs/order-resolution-golden-fixtures.md`.
 
 ---
 
@@ -918,7 +919,7 @@ Les conflicts sont non orientés. Le sens de création ne doit pas influencer la
 
 Un conflict scope `participation` signifie que les appearances issues de deux participations ne doivent pas se retrouver sur le même plateau, pour toute la soirée.
 
-Le resolver doit étendre ce conflict à toutes les appearances actives des participations ciblées : appearances déjà visibles, appearances matérialisées plus tard par `round_revealed`, et appearances ajoutées par une nouvelle participation si elle est déjà concernée par un conflict de participation.
+Le resolver doit étendre ce conflict à toutes les appearances actives des participations ciblées : appearances déjà visibles, appearances matérialisées plus tard par `instrument_round_visibility_changed`, et appearances ajoutées par une nouvelle participation si elle est déjà concernée par un conflict de participation.
 
 Conséquence : si `A` et `C` ont un conflict `scope: participation`, alors `A'` et `C'` doivent être séparés dès que le round suivant est révélé. Cette propagation est une conséquence de projection déterministe ; elle ne nécessite pas un nouvel event `conflict_created` pour chaque round.
 

@@ -16,6 +16,19 @@ La source de vérité est l’eventLog.
 
 ---
 
+
+## Convention canonique des IDs resolver
+
+Pour le resolver V0, les appearances doivent utiliser un id déterministe :
+
+```txt
+appearanceId = appearance_${participationId}_${appearanceIndex}
+```
+
+`appearance_{uuid}` est interdit pour les appearances calculées ou futures. Les holes, links, conflicts, transactions et events peuvent rester en `{type}_{uuid}`.
+
+Noms d’events canoniques côté resolver : `participant_marked_left`, `instrument_visibility_changed`, `instrument_round_visibility_changed`, `plateau_played`, `plateau_unplayed`. Les anciens alias comme `participant_marked_left`, `instrument_round_visibility_changed` et `plateauIndex` sont uniquement des concepts legacy/migration, jamais des sources de vérité du resolver.
+
 ## 2. Enveloppe de transaction
 
 Une action UI peut produire plusieurs events. Ces events sont regroupés dans une transaction.

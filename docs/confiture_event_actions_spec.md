@@ -626,7 +626,9 @@ Si l’organisateur locke Nicolas guitare 3, alors appearance_nicolas_guitar_3 e
 ID recommandé pour les appearances calculables :
 
 ```txt
-appearanceId = deterministic(participationId + appearanceIndex)
+appearanceId = `appearance_${participationId}_${appearanceIndex}`
+
+Ce format est canonique V0. Les ids `appearance_{uuid}` sont interdits pour les appearances calculées/futures dans le nouveau resolver.
 ```
 
 Cela permet de cibler une future appearance sans dépendre d’un ordre de création fragile.
@@ -1119,8 +1121,8 @@ Un link est non orienté : il ne contient pas d’anchor et son sens de créatio
 
 - crée une participation ;
 - crée ou rend calculable `appearanceIndex 1` ;
-- ajoute l’appearance 1 à la fin du round 1 ;
-- si plusieurs rounds sont visibles, génère aussi les appearances correspondantes à la fin de chaque round visible ;
+- seed l’appearance 1 à la fin du round 1 visible ;
+- si plusieurs rounds sont visibles, seed aussi les appearances correspondantes à la fin de chaque round visible ;
 - les rounds futurs non visibles seront générés plus tard selon le même `baseOrderKey` / `roundOrderKey`.
 
 ### Cas standard
@@ -1139,10 +1141,12 @@ Round 1 et Round 2 sont visibles.
 Paul rejoint la colonne guitare.
 Avant : Noé, Iris, Tom, Noé', Iris', Tom'
 
-Résultat :
-- Paul guitare appearance 1 est à la fin du Round 1.
-- Paul guitare appearance 2 est à la fin du Round 2.
-- Ordre : Noé, Iris, Tom, Paul, Noé', Iris', Tom', Paul'.
+Seed initial :
+- Paul guitare appearance 1 est seedée à la fin du Round 1.
+- Paul guitare appearance 2 est seedée à la fin du Round 2.
+- Seed avant réparation : Noé, Iris, Tom, Paul, Noé', Iris', Tom', Paul'.
+
+Ce seed n’est pas une contrainte finale : le resolver peut ensuite mélanger les rounds si links/conflicts/played/locked ou l’intention utilisateur l’exigent.
 - Paul guitare appearance 3 sera générée à la fin du Round 3 quand Round 3 sera révélé.
 ```
 

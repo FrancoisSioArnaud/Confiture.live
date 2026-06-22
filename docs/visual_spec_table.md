@@ -1248,3 +1248,17 @@ Règles non négociables :
 ```
 
 Le front peut utiliser `cardIndexInColumn` pour mapper une liste et poser des keys React, mais jamais pour déterminer “même plateau”.
+
+
+## Definition of Done visuelle resolver
+
+Le tableau est conforme au nouveau resolver seulement si :
+
+```txt
+- il consomme `visibleResolvedRows` et `visualIndex` global ;
+- il affiche une ligne globale par `visibleResolvedRows` ;
+- une cellule vide visuelle reste `cardId: null` et ne crée pas de hole métier ;
+- aucun composant React ne déduit un plateau avec `columns[col].cards[index]` ;
+- aucun tri par round, `appearanceIndex`, `positionInRound` ou rang local de colonne ne reste dans le rendu final ;
+- `plateau_played` convertit le visualIndex affiché en `playedResolvedRow` via la projection courante.
+```

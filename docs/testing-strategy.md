@@ -207,7 +207,7 @@ fixture_14_conflict_removed_no_magic_restore
 fixture_15_participation_conflict_expansion
 ```
 
-Ces fixtures doivent être petites et lisibles à la main. Elles verrouillent le contrat d’entrée/sortie du resolver, pas seulement le rendu UI.
+Ces fixtures doivent être petites et lisibles à la main. Elles verrouillent le contrat d’entrée/sortie du resolver, pas seulement le rendu UI. Les résultats attendus exacts sont définis dans `docs/order-resolution-golden-fixtures.md`; le fichier de test doit contenir les mêmes `expected` sous forme exécutable.
 
 ### Tests de contrat d’intégration resolver
 
@@ -260,4 +260,36 @@ Ajouter explicitement ces tests avant la réécriture complète du resolver :
 - link local insoluble n’empêche pas la réparation d’un autre link résoluble dans la même résolution ;
 - conflict local insoluble n’empêche pas la réparation d’un autre conflict résoluble dans la même résolution ;
 - layout partiel avec warning error ne supprime aucune card visible active.
+```
+
+
+### Definition of Done test pour la réécriture du resolver
+
+La réécriture du resolver est considérée terminée seulement si :
+
+```txt
+- toutes les fixtures golden de `docs/order-resolution-golden-fixtures.md` existent en tests purs ;
+- chaque fixture compare `layoutByCardId`, `orderedCardIdsByColumnId`, `visibleResolvedRows` et `projectionWarnings` ;
+- les warnings appartiennent au catalogue fermé de `docs/order-resolution-hierarchy-spec.md` section 4.3 ;
+- les typedefs/JSDoc du resolver existent ou sont couverts par un schema équivalent ;
+- `buildTransactionContext()` respecte toute la table event → context ;
+- `validateTransactionBeforeApply()` retourne des reasons stables ;
+- aucun test ne dépend du DOM, de React, de Zustand, de Dexie, de `Date.now()` ou de `Math.random()` ;
+- aucun tri round-first, `appearanceIndex`, `positionInRound` ou rang local de colonne ne reste dans le chemin critique ;
+- même eventLog rejoué deux fois produit une sortie strictement identique.
+```
+
+### Property-based tests resolver
+
+Ajouter des tests génératifs sur petits tableaux quand le resolver de base est stable. Les propriétés minimales sont :
+
+```txt
+- aucune card visible active ne disparaît du layout ;
+- pas deux cards visibles dans la même colonne et le même resolvedRow sans warning `column_collision_unresolvable` ;
+- une card played ne change jamais de resolvedRow après une transaction ultérieure ;
+- une card locked ne change jamais de resolvedRow tant qu’elle reste locked ;
+- tout link résoluble finit aligné ;
+- tout conflict résoluble finit séparé ;
+- mélanger l’ordre d’entrée des arrays cards/links/conflicts ne change pas le résultat ;
+- les rounds peuvent être mélangés sans warning.
 ```
