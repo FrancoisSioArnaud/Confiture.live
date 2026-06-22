@@ -12,10 +12,15 @@ function columnForCard(projection, card) {
   return projection.columns.find((column) => column.instrument.instrumentId === card.instrumentId);
 }
 
-function adjacentAt(column, index) {
+function cardResolvedRow(card) {
+  return card?.resolvedRow ?? card?.visualIndex ?? card?.cardIndexInColumn ?? null;
+}
+
+function adjacentAroundResolvedRow(column, resolvedRow, sourceId = null) {
+  const cards = (column?.cards ?? []).filter((card) => card.id !== sourceId);
   return {
-    afterCard: column?.cards[index - 1] ?? null,
-    beforeCard: column?.cards[index + 1] ?? null,
+    afterCard: cards.filter((card) => cardResolvedRow(card) < resolvedRow).sort((a, b) => cardResolvedRow(b) - cardResolvedRow(a))[0] ?? null,
+    beforeCard: cards.filter((card) => cardResolvedRow(card) > resolvedRow).sort((a, b) => cardResolvedRow(a) - cardResolvedRow(b))[0] ?? null,
   };
 }
 
@@ -29,14 +34,14 @@ function conflictAppliesToCards(conflict, leftCard, rightCard) {
   return ids.every((id) => conflict.targetIds?.includes(id));
 }
 
-function plateauCardsExceptSource(projection, sourceCard, plateauIndex) {
+function plateauCardsExceptSource(projection, sourceCard, resolvedRow) {
   return (projection.columns ?? [])
-    .map((column) => column.cards[plateauIndex])
+    .flatMap((column) => (column.cards ?? []).filter((card) => cardResolvedRow(card) === resolvedRow))
     .filter((card) => card && card.id !== sourceCard.id && card.instrumentId !== sourceCard.instrumentId);
 }
 
-function candidateConflictsWithPlateau(projection, candidate, sourceCard, plateauIndex) {
-  const otherCards = plateauCardsExceptSource(projection, sourceCard, plateauIndex);
+function candidateConflictsWithPlateau(projection, candidate, sourceCard, resolvedRow) {
+  const otherCards = plateauCardsExceptSource(projection, sourceCard, resolvedRow);
   return otherCards.some((otherCard) => Object.values(projection.conflicts ?? {}).some((conflict) => conflictAppliesToCards(conflict, candidate, otherCard)));
 }
 
@@ -58,19 +63,20 @@ function compareReplacementCandidates(projection) {
   };
 }
 
-export function replacementCandidatesForCallDrawer({ projection, sourceCard, plateauIndex }) {
+export function replacementCandidatesForCallDrawer({ projection, sourceCard, visualIndex = null, resolvedRow = null, plateauIndex = null }) {
   const column = columnForCard(projection, sourceCard);
   if (!column) return [];
+  const targetResolvedRow = resolvedRow ?? cardResolvedRow(sourceCard) ?? ((plateauIndex ?? Math.max(0, (visualIndex ?? 1) - 1)) + 1);
   return column.cards
-    .filter((card, index) => (
+    .filter((card) => (
       card.type === 'appearance'
       && card.id !== sourceCard.id
-      && index > plateauIndex
+      && cardResolvedRow(card) > targetResolvedRow
       && !card.played
       && !card.locked
       && projection.participants[card.participantId]?.status !== 'left'
       && projection.participants[card.participantId]?.status !== 'removed'
-      && !candidateConflictsWithPlateau(projection, card, sourceCard, plateauIndex)
+      && !candidateConflictsWithPlateau(projection, card, sourceCard, targetResolvedRow)
     ))
     .sort(compareReplacementCandidates(projection))
     .slice(0, 3);
@@ -89,13 +95,13 @@ export function replacementCandidatePresentation({ projection, candidate, source
   };
 }
 
-export function buildSkipWithReplacementTransaction({ jamId, clientId, clientSequenceNumber, projection, sourceCard, replacementCard, plateauIndex, confirmedDelink = false }) {
+export function buildSkipWithReplacementTransaction({ jamId, clientId, clientSequenceNumber, projection, sourceCard, replacementCard, visualIndex = null, resolvedRow = null, plateauIndex = null, confirmedDelink = false }) {
   const sourceColumn = columnForCard(projection, sourceCard);
   const replacementColumn = columnForCard(projection, replacementCard);
-  const sourceIndex = sourceColumn.cards.findIndex((card) => card.id === sourceCard.id);
-  const replacementIndex = replacementColumn.cards.findIndex((card) => card.id === replacementCard.id);
-  const sourceAdjacent = adjacentAt(sourceColumn, sourceIndex);
-  const replacementAdjacent = adjacentAt(replacementColumn, replacementIndex);
+  const targetResolvedRow = resolvedRow ?? cardResolvedRow(sourceCard) ?? ((plateauIndex ?? Math.max(0, (visualIndex ?? 1) - 1)) + 1);
+  const replacementResolvedRow = cardResolvedRow(replacementCard) ?? targetResolvedRow;
+  const sourceAdjacent = adjacentAroundResolvedRow(sourceColumn, targetResolvedRow, sourceCard.id);
+  const replacementAdjacent = adjacentAroundResolvedRow(replacementColumn, replacementResolvedRow, replacementCard.id);
   const removedLinkIds = linkIdsForCards([sourceCard, replacementCard], projection);
 
   return createTransaction({
@@ -115,7 +121,7 @@ export function buildSkipWithReplacementTransaction({ jamId, clientId, clientSeq
       appearanceSkipped({
         appearanceId: sourceCard.id,
         instrumentId: sourceCard.instrumentId,
-        originalPlateauIndex: plateauIndex,
+        originalPlateauIndex: Math.max(0, (visualIndex ?? targetResolvedRow) - 1),
         replacement: { mode: 'appearance', appearanceId: replacementCard.id },
         createdHoleId: null,
         removedLinkIds,
@@ -132,10 +138,10 @@ export function buildSkipWithReplacementTransaction({ jamId, clientId, clientSeq
   });
 }
 
-export function buildSkipWithoutMusicianTransaction({ jamId, clientId, clientSequenceNumber, projection, sourceCard, plateauIndex, confirmedDelink = false, instrumentLabel = null }) {
+export function buildSkipWithoutMusicianTransaction({ jamId, clientId, clientSequenceNumber, projection, sourceCard, visualIndex = null, resolvedRow = null, plateauIndex = null, confirmedDelink = false, instrumentLabel = null }) {
   const sourceColumn = columnForCard(projection, sourceCard);
-  const sourceIndex = sourceColumn.cards.findIndex((card) => card.id === sourceCard.id);
-  const sourceAdjacent = adjacentAt(sourceColumn, sourceIndex);
+  const targetResolvedRow = resolvedRow ?? cardResolvedRow(sourceCard) ?? ((plateauIndex ?? Math.max(0, (visualIndex ?? 1) - 1)) + 1);
+  const sourceAdjacent = adjacentAroundResolvedRow(sourceColumn, targetResolvedRow, sourceCard.id);
   const holeId = createId('hole');
   const removedLinkIds = linkIdsForCards([sourceCard], projection);
 
@@ -154,11 +160,13 @@ export function buildSkipWithoutMusicianTransaction({ jamId, clientId, clientSeq
         afterTarget: toTarget(sourceAdjacent.afterCard),
         beforeTarget: toTarget(sourceCard),
         positionKey: `position_${holeId}`,
+        preferredResolvedRow: targetResolvedRow,
+        targetResolvedRow,
       }),
       appearanceSkipped({
         appearanceId: sourceCard.id,
         instrumentId: sourceCard.instrumentId,
-        originalPlateauIndex: plateauIndex,
+        originalPlateauIndex: Math.max(0, (visualIndex ?? targetResolvedRow) - 1),
         replacement: { mode: 'hole', holeId },
         createdHoleId: holeId,
         removedLinkIds,

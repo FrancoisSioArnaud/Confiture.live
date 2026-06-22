@@ -3,9 +3,9 @@ import { buildSkipWithReplacementTransaction, buildSkipWithoutMusicianTransactio
 
 vi.mock('../../../shared/utils/createId', () => ({ createId: (prefix) => `${prefix}_fixed` }));
 
-const source = { id: 'appearance_source', type: 'appearance', instrumentId: 'instrument_drums', participantId: 'participant_a', participationId: 'participation_source', appearanceIndex: 1, played: false, locked: false };
-const replacement = { id: 'appearance_replacement', type: 'appearance', instrumentId: 'instrument_drums', participantId: 'participant_b', participationId: 'participation_replacement', appearanceIndex: 2, played: false, locked: false };
-const alreadyPlayedReplacement = { id: 'appearance_already_played_replacement', type: 'appearance', instrumentId: 'instrument_drums', participantId: 'participant_c', participationId: 'participation_already_played_replacement', appearanceIndex: 2, played: false, locked: false };
+const source = { id: 'appearance_source', type: 'appearance', instrumentId: 'instrument_drums', participantId: 'participant_a', participationId: 'participation_source', appearanceIndex: 1, resolvedRow: 1, visualIndex: 1, played: false, locked: false };
+const replacement = { id: 'appearance_replacement', type: 'appearance', instrumentId: 'instrument_drums', participantId: 'participant_b', participationId: 'participation_replacement', appearanceIndex: 2, resolvedRow: 2, visualIndex: 2, played: false, locked: false };
+const alreadyPlayedReplacement = { id: 'appearance_already_played_replacement', type: 'appearance', instrumentId: 'instrument_drums', participantId: 'participant_c', participationId: 'participation_already_played_replacement', appearanceIndex: 2, resolvedRow: 3, visualIndex: 3, played: false, locked: false };
 const projection = {
   jam: { linkReorderStrategy: 'move_to_first' },
   instruments: {
@@ -55,7 +55,7 @@ describe('buildCallDrawerTransaction', () => {
   });
 
   it('excludes replacement candidates that conflict with another card on the called plateau', () => {
-    const otherPlateauCard = { id: 'appearance_guitar', type: 'appearance', instrumentId: 'instrument_guitar', participantId: 'participant_c', participationId: 'participation_guitar', appearanceIndex: 1, played: false, locked: false };
+    const otherPlateauCard = { id: 'appearance_guitar', type: 'appearance', instrumentId: 'instrument_guitar', participantId: 'participant_c', participationId: 'participation_guitar', appearanceIndex: 1, resolvedRow: 1, visualIndex: 1, played: false, locked: false };
     const conflictedProjection = {
       ...projection,
       conflicts: { conflict_1: { conflictId: 'conflict_1', status: 'active', scope: 'participation', targetIds: ['participation_replacement', 'participation_guitar'] } },

@@ -361,10 +361,10 @@ describe('local-first sync layer', () => {
       'appearance_participation_a_guitar_1',
       'appearance_participation_b_guitar_1',
       'appearance_participation_c_guitar_1',
-      'appearance_participation_a_guitar_2',
       'appearance_participation_d_guitar_1',
-      'appearance_participation_b_guitar_2',
+      'appearance_participation_a_guitar_2',
       'appearance_participation_c_guitar_2',
+      'appearance_participation_b_guitar_2',
       'appearance_participation_d_guitar_2',
     ]);
     expect((await getPendingTransactions('jam_sync'))[0]).toMatchObject({ transactionId: pendingD.transactionId, status: 'pending' });

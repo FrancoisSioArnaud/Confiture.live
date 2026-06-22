@@ -17,10 +17,14 @@ function toTarget(card) {
   return { type: card.type, id: card.id };
 }
 
+function currentResolvedRow(card) {
+  return Number.isFinite(card?.resolvedRow) ? card.resolvedRow : undefined;
+}
+
 export function buildToggleLockTransaction({ jamId, clientId, clientSequenceNumber, card }) {
   const event = card.type === 'hole'
-    ? (card.locked ? holeUnlocked({ holeId: card.id }) : holeLocked({ holeId: card.id }))
-    : (card.locked ? appearanceUnlocked({ appearanceId: card.id }) : appearanceLocked({ appearanceId: card.id }));
+    ? (card.locked ? holeUnlocked({ holeId: card.id }) : holeLocked({ holeId: card.id, preferredResolvedRow: currentResolvedRow(card) }))
+    : (card.locked ? appearanceUnlocked({ appearanceId: card.id }) : appearanceLocked({ appearanceId: card.id, preferredResolvedRow: currentResolvedRow(card) }));
   return createTransaction({ jamId, clientId, clientSequenceNumber, label: card.locked ? 'Déverrouiller passage' : 'Verrouiller passage', events: [event] });
 }
 

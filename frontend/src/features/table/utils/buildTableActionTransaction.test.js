@@ -14,10 +14,11 @@ describe('buildTableActionTransaction', () => {
 
   it('adds played holes for empty instrument slots before marking a plateau played', () => {
     const projection = {
+      visibleResolvedRows: [1],
       columns: [
         {
           instrument: { instrumentId: 'instrument_vocals', label: 'Chant' },
-          cards: [{ id: 'appearance_a', type: 'appearance', instrumentId: 'instrument_vocals', appearanceIndex: 1 }],
+          cards: [{ id: 'appearance_a', type: 'appearance', instrumentId: 'instrument_vocals', appearanceIndex: 1, resolvedRow: 1, visualIndex: 1 }],
         },
         {
           instrument: { instrumentId: 'instrument_guitar', label: 'Guitare' },
@@ -30,6 +31,8 @@ describe('buildTableActionTransaction', () => {
       clientId: 'client_1',
       clientSequenceNumber: 3,
       plateauIndex: 0,
+      visualIndex: 1,
+      playedResolvedRow: 1,
       targets: [{ type: 'appearance', id: 'appearance_a' }],
       played: false,
       projection,
@@ -41,10 +44,15 @@ describe('buildTableActionTransaction', () => {
       instrumentId: 'instrument_guitar',
       reason: 'played_empty_slot',
     });
-    expect(transaction.events[1].payload.targets).toEqual([
-      { type: 'appearance', id: 'appearance_a' },
-      { type: 'hole', id: 'hole_test' },
-    ]);
+    expect(transaction.events[1].payload).toMatchObject({
+      visualIndex: 1,
+      playedResolvedRow: 1,
+      targetResolvedRow: 1,
+      targets: [
+        { type: 'appearance', id: 'appearance_a' },
+        { type: 'hole', id: 'hole_test' },
+      ],
+    });
   });
 
 });

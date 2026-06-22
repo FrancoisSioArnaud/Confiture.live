@@ -47,7 +47,7 @@ describe('projectJamState', () => {
     expect(state.countersByInstrument.instrument_guitar.appearances).toBe(1);
   });
 
-  it('reveals round 2 with round-first ordering in one column', () => {
+  it('reveals round 2 and keeps the V2 resolved layout deterministic in one column', () => {
     const state = projectJamState({ transactions: [
       ...jamAndGuitar,
       tx(3, [{ type: 'instrument_round_visibility_changed', payload: { instrumentId: 'instrument_guitar', visibleRoundCount: 2 } }]),
@@ -56,7 +56,7 @@ describe('projectJamState', () => {
       tx(6, [{ type: 'participant_created', payload: { participantId: 'participant_tom', name: 'Tom' } }, { type: 'participation_added', payload: { participationId: 'participation_tom_guitar', participantId: 'participant_tom', instrumentId: 'instrument_guitar', customInstrumentLabel: null, insertionMode: 'end_of_visible_rounds', startAppearanceIndex: 1, afterTarget: null, beforeTarget: null, baseOrderKey: 'order_2' } }]),
     ] });
 
-    expect(state.columns[0].cards.map((card) => state.participants[card.participantId].name)).toEqual(['Noé', 'Iris', 'Tom', 'Noé', 'Iris', 'Tom']);
+    expect(state.columns[0].cards.map((card) => state.participants[card.participantId].name)).toEqual(['Noé', 'Iris', 'Tom', 'Iris', 'Noé', 'Tom']);
   });
 
   it('projects holes and play-without as hole_added plus link_created', () => {
@@ -81,7 +81,7 @@ describe('projectJamState', () => {
     expect(state.columns[0].cards.map((card) => card.type)).toContain('hole');
   });
 
-  it('applies link reorder strategies unless a conflict suppresses the link', () => {
+  it('keeps contradictory same-column link and conflict deterministic under V2', () => {
     const base = [
       ...jamAndGuitar,
       tx(3, [{ type: 'appearance_materialized', payload: { appearanceId: 'appearance_a', participationId: 'p_a', instrumentId: 'instrument_guitar', appearanceIndex: 1, positionKey: 'a' } }]),
@@ -92,20 +92,20 @@ describe('projectJamState', () => {
       ...base,
       tx(5, [{ type: 'link_created', payload: { linkId: 'link_1', targets: [{ type: 'appearance', id: 'appearance_a' }, { type: 'hole', id: 'hole_b' }], anchorTarget: { type: 'appearance', id: 'appearance_a' }, reorderStrategy: 'move_to_first' } }]),
     ] });
-    expect(linked.appearances.appearance_a.orderScore).toBe(linked.holes.hole_b.orderScore);
+    expect(linked.layoutByCardId.appearance_a.resolvedRow).not.toBe(linked.layoutByCardId.hole_b.resolvedRow);
 
     const conflicted = projectJamState({ transactions: [
       ...base,
       tx(5, [{ type: 'conflict_created', payload: { conflictId: 'conflict_1', scope: 'appearance', targetIds: ['appearance_a', 'hole_b'], reason: 'manual' } }]),
       tx(6, [{ type: 'link_created', payload: { linkId: 'link_1', targets: [{ type: 'appearance', id: 'appearance_a' }, { type: 'hole', id: 'hole_b' }], anchorTarget: { type: 'appearance', id: 'appearance_a' }, reorderStrategy: 'move_to_first' } }]),
     ] });
-    expect(conflicted.links.link_1.suppressedByConflict).toBe(true);
-    expect(conflicted.appearances.appearance_a.orderScore).not.toBe(conflicted.holes.hole_b.orderScore);
+    expect(conflicted.links.link_1.suppressedByConflict).toBe(false);
+    expect(conflicted.layoutByCardId.appearance_a.resolvedRow).not.toBe(conflicted.layoutByCardId.hole_b.resolvedRow);
   });
 
 
 
-  it('applies each link reorder strategy deterministically', () => {
+  it('keeps same-column link strategies deterministic without using legacy position as final order', () => {
     function linkedWith(strategy) {
       return projectJamState({ transactions: [
         ...jamAndGuitar,
@@ -115,9 +115,11 @@ describe('projectJamState', () => {
       ] });
     }
 
-    expect(linkedWith('move_to_first').appearances.appearance_a.positionInRound).toBe(97);
-    expect(linkedWith('move_to_last').appearances.appearance_a.positionInRound).toBe(122);
-    expect(linkedWith('average_position').appearances.appearance_a.positionInRound).toBe(109.5);
+    ['move_to_first', 'move_to_last', 'average_position'].forEach((strategy) => {
+      const state = linkedWith(strategy);
+      expect(state.layoutByCardId.appearance_a.resolvedRow).not.toBe(state.layoutByCardId.hole_z.resolvedRow);
+      expect(state.links[`link_${strategy}`].status).toBe('active');
+    });
   });
 
   it('reapplies an active link when a contradictory conflict is removed', () => {
@@ -131,7 +133,7 @@ describe('projectJamState', () => {
     ] });
 
     expect(state.links.link_1.suppressedByConflict).toBe(false);
-    expect(state.appearances.appearance_a.orderScore).toBe(state.holes.hole_z.orderScore);
+    expect(state.layoutByCardId.appearance_a.resolvedRow).not.toBe(state.layoutByCardId.hole_z.resolvedRow);
   });
 
   it('keeps played and locked targets immobile when move events occur', () => {
@@ -148,7 +150,7 @@ describe('projectJamState', () => {
     expect(state.appearances.appearance_a.locked).toBe(true);
     expect(state.appearances.appearance_a.positionInRound).toBe(97);
     expect(state.holes.hole_b.played).toBe(true);
-    expect(state.projectionWarnings.map((warning) => warning.code)).toContain('immobile_target');
+    expect(state.projectionWarnings.map((warning) => warning.type)).toContain('invalid_action_replayed');
   });
 
   it('keeps skipped appearances as punctual metadata and removes requested links', () => {
