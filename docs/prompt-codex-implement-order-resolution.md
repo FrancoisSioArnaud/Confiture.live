@@ -106,6 +106,7 @@ Implémentation attendue :
    - skip : repousse uniquement l’appearance ciblée, sans modifier le participant ni les appearances futures ;
    - validations UI pré-transaction listées en section 4.14 ;
    - ne jamais scorer le round comme priorité.
+   - appliquer les clarifications finales de section 4.28 : une seule résolution par transaction complète, `playedResolvedRow`, holes `played_empty_slot`, lock sur row courante, move avec bornes manquantes, tri déterministe des entrées, layout partiel complet.
 
 5. Implémenter la propagation :
    - une card déplacée peut pousser une autre card ;
@@ -187,5 +188,7 @@ Interdictions spécifiques :
 - ne pas utiliser `appearanceIndex`, `positionInRound`, `cardIndexInColumn` ou le rang local UI pour aligner les plateaux ;
 - ne pas faire dépendre le résultat de l’ordre de parcours des objets JavaScript sans tri stable explicite ;
 - ne pas répartir les validations pré-transaction dans plusieurs composants React.
+- ne pas oublier de patcher les payloads `plateau_played` / `hole_added reason: played_empty_slot` et les tests liés à `targetResolvedRow` ;
+- ne pas arrêter tout le resolver pour un link/conflict local insoluble : isoler la contrainte, warning, puis continuer les réparations possibles.
 
 Livrable attendu : code + tests + mise à jour éventuelle des exports/imports, sans réintroduire de logique d’ordre dans les composants React.

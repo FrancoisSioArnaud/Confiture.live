@@ -265,6 +265,27 @@ Le mapping event → `transactionContext`, le contrat d’entrée/sortie, la con
 
 ---
 
+
+### 3.9 Verrous finaux d’intégration resolver
+
+Le branchement projection → resolver doit appliquer les clarifications finales de `docs/order-resolution-hierarchy-spec.md`, section 4.28.
+
+Règles obligatoires :
+
+```txt
+- appliquer tous les events d’une même transaction dans `eventIndexInTransaction` croissant avant d’appeler le resolver ;
+- appeler le resolver une seule fois par transaction complète ;
+- convertir `visualIndex` UI de `plateau_played` en `playedResolvedRow` depuis le layout courant ;
+- créer les holes `played_empty_slot` avec `targetResolvedRow` obligatoire avant `plateau_played` ;
+- construire `lock` depuis le `resolvedRow` courant de la card, sans inventer de row si elle manque ;
+- traiter les bornes `before/after` manquantes d’un move avec warning `missing_target`, sans changer la colonne ;
+- trier explicitement cards, links, conflicts et targets avant toute résolution ;
+- ne jamais supprimer silencieusement une card visible active du layout partiel de sortie.
+```
+
+Si une contrainte locale est insoluble, la projection doit marquer uniquement cette contrainte comme non résolue pour la résolution courante et continuer les autres réparations possibles. Seuls `resolver_cycle_detected`, `resolver_max_passes_reached` ou une collision finale insoluble arrêtent la boucle itérative, jamais le replay complet.
+
+
 ## 4. Entités projetées
 
 ### 4.1 `Participant`
@@ -429,7 +450,8 @@ Un plateau est une ligne déduite du tableau.
 
 ```js
 {
-  plateauIndex: 0,
+  visualIndex: 0,
+  resolvedRow: 1,
   cells: [
     { instrumentId, targetType: "appearance", targetId: "appearance_..." },
     { instrumentId, targetType: "hole", targetId: "hole_..." }

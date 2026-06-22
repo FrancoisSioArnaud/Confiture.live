@@ -1692,7 +1692,8 @@ L’ajout manuel de hole entre deux cards est hors V0.
   appearanceIndex: 1,
   previousTargetId: "appearance_tom_bass_1",
   nextTargetId: "appearance_max_bass_1",
-  reason: "manual"
+  reason: "manual",
+  targetResolvedRow: null
 }
 ```
 
@@ -1707,6 +1708,8 @@ transaction_x
 ```
 
 Il n’y a pas d’event `play_without_created`.
+
+Pour `reason: played_empty_slot`, `targetResolvedRow` est obligatoire. Il correspond au `playedResolvedRow` du plateau joué et le hole est inclus dans `plateau_played.targets` dans la même transaction.
 
 ### Conséquences sur la liste
 
@@ -1895,6 +1898,8 @@ Masquer un round : non.
 ```js
 {
   plateauId: "plateau_4",
+  visualIndex: 4,
+  playedResolvedRow: 4,
   targets: [
     { targetType: "appearance", targetId: "appearance_lea_vocals_1" },
     { targetType: "appearance", targetId: "appearance_nicolas_guitar_1" },
@@ -1905,8 +1910,7 @@ Masquer un round : non.
 
 ### Conséquences sur la liste
 
-Un link est non orienté : il ne contient pas d’anchor et son sens de création ne doit pas modifier la résolution. Un link actif contient toujours au moins deux targets. Si une target est retirée d’un groupe de trois ou plus, le groupe restant continue d’exister. Si moins de deux targets restent, le link est supprimé. Créer un link avec une card déjà linkée fusionne les groupes concernés.
-
+`visualIndex` est l’intention UI. `playedResolvedRow` est la row logique calculée depuis le layout courant avant application de `plateau_played`.
 
 - marque les appearances/holes du plateau comme joués ;
 - les cards deviennent grisées ;
@@ -1914,7 +1918,7 @@ Un link est non orienté : il ne contient pas d’anchor et son sens de créatio
 - elles ne peuvent plus bouger ;
 - elles ne sont plus candidates pour les prochains plateaux ;
 - ne déplace pas automatiquement les cards ;
-- si une colonne visible est vide sur ce plateau au moment du marquage joué, le frontend crée d’abord un `hole_added` avec `reason: played_empty_slot`, puis inclut ce hole dans `plateau_played.targets`. Ce trou joué fige la ligne vide et empêche toute participation ajoutée plus tard sur cet instrument de se placer sur un plateau déjà joué.
+- si une colonne visible est vide sur ce `playedResolvedRow` au moment du marquage joué, le frontend crée d’abord un `hole_added` avec `reason: played_empty_slot` et `targetResolvedRow = playedResolvedRow`, puis inclut ce hole dans `plateau_played.targets`. Ce trou joué fige la ligne vide et empêche toute participation ajoutée plus tard sur cet instrument de se placer sur un plateau déjà joué.
 
 Si une appearance du plateau vient d’être skipped, elle ne peut pas être marquée jouée sur ce plateau.
 
@@ -2618,8 +2622,8 @@ Cette section renforce la règle de résolution d’ordre définie dans `order-r
 - Un `conflict` est une contrainte **bidirectionnelle** : le sens `A → C` ou `C → A` ne change pas l’interdiction de cohabitation. Le sens de création ne doit pas orienter la résolution ; seuls un drag manuel ou une autre dernière action utilisateur peuvent fournir une intention prioritaire.
 - À chaque transaction, le resolver doit vérifier les conflicts actifs dans les deux sens, quelle que soit la colonne touchée par l’action.
 - Une card ayant un link ou un conflict reste draggable tant qu’elle n’est ni `played` ni `locked`.
-- Après un drag, le resolver applique les conséquences : les cards linkées suivent la card déplacée si possible ; les conflicts qui deviennent actifs sur la nouvelle ligne déplacent l’autre card conflictuelle vers le slot valide le plus proche.
-- Si la card conflictuelle à déplacer ne peut pas descendre, le resolver peut chercher un slot valide au-dessus afin de résoudre immédiatement le conflict sans attendre l’ajout d’une autre participation.
+- Après un drag, le resolver applique les conséquences : les cards linkées suivent la card déplacée si possible ; les conflicts qui deviennent actifs sur la nouvelle ligne déplacent la card ou le groupe au coût valide le plus faible selon `RESOLUTION_COST`.
+- Si la réparation la moins coûteuse ne peut pas descendre, le resolver peut chercher un slot valide au-dessus afin de résoudre immédiatement le conflict sans attendre l’ajout d’une autre participation.
 - Aucune résolution induite ne peut déplacer une card `played` ou `locked`.
 
 

@@ -616,7 +616,8 @@ Feedback : silent ou snackbar selon contexte.
     reason: "manual",
     afterTarget: { type: "appearance", id: "appearance_a" },
     beforeTarget: { type: "appearance", id: "appearance_b" },
-    positionKey: "pos_..."
+    positionKey: "pos_...",
+    targetResolvedRow: null
   }
 }
 ```
@@ -628,6 +629,14 @@ manual
 play_without
 call_drawer_without_musician
 played_empty_slot
+```
+
+Règles `targetResolvedRow` :
+
+```txt
+- `targetResolvedRow` est normalement null/absent pour `manual`, `play_without` et `call_drawer_without_musician` ; ces holes sont placés par l’intention relative puis par le resolver.
+- `targetResolvedRow` est obligatoire pour `reason: played_empty_slot` ; il correspond au `playedResolvedRow` du plateau joué.
+- Un hole `played_empty_slot` est inclus dans `plateau_played.targets` dans la même transaction et devient immédiatement fixed/played.
 ```
 
 ---
@@ -815,7 +824,8 @@ Feedback : silent ou snackbar optionnelle. Cards grisées.
 {
   type: "plateau_played",
   payload: {
-    plateauIndex: 3,
+    visualIndex: 3,
+    playedResolvedRow: 4,
     targets: [
       { type: "appearance", id: "appearance_..." },
       { type: "hole", id: "hole_..." }
@@ -825,7 +835,7 @@ Feedback : silent ou snackbar optionnelle. Cards grisées.
 }
 ```
 
-Effet : targets immobiles et jouées. Avant de créer `plateau_played`, le frontend doit ajouter un `hole_added` `reason: played_empty_slot` dans chaque colonne visible qui n’a aucune card sur ce plateau. Le `plateau_played.targets` doit inclure ces holes. Ainsi, un instrument vide au moment où le plateau est joué conserve une trace jouée et aucune nouvelle participation future ne peut venir occuper rétroactivement cette ligne.
+Effet : targets immobiles et jouées. `visualIndex` est l’intention UI ; `playedResolvedRow` est la row logique calculée depuis le layout courant au moment de l’action. Avant de créer `plateau_played`, le frontend doit ajouter un `hole_added` `reason: played_empty_slot` avec `targetResolvedRow = playedResolvedRow` dans chaque colonne visible qui n’a aucune card sur cette row. Le `plateau_played.targets` doit inclure ces holes. Ainsi, un instrument vide au moment où le plateau est joué conserve une trace jouée et aucune nouvelle participation future ne peut venir occuper rétroactivement cette ligne.
 
 ---
 
@@ -839,7 +849,8 @@ Feedback : dialog si nécessaire + snackbar.
 {
   type: "plateau_unplayed",
   payload: {
-    plateauIndex: 3,
+    visualIndex: 3,
+    playedResolvedRow: 4,
     targets: [
       { type: "appearance", id: "appearance_..." },
       { type: "hole", id: "hole_..." }
@@ -946,11 +957,11 @@ appearance_skipped
 Cette section renforce la règle de résolution d’ordre définie dans `order-resolution-hierarchy-spec.md`.
 
 - Les `links` et les `conflicts` sont uniquement **inter-colonnes** en V0. Ils ne peuvent pas être créés entre deux cards du même instrument.
-- Un `conflict` est une contrainte **bidirectionnelle** : le sens `A → C` ou `C → A` ne change pas l’interdiction de cohabitation. Le sens sert seulement à définir l’anchor préférée de la transaction.
+- Un `conflict` est une contrainte **bidirectionnelle** : le sens `A → C` ou `C → A` ne change pas l’interdiction de cohabitation et ne définit pas d’anchor de résolution.
 - À chaque transaction, le resolver doit vérifier les conflicts actifs dans les deux sens, quelle que soit la colonne touchée par l’action.
 - Une card ayant un link ou un conflict reste draggable tant qu’elle n’est ni `played` ni `locked`.
-- Après un drag, le resolver applique les conséquences : les cards linkées suivent la card déplacée si possible ; les conflicts qui deviennent actifs sur la nouvelle ligne déplacent la card non-anchor vers le slot valide le plus proche.
-- Si la card non-anchor conflictuelle ne peut pas descendre, le resolver peut chercher un slot valide au-dessus afin de résoudre immédiatement le conflict sans attendre l’ajout d’une autre participation.
+- Après un drag, le resolver applique les conséquences : les cards linkées suivent la card déplacée si possible ; les conflicts qui deviennent actifs sur la nouvelle ligne déplacent la card ou le groupe au coût valide le plus faible selon `RESOLUTION_COST`.
+- Si la réparation la moins coûteuse ne peut pas descendre, le resolver peut chercher un slot valide au-dessus afin de résoudre immédiatement le conflict sans attendre l’ajout d’une autre participation.
 - Aucune résolution induite ne peut déplacer une card `played` ou `locked`.
 
 

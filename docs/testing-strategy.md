@@ -243,3 +243,21 @@ builder ou transaction déterministe
 Ces tests doivent vérifier les cards visibles (`projection.columns[*].cards`) plutôt que seulement des champs internes comme `positionInRound`, `orderScore` ou `manualOrderKey`.
 
 Scénarios prioritaires : link créé, drag linké, played/locked + ajout participation, conflict + drag, play without / hole, appearance_skipped, hidden column, link_removed, conflict_removed, participant left/removed, et undo.
+
+
+### Tests de verrouillage final resolver
+
+Ajouter explicitement ces tests avant la réécriture complète du resolver :
+
+```txt
+- transaction multi-events : tous les events sont appliqués, puis resolver appelé une seule fois ;
+- `plateau_played` depuis visualIndex : conversion correcte vers `playedResolvedRow` ;
+- colonne vide sur plateau joué : création d’un hole `played_empty_slot` avec `targetResolvedRow`, inclus dans `plateau_played.targets` et fixed ;
+- lock d’une card : fixed sur son resolvedRow courant, unlock sans retour magique ;
+- move avec afterTarget manquant mais beforeTarget valide : placement déterministe + warning `missing_target` ;
+- move avec deux bornes manquantes : fallback previousLayout/baseOrder + warning ;
+- tri déterministe des cards/links/conflicts/targets malgré entrée mélangée ;
+- link local insoluble n’empêche pas la réparation d’un autre link résoluble dans la même résolution ;
+- conflict local insoluble n’empêche pas la réparation d’un autre conflict résoluble dans la même résolution ;
+- layout partiel avec warning error ne supprime aucune card visible active.
+```

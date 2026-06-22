@@ -340,6 +340,21 @@ Créer de vrais holes métier pour remplir les cellules vides d’autres colonne
 
 Les holes visibles dans une colonne occupent une position seulement dans cette colonne. Ils ne créent pas de holes artificiels dans les autres colonnes. Les cellules vides nécessaires à l’alignement visuel sont un rendu de grille, pas des cards.
 
+
+
+### Plateau joué et cellule vide
+
+Quand l’organisateur marque une ligne affichée comme jouée, l’UI travaille depuis le `visualIndex` global affiché, mais la projection doit le convertir en `playedResolvedRow`.
+
+Si une colonne visible n’a aucune card sur ce `playedResolvedRow`, l’UI/projection crée un vrai hole métier `reason: played_empty_slot` avec `targetResolvedRow = playedResolvedRow`, puis l’inclut dans `plateau_played.targets`.
+
+À distinguer strictement :
+
+```txt
+cellule vide visuelle normale = rendu de grille, non persisté ;
+hole `played_empty_slot` = trace métier historique, played/fixed.
+```
+
 ## 5.4 Ajout après reveal de round
 
 Règle importante de génération :

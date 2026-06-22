@@ -23,7 +23,7 @@ Depuis la colonne d’actions de plateau :
 Bouton appeler / ouvrir drawer d’appel sur une ligne plateau
 ```
 
-Le drawer cible un `plateauIndex` précis déduit de la projection.
+Le drawer cible un `visualIndex` global précis déduit de la projection. La projection conserve aussi le `resolvedRow` correspondant ; toute action “Plateau joué” doit convertir ce `visualIndex` en `playedResolvedRow` avant création de transaction.
 
 ---
 

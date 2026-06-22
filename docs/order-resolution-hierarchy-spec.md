@@ -342,6 +342,10 @@ layout_cycle_detected
 hidden_column_not_resolved
 skip_target_blocked
 skip_target_missing
+move_target_missing
+lock_target_missing_row
+played_target_row_mismatch
+played_empty_slot_missing_target_row
 ```
 
 L’UI organisateur n’affiche pas forcément tous les warnings. En revanche, le moteur doit toujours les produire pour debug, tests et admin.
@@ -692,12 +696,15 @@ Règles d’arrêt :
 
 ```txt
 - si aucune violation n’est trouvée : succès ;
-- si aucune réparation valide n’existe pour la violation prioritaire : warning ciblé puis arrêt propre ;
+- si aucune réparation valide n’existe pour une violation locale de link/conflict : warning ciblé, marquer seulement cette contrainte comme `unresolvedIgnoredForThisRun`, puis continuer les autres réparations possibles ;
+- si aucune réparation valide n’existe pour une collision finale de colonne visible : warning `column_collision_unresolvable` severity `error`, puis retourner le meilleur layout partiel déterministe ;
 - si MAX_PASSES est atteint : warning `resolver_max_passes_reached` ;
 - si MAX_REPAIRS_PER_PASS est atteint : warning `resolver_max_passes_reached` reason `max_repairs_per_pass_reached` ;
 - si le même layoutHash revient deux fois dans la même résolution : warning `resolver_cycle_detected` ;
-- si aucune candidateRow valide n’est trouvée dans MAX_CANDIDATE_ROW_DISTANCE : warning ciblé selon la violation en cours.
+- si aucune candidateRow valide n’est trouvée dans MAX_CANDIDATE_ROW_DISTANCE : warning ciblé selon la violation en cours, puis continuer si la violation peut être isolée.
 ```
+
+Une contrainte marquée `unresolvedIgnoredForThisRun` n’est pas supprimée de l’état projeté. Elle est seulement ignorée pour éviter une boucle pendant cette résolution. Au replay suivant ou après une action ultérieure, elle est réévaluée normalement.
 
 Le resolver ne doit jamais boucler indéfiniment et ne doit jamais produire un ordre non déterministe pour “sortir” d’un cycle.
 
@@ -995,7 +1002,7 @@ Shape générique :
 {
   transactionId: "transaction_...",
   eventIds: ["event_..."],
-  intent: "move" | "link_created" | "conflict_created" | "skip" | "lock" | "unlock" | "play" | "unplay" | "visibility_changed" | "neutral",
+  intent: "move" | "card_created" | "link_created" | "conflict_created" | "skip" | "lock" | "unlock" | "play" | "unplay" | "visibility_changed" | "neutral",
   anchorCardId: "appearance_..." | null,
   affectedCardIds: ["appearance_..."],
   afterTargetCardId: "appearance_prev" | null,
@@ -1109,7 +1116,7 @@ La projection doit transformer chaque transaction en un `transactionContext` sta
 | `appearance_skipped` | `skip` | appearance skippée | `replacementCardId`, `createdHoleId`, `preferredResolvedRow` | Délink ponctuel puis push seule. |
 | `appearance_locked` / `hole_locked` | `lock` | card verrouillée | `affectedCardIds` | La card devient fixed au resolvedRow courant. |
 | `appearance_unlocked` / `hole_unlocked` | `unlock` | card déverrouillée | `affectedCardIds` | La card redevient mobile, ordre courant préservé sauf contrainte. |
-| `plateau_played` | `play` | `null` | `affectedCardIds`, `resolvedRow` joué | Les cards du plateau deviennent fixed à leur resolvedRow courant. |
+| `plateau_played` | `play` | `null` | `affectedCardIds`, `playedResolvedRow` dérivé du layout courant | Les cards du plateau deviennent fixed à leur resolvedRow courant. Si l’UI a envoyé un `visualIndex`, la projection le convertit en `playedResolvedRow` via `visibleResolvedRows` avant d’appeler le resolver. |
 | `plateau_unplayed` | `unplay` | `null` | `affectedCardIds` | Les cards redeviennent mobiles sauf lock. |
 | `instrument_visibility_changed` | `visibility_changed` | `null` | `columnId`, `hidden` | Relancer resolver visible avec filtrage hidden. |
 | `round_revealed` / `instrument_round_visibility_changed` | `card_created` | `null` | appearances visibles nouvellement calculées | Ajouter les cards, puis solver. Round sans priorité d’ordre. |
@@ -1431,6 +1438,141 @@ Chaque fixture doit vérifier explicitement :
 ```
 
 Les fixtures doivent être suffisamment petites pour être relues à la main. Une fixture illisible ne verrouille pas le comportement.
+
+---
+
+### 4.28 Derniers cas limites verrouillés avant réécriture
+
+Cette section complète les sections 4.16 à 4.27. Elle vise à empêcher les interprétations divergentes pendant une réécriture complète du resolver.
+
+#### 4.28.1 Ordre interne d’une transaction multi-events
+
+Une transaction peut contenir plusieurs events. La projection doit toujours :
+
+```txt
+1. appliquer les events bruts dans `eventIndexInTransaction` croissant ;
+2. construire ou mettre à jour les entities projetées ;
+3. construire un seul `transactionContext` principal selon la priorité de section 4.19 ;
+4. appeler le resolver une seule fois pour la transaction complète.
+```
+
+Le resolver ne doit pas être appelé entre deux events d’une même transaction, sauf migration technique explicitement documentée. Cela évite des états intermédiaires visibles et des projections différentes selon le découpage interne de l’action.
+
+#### 4.28.2 `plateau_played`, `visualIndex` UI et `playedResolvedRow`
+
+L’UI peut déclencher “plateau joué” depuis une ligne affichée, donc depuis un `visualIndex`. La projection doit convertir ce `visualIndex` en `playedResolvedRow` avant d’appliquer l’effet métier.
+
+Règles :
+
+```txt
+- `plateau_played` cible toujours des `cardId` concrets dans `payload.targets`.
+- Si le payload contient `plateauIndex` ou `visualIndex`, cette valeur est une intention UI, pas une vérité de résolution.
+- La projection convertit `visualIndex` → `playedResolvedRow` avec `visibleResolvedRows` du layout courant.
+- Les targets jouées sont figées à leur `resolvedRow` courant.
+- Si une target n’est pas sur `playedResolvedRow`, produire `invalid_action_replayed` et figer la target à son `resolvedRow` courant plutôt que la déplacer.
+- `playedResolvedRow` peut être stocké dans le `transactionContext` et dans un event de trace/audit, mais le resolver ne doit jamais l’utiliser pour déplacer une card déjà fixed.
+```
+
+Cette règle ne contredit pas “`resolvedRow` n’est pas une vérité finale stockée dans les events” : ici, `playedResolvedRow` est une intention/freeze historique liée à l’action `plateau_played`, pas une position générale à rejouer comme ordre libre.
+
+#### 4.28.3 Holes `played_empty_slot`
+
+Quand un plateau est joué et qu’une colonne visible n’a aucune card sur le `playedResolvedRow`, il faut créer un vrai hole métier pour figer cette absence.
+
+Payload minimal attendu pour ce hole :
+
+```js
+{
+  type: "hole_added",
+  payload: {
+    holeId: "hole_...",
+    instrumentId: "instrument_...",
+    reason: "played_empty_slot",
+    targetResolvedRow: 4,
+    sourcePlateauPlayedTransactionId: "transaction_..."
+  }
+}
+```
+
+Règles :
+
+```txt
+- `targetResolvedRow` est obligatoire pour `reason: played_empty_slot`.
+- Le hole `played_empty_slot` est immédiatement inclus dans `plateau_played.targets`.
+- Le hole devient `played` et donc fixed dès la même transaction.
+- Ce hole empêche toute card ajoutée plus tard d’occuper rétroactivement le plateau joué dans cette colonne.
+- Ce hole n’est pas un vide visuel : c’est une vraie card métier historique.
+- Les cellules vides visuelles normales restent non persistées et ne deviennent jamais des holes.
+```
+
+#### 4.28.4 Lock et unlock
+
+Un lock fixe la card à son `resolvedRow` courant.
+
+Règles :
+
+```txt
+- L’UI ne peut lock qu’une card visible ayant un `resolvedRow` courant.
+- La projection construit `transactionContext.preferredResolvedRow` depuis le `previousLayout` courant.
+- Si un event de lock est rejoué sans resolvedRow courant disponible, produire `invalid_action_replayed` reason `lock_target_missing_row` et ne pas inventer une row.
+- Unlock retire seulement la contrainte fixed `locked`; il ne restaure aucun ordre ancien.
+```
+
+#### 4.28.5 Move avec targets `before/after` manquantes
+
+Un move relatif peut référencer des targets devenues hidden, supprimées ou absentes pendant le replay défensif.
+
+Règles :
+
+```txt
+- Si `afterTargetCardId` existe et est visible dans la même colonne, l’utiliser.
+- Si `beforeTargetCardId` existe et est visible dans la même colonne, l’utiliser.
+- Si une seule borne est valide, placer l’anchor juste après/avant cette borne, puis réparer.
+- Si les deux bornes sont invalides, conserver la position de `previousLayout` si possible, sinon utiliser `baseOrder`/`createdAtOrder`/`cardId`.
+- Produire `missing_target` reason `move_target_missing` pour chaque borne invalide.
+- Ne jamais changer la colonne de l’anchor pour satisfaire un move relatif.
+```
+
+#### 4.28.6 Ordre de parcours déterministe
+
+Tous les tableaux d’entrée doivent être triés explicitement avant usage algorithmique.
+
+Règles :
+
+```txt
+- cards : `previousResolvedRow`, puis `createdAtOrder`, puis `cardId`.
+- links : `createdAtOrder`, puis `linkId`.
+- conflicts : `createdAtOrder`, puis `conflictId`.
+- targetCardIds dans un link/conflict : ordre par `createdAtOrder`, puis `cardId`.
+- linkGroupId dérivé : plus petit `linkId` actif du groupe, sinon plus petit `cardId` du groupe.
+- aucun résultat ne doit dépendre de l’ordre d’énumération brut des propriétés d’objet JavaScript.
+```
+
+#### 4.28.7 Cards restantes et layout partiel
+
+Même en cas d’erreur, le resolver ne doit jamais faire disparaître silencieusement une card visible active.
+
+Règles :
+
+```txt
+- Toute card visible active en entrée doit être présente dans `layoutByCardId` en sortie, sauf si un event de suppression/retrait actif l’a retirée avant `buildVisibleCards`.
+- Si une card ne peut pas obtenir une row idéale, elle conserve sa row précédente ou reçoit le fallback stable disponible, avec warning.
+- Une collision finale insoluble produit `column_collision_unresolvable` severity `error` mais la sortie reste complète et déterministe.
+- Les warnings doivent permettre d’identifier les cards non résolues, pas seulement la transaction globale.
+```
+
+#### 4.28.8 Contrat final de réécriture
+
+Pour réécrire le resolver de zéro, Codex doit considérer comme canonique uniquement :
+
+```txt
+- `docs/order-resolution-hierarchy-spec.md` pour le comportement de résolution ;
+- `docs/projection-engine-spec.md` pour le branchement projection/replay ;
+- `docs/event-payloads-reference.md` pour les payloads ;
+- `docs/testing-strategy.md` pour les fixtures et invariants.
+```
+
+Toute ancienne mention de tri round-first, de conflict orienté par non-anchor, d’alignement par rang local de colonne, ou de retour magique après suppression d’un link/conflict doit être considérée comme obsolète si elle contredit cette spec.
 
 ---
 
