@@ -11,7 +11,7 @@ Lis d’abord toute la documentation suivante avant de modifier le code :
 
 Objectif : implémenter un moteur frontend pur et déterministe de résolution d’ordre, basé sur un solver de contraintes discrètes.
 
-La section `4. Arbitrages canoniques du resolver` de `docs/order-resolution-hierarchy-spec.md` est normative. Elle doit être appliquée telle quelle : hiérarchie hard/conditional/soft, politique refus vs warning, format des `projectionWarnings`, séparation `resolvedRow`/`visualIndex`, stratégie de collision, scoring chiffré et propagation chiffrée.
+Les sections `4.1` à `4.15` de `docs/order-resolution-hierarchy-spec.md` sont normatives. Elles doivent être appliquées telles quelles : hiérarchie hard/conditional/soft, politique refus vs warning, format des `projectionWarnings`, séparation `resolvedRow`/`visualIndex`, stratégie de collision, scoring chiffré, propagation chiffrée, choix de `targetRow`, ordre exact des passes, conditions d’arrêt, colonnes hidden, holes, `appearance_skipped`, validations UI pré-transaction et invariants de tests.
 
 Créer ou remplacer le module :
 
@@ -54,6 +54,12 @@ Implémentation attendue :
    - réparation itérative bornée ;
    - scoring des réparations avec les constantes `RESOLUTION_COST` de la spec ;
    - propagation avec les constantes `PROPAGATION_PRIORITY` de la spec ;
+   - choix de `targetRow` avec stratégie link + candidateRows alternatives ;
+   - ordre exact des passes : collisions, links, collisions, conflicts, collisions, repeat ;
+   - limites `RESOLUTION_LIMITS` et détection de `layoutHash` répété ;
+   - filtrage canonique des colonnes hidden ;
+   - règles holes comme cards normales pour ordre/lock/played/link explicite ;
+   - règles `appearance_skipped` : délink ponctuel puis push de l’appearance seule ;
    - séparation stricte `resolvedRow` / `visualIndex` ;
    - normalisation finale stable sans modifier les `resolvedRow` fixed ;
    - production de `projectionWarnings` déterministes au format standard de la spec.
@@ -79,6 +85,13 @@ Implémentation attendue :
    - collision : fixed garde la place, sinon priorité la plus haute, sinon stabilité, card poussée vers le slot valide le plus proche avec préférence vers le bas en cas d’égalité ;
    - scoring numérique `RESOLUTION_COST` ;
    - propagation numérique `PROPAGATION_PRIORITY` ;
+   - `targetRow` des links : fixed row, priorité >= 500, stratégie enregistrée, candidateRows alternatives ;
+   - limites `RESOLUTION_LIMITS` : `MAX_PASSES = 50`, repairs par passe = cards visibles * 4, distance candidate max = 200 ;
+   - warning `resolver_cycle_detected` si un `layoutHash` revient deux fois ;
+   - colonnes hidden absentes de `buildVisibleCards` et contraintes hidden ignorées dans le resolver visible ;
+   - holes traités comme cards normales, sauf pas de conflicts automatiques et pas de génération future ;
+   - skip : repousse uniquement l’appearance ciblée, sans modifier le participant ni les appearances futures ;
+   - validations UI pré-transaction listées en section 4.14 ;
    - ne jamais scorer le round comme priorité.
 
 5. Implémenter la propagation :
@@ -89,25 +102,47 @@ Implémentation attendue :
    - sous la priorité utile 100, utiliser le fallback de stabilité ;
    - la boucle doit être bornée et retourner `resolver_max_passes_reached` ou `resolver_cycle_detected` si elle n’atteint pas un état stable.
 
-6. Ajouter ou mettre à jour les tests :
+6. Implémenter les points canoniques 8 à 15 :
+   - `chooseLinkTargetRow()` respecte fixed rows, priorité de propagation, stratégie `link_created`, candidateRows alternatives ;
+   - `runResolutionPasses()` respecte l’ordre canonique des passes et relance collisions après links/conflicts ;
+   - `layoutHash()` détecte les cycles et les limites de passes/réparations retournent des warnings standards ;
+   - les colonnes hidden sont filtrées avant résolution visible et leurs contraintes n’influencent pas les cards visibles ;
+   - les holes utilisent le même pipeline que les appearances pour collisions, push, lock, played et links explicites ;
+   - `appearance_skipped` délinke ponctuellement puis repousse seulement l’appearance ciblée ;
+   - ajouter les validations UI/pré-transaction nécessaires sans déplacer la logique de résolution dans les composants ;
+   - faire passer tous les invariants de tests listés en section 4.15.
+
+7. Ajouter ou mettre à jour les tests :
    - même event log rejoué deux fois → même projection exacte ;
    - drag simple qui pousse une card mobile ;
    - drag qui pousse une card linkée et propage son link ;
    - propagation en chaîne `A pousse B`, `B link C`, `C pousse D`, `D link E` ;
    - link aligné avec target locked ;
    - link impossible avec deux targets fixed sur rows différentes ;
+   - link `move_to_first`, `move_to_last`, `average_position` ;
+   - link targetRow bloquée puis candidateRow alternative ;
    - conflict simple entre deux cards mobiles ;
    - conflict où une card est locked ;
    - conflict impossible entre deux cards fixed ;
    - création de link refusée si conflict direct ;
    - création de link refusée si deux targets dans la même colonne ;
+   - création de conflict refusée si deux targets sont déjà linkées ;
    - suppression de link ne provoquant pas un retour magique ;
    - suppression de conflict ne provoquant pas un retour magique ;
    - reveal round puis résolution par solver ;
    - mélange de rounds autorisé si nécessaire ;
    - played et locked immobiles ;
+   - colonne hidden n’influençant pas l’ordre visible ;
+   - réaffichage d’une colonne hidden relançant une résolution stable ;
+   - hole mobile traité comme card normale ;
+   - hole played/locked immobile ;
+   - hole de `jouer sans` membre d’un link explicite ;
+   - `appearance_skipped` repoussant uniquement l’appearance ciblée ;
+   - skip avec remplaçant linked nécessitant confirmation UI ;
    - collision entre deux cards mobiles : garde la plus prioritaire et pousse vers le slot valide le plus proche ;
    - collision avec une card fixed : la fixed garde sa row ;
+   - cycle détecté avec warning `resolver_cycle_detected` ;
+   - max passes atteint avec warning `resolver_max_passes_reached` ;
    - `projectionWarnings` produits au format standard ;
    - `resolvedRow` stable pour played/locked malgré normalisation `visualIndex` ;
    - score égal départagé par ordre précédent, ordre de création, puis id ;

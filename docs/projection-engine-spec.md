@@ -151,6 +151,8 @@ Le resolver officiel est spécifié dans :
 docs/order-resolution-hierarchy-spec.md
 ```
 
+Les sections `4.1` à `4.15` de cette spec sont normatives pour la projection : targetRow des links, ordre exact des passes, limites d’arrêt, colonnes hidden, holes, skip, validations UI et invariants de tests.
+
 ---
 
 ### 3.6 Les déplacements induits sont des résultats de projection
@@ -629,10 +631,14 @@ Règles clés :
 - `played` et `locked` sont des murs ;
 - l’anchor de la dernière action est conservée autant que possible, mais ne bat jamais `played` ou `locked` ;
 - les links sont transformés en groupes et alignés comme des blocs logiques ;
+- la `targetRow` des links suit l’ordre canonique : fixed row si possible, priorité de propagation, puis stratégie `move_to_first` / `move_to_last` / `average_position` ;
 - les conflicts sont bidirectionnels et doivent séparer les cards concernées ;
 - une card déplacée ou poussée transmet sa priorité à ses links ;
 - si une card poussée est linkée à une autre card, cette autre card gagne une priorité indirecte dans sa colonne ;
-- la propagation continue jusqu’à disparition des violations ou warning d’impossibilité ;
+- la propagation continue jusqu’à disparition des violations, warning d’impossibilité, limite de passes ou cycle détecté ;
+- les colonnes hidden ne participent pas au resolver visible ;
+- les holes sont des cards normales pour ordre, lock, played et links explicites ;
+- `appearance_skipped` repousse seulement l’appearance ciblée après délink ponctuel ;
 - les rounds ne sont pas une contrainte d’ordre et peuvent être mélangés ;
 - supprimer un link ou conflict ne restaure pas un ancien ordre : le resolver part de l’ordre courant et répare seulement ce qui reste nécessaire.
 
@@ -656,9 +662,11 @@ Toute transaction pouvant modifier l’ordre ou les contraintes doit appeler le 
 
 La suppression d’un link ou d’un conflict ne doit pas provoquer un retour magique à un ancien ordre. Le resolver part de l’ordre résolu courant et ne bouge que ce qui est nécessaire.
 
+Le resolver doit respecter les limites canoniques : `MAX_PASSES = 50`, `MAX_REPAIRS_PER_PASS = cards visibles * 4`, détection de `layoutHash` répété, et warnings `resolver_max_passes_reached` / `resolver_cycle_detected`.
+
 ---
 
-### 8.3 Effet de `left`
+### 8.4 Effet de `left`
 
 Quand un participant devient `left` :
 
@@ -873,31 +881,34 @@ Modifier un conflict = supprimer puis recréer.
 
 ## 11. Appearance skipped
 
-`appearance_skipped` remplace la logique “temporarily away”.
-
-Ce n’est pas un état durable.
+`appearance_skipped` remplace la logique “temporarily away”. Ce n’est pas un état durable.
 
 Déclencheur unique : drawer d’appel, quand le musicien appelé est introuvable.
 
-Effet :
+Règles canoniques de projection :
 
-1. si l’appearance est linkée, supprimer/désactiver le link concerné ;
-2. repousser uniquement l’appearance skippée au prochain slot valide de sa colonne ;
-3. ne pas modifier le participant durablement ;
-4. ne pas marquer le participant comme `left` ;
-5. ne pas créer d’état `temporarily_away` persistant.
+1. le skip cible une appearance précise ;
+2. si l’appearance est linkée, supprimer/désactiver le link concerné pour cette appearance avant déplacement ;
+3. le reste de l’ancien groupe linké reste actif et doit être réaligné si au moins deux targets restent ;
+4. repousser uniquement l’appearance skippée au prochain slot valide de sa colonne ;
+5. ne pas modifier les appearances futures de la participation ;
+6. ne pas marquer le participant comme `left` ;
+7. ne jamais déplacer une card played ou locked ;
+8. si aucun slot valide n’existe, produire un warning stable.
 
 Si un remplaçant est choisi :
 
-- le remplaçant prend le slot de l’appearance skippée ;
-- l’appearance skippée est repoussée ;
-- si le remplaçant était linké, l’UI doit confirmer le délink avant validation.
+- le remplaçant prend le `resolvedRow` de l’appearance skippée si possible ;
+- l’appearance skippée est repoussée seule ;
+- si le remplaçant était linké, l’UI doit confirmer le délink avant validation ;
+- le resolver répare ensuite collisions, links restants et conflicts.
 
 Si “Plateau sans [instrument manquant]” est choisi :
 
 - un hole est créé à la place ;
-- l’appearance skippée est repoussée ;
-- le hole peut être played avec le plateau.
+- l’appearance skippée est repoussée seule ;
+- le hole peut être played/locked comme une card normale ;
+- aucun event dédié `play_without_created` n’est nécessaire.
 
 ---
 
@@ -963,21 +974,34 @@ Effet :
 - l’instrument reste dans l’historique ;
 - ses participations/appearances ne sont pas physiquement supprimées ;
 - les events restent rejouables ;
-- l’UI doit afficher un warning si l’instrument a des links actifs, mais l’action reste autorisée après confirmation.
+- les cards de cette colonne ne sont pas incluses dans `buildVisibleCards` ;
+- les links/conflicts impliquant cette colonne sont ignorés par le resolver visible ;
+- une colonne hidden ne force jamais une card visible à bouger ;
+- l’UI doit afficher un warning si l’instrument a des links actifs, mais l’action reste autorisée après confirmation ;
+- montrer à nouveau l’instrument relance le resolver avec les cards redevenues visibles.
 
 ---
 
 ## 13. Holes et jouer sans
 
+Un hole est une card ordonnable normale pour le resolver.
+
+Règles canoniques :
+
+- un hole occupe un vrai `resolvedRow` dans sa colonne ;
+- un hole peut être poussé comme une appearance mobile ;
+- un hole played est fixed ;
+- un hole locked est fixed ;
+- un hole peut être membre d’un link group seulement s’il a été créé par un flux explicite `jouer sans` ou drawer d’appel ;
+- un hole ne participe jamais aux conflicts automatiques `instrument_constraint` liés au même participant ;
+- un hole ne génère jamais d’appearance ou de hole futur ;
+- supprimer un hole retire uniquement le hole de la projection active et désactive/ignore les links qui le ciblent.
+
 ### 13.1 Hole manuel
 
 En V0, un hole manuel n’est pas ajouté entre deux cards. Les holes sont créés par les flux `jouer sans` ou drawer d’appel.
 
-Il occupe une position réelle.
-
-Il ne se répète pas dans les rounds futurs.
-
----
+Il occupe une position réelle et ne se répète pas dans les rounds futurs.
 
 ### 13.2 Jouer sans
 
@@ -997,6 +1021,8 @@ Nicolas guitare veut jouer sans batterie
 → hole ajouté dans batterie
 → link entre Nicolas guitare et le hole batterie
 ```
+
+Le hole créé par ce flux peut participer au link group explicite et suit les mêmes règles de collision, lock, played et normalisation que les appearances.
 
 ---
 

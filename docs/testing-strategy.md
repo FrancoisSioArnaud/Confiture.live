@@ -106,17 +106,49 @@ Cas minimaux :
 4. propagation en chaîne `A pousse B`, `B link C`, `C pousse D`, `D link E` ;
 5. link aligné avec une target locked ;
 6. link impossible avec deux targets fixed sur rows différentes ;
-7. conflict simple entre deux cards mobiles ;
-8. conflict où une card est locked ;
-9. conflict impossible entre deux cards fixed ;
-10. link direct refusé si conflict direct ;
-11. link refusé si deux targets sont dans la même colonne ;
-12. link_removed ne provoquant pas un retour magique à un ancien ordre ;
-13. conflict_removed ne provoquant pas un retour magique à un ancien ordre ;
-14. reveal round puis résolution par solver ;
-15. mélange de rounds autorisé si nécessaire ;
-16. played et locked immobiles ;
-17. replay après undo linéaire produisant un état stable.
+7. link `move_to_first` choisissant la row la plus haute ;
+8. link `move_to_last` choisissant la row la plus basse ;
+9. link `average_position` avec arrondi canonique ;
+10. link targetRow bloquée par une card fixed puis candidateRow alternative ;
+11. conflict simple entre deux cards mobiles ;
+12. conflict où une card est locked ;
+13. conflict impossible entre deux cards fixed ;
+14. link direct refusé si conflict direct ;
+15. link refusé si deux targets sont dans la même colonne ;
+16. conflict refusé si deux targets sont dans le même link group ;
+17. link_removed ne provoquant pas un retour magique à un ancien ordre ;
+18. conflict_removed ne provoquant pas un retour magique à un ancien ordre ;
+19. reveal round puis résolution par solver ;
+20. mélange de rounds autorisé si nécessaire ;
+21. played et locked immobiles ;
+22. hidden column ignorée par le resolver visible ;
+23. réaffichage d’une hidden column relançant une résolution stable ;
+24. hole mobile traité comme une card normale ;
+25. hole played/locked immobile ;
+26. hole de `jouer sans` membre d’un link explicite ;
+27. `appearance_skipped` repoussant uniquement l’appearance ciblée ;
+28. skip avec remplaçant linked nécessitant confirmation UI ;
+29. collision entre deux cards mobiles : garde la plus prioritaire et pousse vers le slot valide le plus proche ;
+30. collision avec une card fixed : la fixed garde sa row ;
+31. cycle détecté avec warning `resolver_cycle_detected` ;
+32. max passes atteint avec warning `resolver_max_passes_reached` ;
+33. `projectionWarnings` produits au format standard ;
+34. `resolvedRow` stable pour played/locked malgré normalisation `visualIndex` ;
+35. score égal départagé par ordre précédent, ordre de création, puis id ;
+36. replay après undo linéaire produisant un état stable.
+
+Invariants obligatoires à vérifier dans les tests pertinents :
+
+```txt
+- aucune colonne visible ne contient deux cards sur le même resolvedRow final ;
+- aucune card played/locked ne change de resolvedRow ;
+- aucun link résoluble ne reste désaligné ;
+- aucun conflict résoluble ne reste sur le même resolvedRow ;
+- les rounds ne sont jamais utilisés comme priorité d’ordre ;
+- les colonnes hidden ne déplacent jamais les cards visibles ;
+- les holes suivent les mêmes règles que les appearances pour ordre, lock, played et links explicites ;
+- aucun résultat ne dépend du DOM, de React, de Zustand, de Dexie, de Date.now() ou de Math.random().
+```
 
 Ces tests doivent être indépendants de React et tester le moteur de projection comme une fonction pure.
 
@@ -137,4 +169,4 @@ builder ou transaction déterministe
 
 Ces tests doivent vérifier les cards visibles (`projection.columns[*].cards`) plutôt que seulement des champs internes comme `positionInRound`, `orderScore` ou `manualOrderKey`.
 
-Scénarios prioritaires : link créé, drag linké, played/locked + ajout participation, conflict + drag, play without / hole, link_removed, conflict_removed, participant left/removed, et undo.
+Scénarios prioritaires : link créé, drag linké, played/locked + ajout participation, conflict + drag, play without / hole, appearance_skipped, hidden column, link_removed, conflict_removed, participant left/removed, et undo.

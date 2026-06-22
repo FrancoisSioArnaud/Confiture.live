@@ -309,6 +309,7 @@ missing_target
 resolver_max_passes_reached
 resolver_cycle_detected
 hidden_column_constraint_ignored
+skip_unresolvable
 ```
 
 Reasons canoniques minimales :
@@ -324,8 +325,11 @@ conflict_target_missing
 fixed_card_move_refused
 same_column_collision_with_fixed_cards
 max_passes_reached
+max_repairs_per_pass_reached
 layout_cycle_detected
 hidden_column_not_resolved
+skip_target_blocked
+skip_target_missing
 ```
 
 L’UI organisateur n’affiche pas forcément tous les warnings. En revanche, le moteur doit toujours les produire pour debug, tests et admin.
@@ -518,6 +522,295 @@ D link E → E priority 500
 ```
 
 Les priorités ne sont pas des contraintes dures. Elles départagent les réparations possibles après respect des contraintes dures.
+
+
+### 4.8 Choix exact de la `targetRow` pour les links
+
+Le choix de `targetRow` d’un groupe linké est canonique. Il ne doit pas dépendre de l’ordre de parcours des colonnes.
+
+Priorité de décision :
+
+```txt
+1. Si le groupe contient une ou plusieurs cards fixed sur le même resolvedRow : targetRow = ce resolvedRow.
+2. Si le groupe contient plusieurs cards fixed sur des resolvedRows différents : warning `linked_cards_fixed_on_different_rows`, aucune fixed ne bouge.
+3. Sinon, si une card du groupe a reçu une priorité de propagation supérieure ou égale à 500 : targetRow = resolvedRow de la card prioritaire.
+4. Sinon, appliquer la stratégie enregistrée dans l’event `link_created`.
+5. Si la targetRow choisie est impossible à cause d’une card fixed dans une colonne cible, tester les candidateRows alternatives par coût croissant.
+6. Si aucune candidateRow ne permet d’aligner le groupe sans casser une contrainte dure absolue : warning `link_unresolvable`.
+```
+
+Stratégies de link :
+
+```txt
+move_to_first      : resolvedRow la plus haute parmi les targets du groupe.
+move_to_last       : resolvedRow la plus basse parmi les targets du groupe.
+average_position   : moyenne des resolvedRows des targets mobiles.
+```
+
+Arrondi de `average_position` :
+
+```txt
+1. calculer la moyenne des resolvedRows mobiles ;
+2. si la moyenne tombe entre deux rows, choisir la row de la card ayant la priorité de propagation la plus haute ;
+3. si aucune card n’a de priorité supérieure à `STABILITY_DEFAULT`, arrondir vers la row la plus haute ;
+4. en égalité parfaite, départager par ordre précédent, ordre de création, puis id stable.
+```
+
+CandidateRows alternatives quand la `targetRow` initiale est bloquée :
+
+```txt
+1. targetRow ;
+2. targetRow + 1 ;
+3. targetRow - 1 ;
+4. targetRow + 2 ;
+5. targetRow - 2 ;
+6. continuer jusqu’à trouver une row valide ;
+7. préférer le bas en cas de coût strictement égal.
+```
+
+Une row candidate est valide uniquement si :
+
+```txt
+- elle ne demande pas de déplacer une card played ;
+- elle ne demande pas de déplacer une card locked ;
+- elle ne crée pas de collision finale insoluble ;
+- elle ne crée pas un conflict insoluble ;
+- elle ne met pas deux cards du même groupe linké dans la même colonne visible.
+```
+
+Si une candidateRow valide existe mais provoque des déplacements secondaires, ces déplacements sont scorés avec `RESOLUTION_COST` et propagent leurs priorités selon `PROPAGATION_PRIORITY`.
+
+### 4.9 Ordre exact des passes du resolver
+
+Le resolver doit suivre cet ordre canonique. Les helpers peuvent être organisés librement, mais le comportement observable doit rester celui-ci.
+
+```txt
+1. buildVisibleCards
+2. buildLinkGroups
+3. buildActiveConflicts
+4. buildFixedMap
+5. validateStructuralImpossibleCases
+6. buildInitialLayoutFromPreviousProjection
+7. applyTransactionIntent
+8. seedPropagationPriority
+9. resolveColumnCollisions
+10. resolveLinkMisalignments
+11. resolveColumnCollisions
+12. resolveConflictViolations
+13. resolveColumnCollisions
+14. repeat steps 10 à 13 jusqu’à stabilité
+15. normalizeVisualIndexes
+16. emit projectionWarnings
+```
+
+Règles :
+
+```txt
+- Les collisions sont résolues avant et après les links/conflicts, parce que les links et conflicts peuvent créer de nouvelles collisions.
+- Les structural impossibilities évidentes sont détectées avant les réparations itératives.
+- Les impossibilités apparues pendant les réparations deviennent des `projectionWarnings`.
+- Le resolver peut traiter tout le tableau visible, pas seulement les colonnes directement touchées.
+- Le round n’apparaît dans aucune passe de priorité d’ordre.
+```
+
+Ordre de priorité des violations dans une passe :
+
+```txt
+1. collision dans une colonne visible ;
+2. link désaligné ;
+3. conflict actif sur le même resolvedRow ;
+4. intention de transaction non respectée ;
+5. churn visuel évitable.
+```
+
+L’intention utilisateur peut être dégradée si nécessaire pour résoudre un conflict, un link ou une collision dure. Elle ne peut jamais déplacer du `played` ou du `locked`.
+
+### 4.10 Conditions d’arrêt et anti-oscillation
+
+Le resolver doit être borné et détecter les cycles.
+
+Constantes canoniques :
+
+```js
+const RESOLUTION_LIMITS = {
+  MAX_PASSES: 50,
+  MAX_REPAIRS_PER_PASS_MULTIPLIER: 4,
+  MAX_CANDIDATE_ROW_DISTANCE: 200
+}
+```
+
+Interprétation :
+
+```txt
+MAX_PASSES = nombre maximum de passes complètes links/conflicts/collisions.
+MAX_REPAIRS_PER_PASS = cards visibles * MAX_REPAIRS_PER_PASS_MULTIPLIER.
+MAX_CANDIDATE_ROW_DISTANCE = distance maximale explorée au-dessus/dessous d’une targetRow.
+```
+
+À chaque réparation, le resolver doit calculer un `layoutHash` stable basé sur :
+
+```txt
+cardId
+columnId
+resolvedRow
+fixed status
+linkGroupId actif
+conflict ids actifs pertinents
+```
+
+Règles d’arrêt :
+
+```txt
+- si aucune violation n’est trouvée : succès ;
+- si aucune réparation valide n’existe pour la violation prioritaire : warning ciblé puis arrêt propre ;
+- si MAX_PASSES est atteint : warning `resolver_max_passes_reached` ;
+- si MAX_REPAIRS_PER_PASS est atteint : warning `resolver_max_passes_reached` reason `max_repairs_per_pass_reached` ;
+- si le même layoutHash revient deux fois dans la même résolution : warning `resolver_cycle_detected` ;
+- si aucune candidateRow valide n’est trouvée dans MAX_CANDIDATE_ROW_DISTANCE : warning ciblé selon la violation en cours.
+```
+
+Le resolver ne doit jamais boucler indéfiniment et ne doit jamais produire un ordre non déterministe pour “sortir” d’un cycle.
+
+### 4.11 Règles pour colonnes hidden
+
+En V0, une colonne hidden est absente du tableau visible et ne participe pas au resolver visible.
+
+Règles canoniques :
+
+```txt
+- Les appearances/holes d’une colonne hidden ne sont pas supprimés de l’historique.
+- Les cards hidden ne sont pas incluses dans `buildVisibleCards`.
+- Les links impliquant au moins une card hidden sont ignorés pour l’alignement visible.
+- Les conflicts impliquant au moins une card hidden sont ignorés pour la séparation visible.
+- Les contraintes hidden ignorées doivent produire un warning `hidden_column_constraint_ignored` si elles empêchent de comprendre l’état visible ou si l’UI/admin demande les warnings détaillés.
+- Montrer à nouveau une colonne relance le resolver avec ses cards redevenues visibles.
+```
+
+Un instrument hidden ne doit jamais forcer une card visible à bouger. L’historique reste rejouable, mais la projection visible ignore les contraintes qui traversent une colonne masquée.
+
+### 4.12 Règles précises pour holes
+
+Un hole est une card ordonnable normale pour le resolver.
+
+Règles canoniques :
+
+```txt
+- Un hole occupe un vrai resolvedRow dans sa colonne.
+- Un hole peut être pushed comme une appearance mobile.
+- Un hole played est fixed.
+- Un hole locked est fixed.
+- Un hole peut être membre d’un link group seulement s’il a été créé par un flux explicite `jouer sans` ou drawer d’appel.
+- Un hole ne participe jamais aux conflicts automatiques `instrument_constraint` liés au même participant.
+- Un hole ne génère jamais d’appearance ou de hole futur.
+- Un hole supprimé retire uniquement le hole de la projection active et désactive/ignore les links qui le ciblent.
+```
+
+Un hole peut être impliqué dans un conflict manuel seulement si un event historique le cible déjà. En V0, l’UI ne doit pas proposer de créer un nouveau conflict manuel avec un hole sauf décision produit ultérieure.
+
+### 4.13 Règles précises pour `appearance_skipped`
+
+`appearance_skipped` est ponctuel et ne crée aucun état durable de présence.
+
+Règles canoniques :
+
+```txt
+1. Le skip cible une appearance précise.
+2. Si l’appearance est linked, le link qui la contient est supprimé ou désactivé pour cette appearance avant le déplacement.
+3. Le reste de l’ancien groupe linké reste actif et doit être réaligné sans l’appearance skippée si au moins deux targets restent.
+4. L’appearance skippée est repoussée seule vers le prochain slot valide de sa colonne.
+5. Le skip ne modifie pas les appearances futures de la participation.
+6. Le skip ne marque pas le participant `left`.
+7. Le skip ne peut jamais déplacer une card played ou locked.
+8. Si aucun slot valide n’existe sans casser une contrainte dure, produire un warning `skip_unresolvable` ou `column_collision_unresolvable` selon le cas.
+```
+
+Si un remplaçant est choisi depuis le drawer d’appel :
+
+```txt
+- le remplaçant prend le resolvedRow de l’appearance skippée si possible ;
+- l’appearance skippée est repoussée seule ;
+- si le remplaçant est linked, l’UI doit confirmer le délink ou annuler l’action ;
+- le resolver répare ensuite collisions, links restants et conflicts.
+```
+
+Si “faire sans musicien” est choisi :
+
+```txt
+- créer un hole à la place de l’appearance skippée ;
+- repousser l’appearance skippée seule ;
+- le hole peut être played/locked comme une card normale ;
+- aucun event dédié `play_without_created` n’est nécessaire.
+```
+
+### 4.14 Validations UI pré-transaction
+
+Le resolver reste défensif, mais l’UI doit empêcher les actions manifestement invalides avant de créer une transaction.
+
+Refus UI obligatoires :
+
+```txt
+- drag d’une appearance played ;
+- drag d’un hole played ;
+- drag d’une appearance locked ;
+- drag d’un hole locked ;
+- suppression d’une appearance played ;
+- suppression d’un hole played ;
+- link entre deux targets dans la même colonne visible ;
+- link entre deux targets déjà en conflict direct ;
+- conflict entre deux targets déjà dans le même link group ;
+- conflict entre deux cards fixed déjà sur le même resolvedRow ;
+- move horizontal qui change l’instrument d’une card ;
+- skip d’une appearance played ;
+- skip d’une appearance locked.
+```
+
+Confirmations UI obligatoires :
+
+```txt
+- masquer une colonne qui a des links actifs ;
+- supprimer une appearance future ;
+- supprimer un hole ;
+- supprimer une appearance ou un hole qui a un link actif ;
+- marquer `left` un participant avec appearances futures locked ;
+- choisir un remplaçant déjà linked dans le drawer d’appel.
+```
+
+Feedback minimal :
+
+```txt
+- refus immédiat : snackbar explicative ;
+- action destructive : dialog de confirmation ;
+- projectionWarning complexe : visible en debug/admin, pas forcément en UI organisateur.
+```
+
+### 4.15 Invariants de tests obligatoires
+
+Tous les tests du resolver doivent vérifier les invariants suivants quand ils s’appliquent.
+
+```txt
+1. Même event log + même snapshot + même config = même projection exacte.
+2. Aucune colonne visible ne contient deux cards sur le même resolvedRow final.
+3. Aucune appearance played ne change de resolvedRow après une transaction ultérieure.
+4. Aucun hole played ne change de resolvedRow après une transaction ultérieure.
+5. Aucune appearance locked ne change de resolvedRow tant qu’elle reste locked.
+6. Aucun hole locked ne change de resolvedRow tant qu’il reste locked.
+7. Aucun link résoluble ne reste désaligné.
+8. Aucun conflict résoluble ne reste sur le même resolvedRow.
+9. Tout link impossible produit un projectionWarning canonique.
+10. Tout conflict impossible produit un projectionWarning canonique.
+11. Les rounds peuvent être mélangés ; aucun test ne doit attendre un tri round-first.
+12. Une card pushed qui appartient à un link group propage sa priorité au groupe.
+13. Une suppression de link ne restaure pas un ancien ordre magique.
+14. Une suppression de conflict ne restaure pas un ancien ordre magique.
+15. Les columns hidden ne déplacent pas les cards visibles.
+16. Les holes sont traités comme des cards normales pour collisions, lock, played et links explicites.
+17. `appearance_skipped` repousse uniquement l’appearance ciblée.
+18. Le resolver retourne `resolver_cycle_detected` en cas d’oscillation détectée.
+19. Le resolver retourne `resolver_max_passes_reached` quand les limites sont atteintes.
+20. Aucun résultat ne dépend du DOM, de React, de Zustand, de Dexie, de `Date.now()` ou de `Math.random()`.
+21. Les égalités de scoring sont départagées par ordre précédent, ordre de création, puis id stable.
+22. `visualIndex` peut être compacté, mais les tests de contraintes utilisent toujours `resolvedRow`.
+```
 
 ---
 
@@ -757,17 +1050,22 @@ function resolveOrderAfterTransaction(state, context) {
 
 ### 8.3 Ordre de traitement des violations
 
-Le solver cherche les violations dans cet ordre :
+L’ordre canonique des passes est défini en section 4.9.
+
+Résumé opérationnel :
 
 ```txt
-1. collision dans une même colonne
-2. link désaligné
-3. conflict sur la même row
-4. intention de transaction non respectée
-5. instabilité excessive / mouvements inutiles
+1. résoudre les collisions de colonne ;
+2. résoudre les links désalignés ;
+3. résoudre à nouveau les collisions créées par les links ;
+4. résoudre les conflicts ;
+5. résoudre à nouveau les collisions créées par les conflicts ;
+6. répéter jusqu’à stabilité ou warning d’impossibilité.
 ```
 
 `played` et `locked` ne sont pas des violations à réparer. Ce sont des murs. Si une violation touche une card fixe, le solver tente de bouger les autres cards. Si toutes les cards concernées sont fixes, l’état est impossible.
+
+Les conditions d’arrêt, limites de passes et détection de cycle sont définies en section 4.10.
 
 ---
 
@@ -807,19 +1105,18 @@ B played row 5
 
 ### Cas 4 — aucune card fixe
 
-La row cible dépend de la stratégie copiée au moment de `link_created` :
+La row cible est choisie selon les règles canoniques de la section 4.8.
+
+Résumé :
 
 ```txt
-move_to_first
-move_to_last
-average_position
+1. une target avec priorité de propagation >= 500 peut devenir la référence du groupe ;
+2. sinon appliquer la stratégie enregistrée dans `link_created` : `move_to_first`, `move_to_last` ou `average_position` ;
+3. si la targetRow initiale est bloquée, tester les candidateRows alternatives par coût croissant ;
+4. si aucune candidateRow valide n’existe, produire un warning `link_unresolvable`.
 ```
 
-- `move_to_first` : row la plus haute des targets.
-- `move_to_last` : row la plus basse des targets.
-- `average_position` : moyenne des rows des targets, arrondie vers la row la plus haute en cas d’égalité.
-
-Si une target a été déplacée par la dernière action ou poussée par propagation, elle peut devenir la référence prioritaire du groupe pour cette passe.
+La stratégie de link est copiée dans l’event au moment de `link_created`. Modifier la configuration de jam plus tard ne réinterprète pas rétroactivement les anciens links.
 
 ---
 
@@ -928,15 +1225,13 @@ Même si une action ne semble rien déplacer, appeler le resolver doit être san
 
 ## 15. Validation avant transaction vs replay défensif
 
+La politique canonique complète est définie en sections 4.2 et 4.14.
+
 ### Avant transaction
 
-L’UI doit refuser une action manifestement impossible :
+L’UI doit refuser les actions manifestement impossibles : drag played/locked, skip played/locked, link même colonne, link avec conflict direct, conflict entre targets déjà linkées, conflict insoluble entre fixed déjà alignés, suppression de played, move horizontal.
 
-- déplacer une card played ;
-- déplacer une card locked ;
-- créer un link avec deux targets dans la même colonne ;
-- créer un link entre deux targets en conflict direct ;
-- créer un conflict impossible à résoudre entre deux cards fixes déjà alignées.
+Elle doit demander confirmation pour les actions destructives ou ambiguës : masquer une colonne liée, supprimer une appearance future, supprimer un hole, supprimer une target linkée, marquer `left` avec futures locked, choisir un remplaçant déjà linké.
 
 ### Pendant le replay
 
@@ -1032,7 +1327,7 @@ Supprimer une contrainte ne restaure pas un ancien ordre. Le solver repart de l�
 
 ## 17. Tests minimaux attendus
 
-Le moteur doit avoir des tests couvrant au minimum :
+Le moteur doit avoir des tests couvrant au minimum les scénarios suivants, plus les invariants obligatoires de la section 4.15.
 
 1. même event log rejoué deux fois → même projection exacte ;
 2. drag simple qui pousse une card mobile ;
@@ -1040,15 +1335,34 @@ Le moteur doit avoir des tests couvrant au minimum :
 4. propagation en chaîne `A pousse B`, `B link C`, `C pousse D`, `D link E` ;
 5. link aligné avec une target locked ;
 6. link impossible avec deux targets fixed sur des rows différentes ;
-7. conflict simple entre deux cards mobiles ;
-8. conflict où une card est locked ;
-9. conflict impossible entre deux cards fixed ;
-10. création de link refusée si conflict direct ;
-11. création de link refusée si deux targets dans la même colonne ;
-12. suppression de link ne provoquant pas un retour magique à l’ancien ordre ;
-13. suppression de conflict ne provoquant pas un retour magique à l’ancien ordre ;
-14. reveal round puis résolution par solver ;
-15. mélange de rounds autorisé si nécessaire ;
-16. played empêchant toute modification de sa position ;
-17. locked empêchant toute modification de sa position ;
-18. undo/redo linéaire puis replay cohérent.
+7. link `move_to_first` choisissant la row la plus haute ;
+8. link `move_to_last` choisissant la row la plus basse ;
+9. link `average_position` avec arrondi canonique ;
+10. link targetRow bloquée par une card fixed puis candidateRow alternative ;
+11. conflict simple entre deux cards mobiles ;
+12. conflict où une card est locked ;
+13. conflict impossible entre deux cards fixed ;
+14. création de link refusée si conflict direct ;
+15. création de link refusée si deux targets dans la même colonne ;
+16. création de conflict refusée si les targets sont déjà dans le même link group ;
+17. suppression de link ne provoquant pas un retour magique à l’ancien ordre ;
+18. suppression de conflict ne provoquant pas un retour magique à l’ancien ordre ;
+19. reveal round puis résolution par solver ;
+20. mélange de rounds autorisé si nécessaire ;
+21. played empêchant toute modification de sa position ;
+22. locked empêchant toute modification de sa position ;
+23. hidden column ignorée par le resolver visible ;
+24. réaffichage d’une hidden column relançant une résolution stable ;
+25. hole mobile traité comme une card normale ;
+26. hole played/locked immobile ;
+27. hole de `jouer sans` membre d’un link group explicite ;
+28. `appearance_skipped` délinkant puis repoussant uniquement l’appearance ciblée ;
+29. skip avec remplaçant déjà linked nécessitant confirmation UI ;
+30. collision entre deux cards mobiles : garde la plus prioritaire et pousse vers le slot valide le plus proche ;
+31. collision avec une card fixed : la fixed garde sa row ;
+32. cycle détecté avec warning `resolver_cycle_detected` ;
+33. max passes atteint avec warning `resolver_max_passes_reached` ;
+34. `projectionWarnings` produits au format standard ;
+35. `resolvedRow` stable pour played/locked malgré normalisation `visualIndex` ;
+36. score égal départagé par ordre précédent, ordre de création, puis id ;
+37. undo/redo linéaire puis replay cohérent.
