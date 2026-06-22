@@ -16,11 +16,11 @@ describe('buildCardActionTransaction', () => {
 
 
 
-  it('refuses remove and move transactions for locked or played cards', () => {
-    expect(buildRemoveCardTransaction({ ...base, card: { type: 'appearance', id: 'appearance_locked', locked: true }, linked: false })).toBeNull();
-    expect(buildRemoveCardTransaction({ ...base, card: { type: 'hole', id: 'hole_played', played: true }, linked: false })).toBeNull();
-    expect(buildMoveCardTransaction({ ...base, card: { type: 'appearance', id: 'appearance_played', played: true }, instrumentId: 'instrument_guitar' })).toBeNull();
-    expect(buildMoveCardTransaction({ ...base, card: { type: 'hole', id: 'hole_locked', locked: true }, instrumentId: 'instrument_guitar' })).toBeNull();
+  it('leaves locked/played business refusals to centralized pre-apply validation', () => {
+    expect(buildRemoveCardTransaction({ ...base, card: { type: 'appearance', id: 'appearance_locked', locked: true }, linked: false }).events[0]).toMatchObject({ type: 'appearance_removed' });
+    expect(buildRemoveCardTransaction({ ...base, card: { type: 'hole', id: 'hole_played', played: true }, linked: false }).events[0]).toMatchObject({ type: 'hole_removed' });
+    expect(buildMoveCardTransaction({ ...base, card: { type: 'appearance', id: 'appearance_played', played: true }, instrumentId: 'instrument_guitar' }).events[0]).toMatchObject({ type: 'appearance_moved_between' });
+    expect(buildMoveCardTransaction({ ...base, card: { type: 'hole', id: 'hole_locked', locked: true }, instrumentId: 'instrument_guitar' }).events[0]).toMatchObject({ type: 'hole_moved_between' });
   });
 
   it('creates vertical move events for the moved target only', () => {

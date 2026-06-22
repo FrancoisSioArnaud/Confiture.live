@@ -4,6 +4,8 @@ export function addHole(state, payload) {
   const after = payload.afterTarget ? getTargetEntity(state, payload.afterTarget) : null;
   const before = payload.beforeTarget ? getTargetEntity(state, payload.beforeTarget) : null;
   const positionInRound = orderBetween(after, before, getEntityOrder({ positionKey: payload.positionKey }));
+  const targetResolvedRow = payload.targetResolvedRow ?? null;
+  const preferredResolvedRow = payload.preferredResolvedRow ?? targetResolvedRow;
   state.holes[payload.holeId] = {
     id: payload.holeId,
     holeId: payload.holeId,
@@ -15,6 +17,9 @@ export function addHole(state, payload) {
     played: false,
     locked: false,
     positionKey: payload.positionKey,
+    targetResolvedRow,
+    preferredResolvedRow,
+    resolvedRow: targetResolvedRow ?? preferredResolvedRow ?? null,
     positionInRound,
     roundOrder: positionInRound,
     orderScore: payload.appearanceIndex * 1_000_000 + positionInRound,

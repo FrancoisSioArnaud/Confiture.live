@@ -3,7 +3,7 @@ import { addHole, getTargetEntity } from './holes';
 import { addLink, removeLink } from './links';
 import { setLock } from './locks';
 import { stableOrderValue } from './ordering';
-import { setPlayed } from './played';
+import { playedRowFromPayload, setPlayed, targetsPlayedAtResolvedRow } from './played';
 import { addProjectionWarning } from './projectionWarnings';
 import { ensureVisibleRoundCount } from './rounds';
 
@@ -86,15 +86,15 @@ export function applyEvent(state, event) {
       removeAppearance(state, payload.appearanceId, payload);
       break;
     case 'appearance_locked':
-      setLock(state, { type: 'appearance', id: payload.appearanceId }, true);
-      if (state.appearances[payload.appearanceId]) state.appearances[payload.appearanceId].locked = true;
+      lockCard(state, { type: 'appearance', id: payload.appearanceId }, payload);
       break;
     case 'appearance_unlocked':
       setLock(state, { type: 'appearance', id: payload.appearanceId }, false);
       if (state.appearances[payload.appearanceId]) state.appearances[payload.appearanceId].locked = false;
+      else addProjectionWarning(state, 'invalid_action_replayed', 'appearance_unlocked targets a missing appearance.', payload);
       break;
     case 'appearance_skipped':
-      if (state.appearances[payload.appearanceId]) state.appearances[payload.appearanceId].skippedAtPlateauIndex = payload.originalPlateauIndex;
+      markAppearanceSkipped(state, payload);
       payload.removedLinkIds?.forEach((linkId) => removeLink(state, linkId));
       break;
     case 'hole_added':
@@ -110,12 +110,12 @@ export function applyEvent(state, event) {
       recordManualMoveIntent(state, event, { type: 'hole', id: payload.holeId }, payload);
       break;
     case 'hole_locked':
-      setLock(state, { type: 'hole', id: payload.holeId }, true);
-      if (state.holes[payload.holeId]) state.holes[payload.holeId].locked = true;
+      lockCard(state, { type: 'hole', id: payload.holeId }, payload);
       break;
     case 'hole_unlocked':
       setLock(state, { type: 'hole', id: payload.holeId }, false);
       if (state.holes[payload.holeId]) state.holes[payload.holeId].locked = false;
+      else addProjectionWarning(state, 'invalid_action_replayed', 'hole_unlocked targets a missing hole.', payload);
       break;
     case 'link_created':
       addLink(state, payload);
@@ -129,13 +129,18 @@ export function applyEvent(state, event) {
     case 'conflict_removed':
       removeConflict(state, payload.conflictId);
       break;
-    case 'plateau_played':
-      payload.targets.forEach((target) => setPlayed(state, target, true, payload.plateauIndex));
+    case 'plateau_played': {
+      const resolvedRow = playedRowFromPayload(payload) ?? payload.plateauIndex ?? 1;
+      payload.targets.forEach((target) => setPlayed(state, target, true, resolvedRow));
       break;
+    }
     case 'plateau_unplayed': {
-      const lastPlayedPlateau = Math.max(...Object.keys(state.playedPlateaux).map(Number));
-      if (payload.plateauIndex === lastPlayedPlateau) payload.targets.forEach((target) => setPlayed(state, target, false, payload.plateauIndex));
-      else addProjectionWarning(state, 'non_last_plateau_unplayed_ignored', 'plateau_unplayed ignored because only the latest played plateau can be unplayed in V0.', payload);
+      const resolvedRow = playedRowFromPayload(payload) ?? payload.plateauIndex ?? 1;
+      const explicitTargets = payload.targets ?? [];
+      const targets = explicitTargets.length > 0
+        ? explicitTargets
+        : targetsPlayedAtResolvedRow(state, resolvedRow).map((entity) => ({ type: entity.type, id: entity.id }));
+      targets.forEach((target) => setPlayed(state, target, false, resolvedRow));
       break;
     }
     case 'transaction_reverted':
@@ -225,6 +230,40 @@ function markParticipant(state, participantId, status, eventId) {
       }
     }
   });
+}
+
+function lockCard(state, target, payload = {}) {
+  const entity = getTargetEntity(state, target);
+  if (!entity) {
+    addProjectionWarning(state, 'invalid_action_replayed', `${target.type}_locked targets a missing card.`, payload);
+    return;
+  }
+  const resolvedRow = payload.preferredResolvedRow ?? entity.resolvedRow ?? null;
+  setLock(state, target, true);
+  entity.locked = true;
+  if (Number.isFinite(resolvedRow)) {
+    entity.lockedResolvedRow = resolvedRow;
+    entity.preferredResolvedRow = resolvedRow;
+    entity.resolvedRow = resolvedRow;
+  }
+}
+
+function markAppearanceSkipped(state, payload = {}) {
+  const appearance = state.appearances[payload.appearanceId];
+  if (!appearance) {
+    addProjectionWarning(state, 'missing_appearance', 'appearance_skipped targets a missing appearance.', payload);
+    return;
+  }
+  appearance.skipped = true;
+  appearance.skippedResolvedRow =
+    payload.targetResolvedRow ??
+    payload.preferredResolvedRow ??
+    appearance.resolvedRow ??
+    null;
+  // Legacy migration-only payload. Kept for replay/debug but never used as
+  // canonical resolver truth; resolvedRow fields above are authoritative.
+  if (payload.originalPlateauIndex !== undefined)
+    appearance.legacyOriginalPlateauIndex = payload.originalPlateauIndex;
 }
 
 function recordManualMoveIntent(state, _event, target, payload) {

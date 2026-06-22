@@ -55,4 +55,33 @@ describe('buildTableActionTransaction', () => {
     });
   });
 
+  it('converts global visualIndex to resolvedRow before building plateau_played', () => {
+    const projection = {
+      visibleResolvedRows: [2, 7],
+      columns: [
+        {
+          instrument: { instrumentId: 'instrument_vocals', label: 'Chant' },
+          cards: [{ id: 'appearance_b', type: 'appearance', instrumentId: 'instrument_vocals', appearanceIndex: 1, resolvedRow: 7, visualIndex: 2 }],
+        },
+      ],
+    };
+    const transaction = buildTogglePlateauPlayedTransaction({
+      jamId: 'jam_1',
+      clientId: 'client_1',
+      clientSequenceNumber: 4,
+      plateauIndex: 99,
+      visualIndex: 2,
+      played: false,
+      projection,
+    });
+
+    expect(transaction.events[0].payload).toMatchObject({
+      plateauIndex: 99,
+      visualIndex: 2,
+      playedResolvedRow: 7,
+      targetResolvedRow: 7,
+      targets: [{ type: 'appearance', id: 'appearance_b' }],
+    });
+  });
+
 });

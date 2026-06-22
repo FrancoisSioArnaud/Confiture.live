@@ -315,6 +315,31 @@ describe("buildTransactionContext", () => {
     ]);
   });
 
+  it("derives skip context from skippedCardId/resolvedRow and treats originalPlateauIndex as legacy metadata only", () => {
+    const context = buildTransactionContext(
+      BASE_STATE,
+      tx(EVENT_TYPES.APPEARANCE_SKIPPED, {
+        appearanceId: "appearance_a",
+        originalPlateauIndex: 99,
+        replacement: { mode: "hole", holeId: "hole_a" },
+        removedLinkIds: ["link_a_hole"],
+      }),
+    );
+
+    expect(context).toMatchObject({
+      intent: "skip",
+      anchorCardId: "appearance_a",
+      skippedCardId: "appearance_a",
+      preferredResolvedRow: 4,
+      affectedCardIds: ["appearance_a", "hole_a"],
+      removedLinkIds: ["link_a_hole"],
+    });
+    expect(context.metadata).toMatchObject({
+      skippedResolvedRow: 4,
+      legacyOriginalPlateauIndex: 99,
+    });
+  });
+
   it("uses playedResolvedRow for plateau_played and ignores local plateauIndex", () => {
     const context = buildTransactionContext(
       BASE_STATE,

@@ -60,8 +60,23 @@ export function buildLinkGroups({
   });
   const groups = [...byRoot.values()]
     .filter((ids) => ids.length > 1)
-    .map((cardIds) => ({
-      cardIds: cardIds.sort((a, b) => a.localeCompare(b)),
-    }));
+    .map((cardIds) => {
+      const sortedCardIds = cardIds.sort((a, b) => a.localeCompare(b));
+      const groupLinks = usableLinks.filter((link) =>
+        (link.targetCardIds ?? []).some((cardId) =>
+          sortedCardIds.includes(cardId),
+        ),
+      );
+      return {
+        cardIds: sortedCardIds,
+        linkIds: groupLinks
+          .map((link) => link.linkId)
+          .sort((a, b) => String(a).localeCompare(String(b))),
+        reorderStrategy:
+          groupLinks.sort((a, b) =>
+            String(a.linkId).localeCompare(String(b.linkId)),
+          )[0]?.reorderStrategy ?? "move_to_first",
+      };
+    });
   return { groups, links: usableLinks, warnings };
 }

@@ -58,37 +58,10 @@ function cardResolvedRow(card) {
   return card?.resolvedRow ?? null;
 }
 
-function visualRowsForProjection(projection, columns) {
-  const cardRows = columns
-    .flatMap((column) => column.cards ?? [])
-    .map(cardResolvedRow)
-    .filter(Number.isFinite);
-  const resolvedRows = (projection?.visibleResolvedRows?.length ? projection.visibleResolvedRows : [...new Set(cardRows)].sort((a, b) => a - b));
-  if (resolvedRows.length === 0) {
-    const maxRows = Math.max(1, ...columns.map((column) => column.cards?.length ?? 0));
-    return Array.from({ length: maxRows }, (_, index) => ({
-      visualIndex: index + 1,
-      plateauIndex: index,
-      resolvedRow: index + 1,
-      cells: columns.map((column) => ({ column, card: column.cards?.[index] ?? null })),
-    }));
-  }
-  return resolvedRows.map((resolvedRow, index) => {
-    const visualIndex = index + 1;
-    return {
-      visualIndex,
-      plateauIndex: index,
-      resolvedRow,
-      cells: columns.map((column) => ({
-        column,
-        card: (column.cards ?? []).find((card) => cardResolvedRow(card) === resolvedRow) ?? null,
-      })),
-    };
-  });
-}
-
-function cardsForVisualRow(row) {
-  return row.cells.map(({ card }) => card).filter(Boolean);
+function cardsForVisualRow(row, columns) {
+  return columns
+    .map((column) => column.rows?.find((candidate) => candidate.visualIndex === row.visualIndex)?.card)
+    .filter(Boolean);
 }
 
 function cardTitle(card, projection) {
@@ -308,7 +281,7 @@ function ModeActionBar({ mode, selectedCount, canValidate, onCancel, onValidate 
   );
 }
 
-function PlateauRail({ rows, projection, onOpenCallDrawer, onTogglePlateauPlayed }) {
+function PlateauRail({ rows, columns, projection, onOpenCallDrawer, onTogglePlateauPlayed }) {
   return (
     <Box sx={{ minWidth: 132, flex: '0 0 132px', position: { sm: 'sticky' }, left: 0, zIndex: 1, bgcolor: 'background.paper' }}>
       <Stack spacing={0} sx={{ height: '100%' }}>
@@ -317,7 +290,7 @@ function PlateauRail({ rows, projection, onOpenCallDrawer, onTogglePlateauPlayed
         </Box>
         <Stack spacing={1}>
           {rows.map((row) => {
-            const targets = cardsForVisualRow(row).map(targetFor).filter(Boolean);
+            const targets = cardsForVisualRow(row, columns).map(targetFor).filter(Boolean);
             const played = targets.length > 0 && targets.every((target) => (target.type === 'appearance' ? projection.appearances[target.id]?.played : projection.holes[target.id]?.played));
             return (
               <Box key={row.visualIndex} sx={{ height: TABLE_ROW_HEIGHT, display: 'flex', alignItems: 'stretch' }}>
@@ -355,10 +328,16 @@ function CallDrawer({ open, visualIndex, projection, jamId, clientId, clientSequ
   const [missingCard, setMissingCard] = useState(null);
   const [pendingDelinkAction, setPendingDelinkAction] = useState(null);
   const columns = projection?.columns ?? [];
-  const row = visualRowsForProjection(projection, columns).find((candidate) => candidate.visualIndex === visualIndex) ?? null;
+  const row = columns[0]?.rows?.find((candidate) => candidate.visualIndex === visualIndex) ?? null;
   const resolvedRow = row?.resolvedRow ?? visualIndex;
-  const rowCards = row?.cells ?? columns.map((column) => ({ column, card: null }));
-  const targets = rowCards.map(({ card }) => targetFor(card)).filter(Boolean);
+  const targets = columns
+    .map((column) => column.rows?.find((candidate) => candidate.visualIndex === visualIndex)?.card)
+    .map((card) => targetFor(card))
+    .filter(Boolean);
+  const rowCards = columns.map((column) => ({
+    column,
+    card: column.rows?.find((candidate) => candidate.visualIndex === visualIndex)?.card ?? null,
+  }));
   const alreadyPlayed = targets.length > 0 && targets.every((target) => (target.type === 'appearance' ? projection.appearances[target.id]?.played : projection.holes[target.id]?.played));
   const replacementCandidates = missingCard ? replacementCandidatesForCallDrawer({ projection, sourceCard: missingCard, visualIndex, resolvedRow }) : [];
   const missingCardLinked = missingCard ? cardLinks(missingCard, projection.links).length > 0 : false;
@@ -535,7 +514,7 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
   const presentedLinkMode = linkMode.active ? { ...linkMode, selectedInstrumentIds: linkSelectedInstrumentIds } : linkMode;
   const presentedConflictMode = conflictMode.active ? { ...conflictMode, selectedIds: conflictSelectedIds, selectedInstrumentIds: conflictSelectedInstrumentIds } : conflictMode;
   const hasCards = columns.some((column) => column.cards.length > 0);
-  const rows = visualRowsForProjection(projection, columns);
+  const rows = columns[0]?.rows ?? [];
 
   function dispatch(transaction) {
     if (transaction) onTransaction?.(transaction);
@@ -545,21 +524,21 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
     dispatch(buildRevealRoundTransaction({ jamId, clientId, clientSequenceNumber, instrumentId: column.instrument.instrumentId, visibleRoundCount: (column.visibleRoundCount ?? 1) + 1 }));
   }
 
-  function latestPlayedPlateauIndex() {
-    const playedIndexes = Object.keys(projection.playedPlateaux ?? {}).map(Number);
-    return playedIndexes.length > 0 ? Math.max(...playedIndexes) : null;
+  function latestPlayedResolvedRow() {
+    const playedRows = Object.keys(projection.playedRows ?? projection.playedPlateaux ?? {}).map(Number);
+    return playedRows.length > 0 ? Math.max(...playedRows) : null;
   }
 
   function togglePlateauPlayed(row, targets, played) {
     if (played) {
-      if (latestPlayedPlateauIndex() !== row.plateauIndex) {
+      if (latestPlayedResolvedRow() !== row.resolvedRow) {
         onFeedback?.('Plateau unplayed impossible : seul le dernier plateau joué peut être annulé');
         return;
       }
       setConfirmState({ kind: 'plateau-unplayed', row, targets, title: 'Remettre ce plateau à venir ?', description: 'Seul le dernier plateau joué peut être remis à venir. Les positions des cards seront conservées.', confirmLabel: 'Remettre à venir' });
       return;
     }
-    dispatch(buildTogglePlateauPlayedTransaction({ jamId, clientId, clientSequenceNumber, plateauIndex: row.plateauIndex, visualIndex: row.visualIndex, playedResolvedRow: row.resolvedRow, targets, played, projection }));
+    dispatch(buildTogglePlateauPlayedTransaction({ jamId, clientId, clientSequenceNumber, plateauIndex: row.visualIndex - 1, visualIndex: row.visualIndex, playedResolvedRow: row.resolvedRow, targets, played, projection }));
   }
 
   function toggleLock(card) {
@@ -624,7 +603,7 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
       onFeedback?.('Participant supprimé');
     }
     if (kind === 'plateau-unplayed') {
-      dispatch(buildTogglePlateauPlayedTransaction({ jamId, clientId, clientSequenceNumber, plateauIndex: confirmState.row.plateauIndex, visualIndex: confirmState.row.visualIndex, playedResolvedRow: confirmState.row.resolvedRow, targets: confirmState.targets, played: true, projection }));
+      dispatch(buildTogglePlateauPlayedTransaction({ jamId, clientId, clientSequenceNumber, plateauIndex: confirmState.row.visualIndex - 1, visualIndex: confirmState.row.visualIndex, playedResolvedRow: confirmState.row.resolvedRow, targets: confirmState.targets, played: true, projection }));
       onFeedback?.('Plateau remis à venir');
     }
     setConfirmState(null);
@@ -831,7 +810,7 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <Box sx={{ overflowX: 'auto', pb: 2 }}>
           <Stack direction="row" spacing={1.25} alignItems="stretch" sx={{ minHeight: 360, width: 'max-content', pr: 1 }}>
-            <PlateauRail rows={rows} projection={projection} onOpenCallDrawer={(visualIndex) => { setOpenVisualIndex(visualIndex); onOpenCallDrawer?.(visualIndex); }} onTogglePlateauPlayed={togglePlateauPlayed} />
+            <PlateauRail rows={rows} columns={columns} projection={projection} onOpenCallDrawer={(visualIndex) => { setOpenVisualIndex(visualIndex); onOpenCallDrawer?.(visualIndex); }} onTogglePlateauPlayed={togglePlateauPlayed} />
             {columns.map((column) => {
               return (
                 <Box key={column.instrument.instrumentId} sx={{ width: { xs: 236, sm: 272 }, flex: '0 0 auto' }}>
@@ -841,8 +820,8 @@ export function JamTable({ projection, clientId, clientSequenceNumber, onTransac
                     </Box>
                     <SortableContext items={column.cards.map((card) => card.id)} strategy={verticalListSortingStrategy}>
                       <Stack spacing={1}>
-                        {rows.map((row) => {
-                          const card = row.cells.find((cell) => cell.column.instrument.instrumentId === column.instrument.instrumentId)?.card ?? null;
+                        {(column.rows ?? []).map((row) => {
+                          const card = row.card;
                           return (
                             <Box key={`${column.instrument.instrumentId}-${row.visualIndex}`} sx={{ height: TABLE_ROW_HEIGHT, display: 'flex', alignItems: 'stretch', width: '100%' }}>
                               {card ? (

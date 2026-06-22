@@ -76,11 +76,26 @@ function normalizeWarnings(warnings) {
   );
 }
 
+function stripLayoutMetadata(layoutByCardId) {
+  return Object.fromEntries(
+    Object.entries(layoutByCardId).map(([cardId, layout]) => [
+      cardId,
+      {
+        resolvedRow: layout.resolvedRow,
+        visualIndex: layout.visualIndex,
+        cardIndexInColumn: layout.cardIndexInColumn,
+      },
+    ]),
+  );
+}
+
 describe("order resolution golden fixture outputs against the new resolver", () => {
   ORDER_RESOLUTION_GOLDEN_FIXTURES.forEach((fixture) => {
     it(`${fixture.name} matches canonical output`, () => {
       const result = resolveOrderAfterTransactionV2(fixture.input);
-      expect(result.layoutByCardId).toEqual(fixture.expected.layoutByCardId);
+      expect(stripLayoutMetadata(result.layoutByCardId)).toEqual(
+        fixture.expected.layoutByCardId,
+      );
       expect(result.orderedCardIdsByColumnId).toEqual(
         fixture.expected.orderedCardIdsByColumnId,
       );

@@ -37,6 +37,15 @@ export const RESOLVER_WARNING_CATALOG = Object.freeze([
     message: "Un link cible une card absente.",
   }),
   Object.freeze({
+    type: "link_unresolvable",
+    reason: "link_target_blocked_by_fixed_card",
+    severity: "warning",
+    fatal: false,
+    continueRepairs: true,
+    message:
+      "Impossible d’aligner ce link : toutes les lignes candidates sont bloquées par une card fixe.",
+  }),
+  Object.freeze({
     type: "conflict_unresolvable",
     reason: "conflicted_cards_fixed_on_same_row",
     severity: "warning",

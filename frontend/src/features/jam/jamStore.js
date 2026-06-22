@@ -1,11 +1,21 @@
 import { createStore } from 'zustand/vanilla';
 import { projectJamState } from '../projection/projectJamState';
+import { validateTransactionBeforeApply } from '../projection/resolver/validateTransactionBeforeApply';
 import { getLatestLocalSnapshot, getLocalTransactions, getPendingTransactions, markTransactionSynced, saveLocalJam, saveLocalTransaction, saveSnapshot, saveSyncState } from '../sync/localDb';
 import { enqueueTransaction, hydrateFromServer as hydrateTransactionsFromServer, pushPendingTransactions, scheduleSync } from '../sync/syncQueue';
 import { setSyncStatus, SYNC_STATUS } from '../sync/syncStatus';
 
 function flattenEvents(transactions) {
   return transactions.flatMap((transaction) => transaction.events ?? []);
+}
+
+function transactionValidationError(validation) {
+  const error = new Error(validation.message ?? 'Transaction refusée.');
+  error.name = 'TransactionValidationError';
+  error.validation = validation;
+  error.reason = validation.reason;
+  error.details = validation.details ?? {};
+  return error;
 }
 
 async function rebuildFromLocal(jamId) {
@@ -56,9 +66,16 @@ export const jamStore = createStore((set, get) => ({
   projection: projectJamState(),
   projectionWarnings: [],
   lastProjectedAt: null,
+  lastTransactionError: null,
 
   async applyLocalTransaction(transaction, { sync = true, api } = {}) {
     const jamId = transaction.jamId;
+    const validation = validateTransactionBeforeApply(get().projection, transaction);
+    if (!validation.ok) {
+      const error = transactionValidationError(validation);
+      set({ lastTransactionError: validation });
+      throw error;
+    }
     await enqueueTransaction({ jamId, transaction });
     const rebuilt = await rebuildFromLocal(jamId);
     set({
@@ -66,6 +83,7 @@ export const jamStore = createStore((set, get) => ({
       ...rebuilt,
       projectionWarnings: rebuilt.projection.projectionWarnings,
       lastProjectedAt: new Date().toISOString(),
+      lastTransactionError: null,
     });
     if (sync) scheduleSync({ jamId, api });
     return rebuilt.projection;

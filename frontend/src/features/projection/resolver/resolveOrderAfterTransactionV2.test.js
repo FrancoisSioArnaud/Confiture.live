@@ -14,6 +14,19 @@ function fixture(name) {
   return ORDER_RESOLUTION_GOLDEN_FIXTURES.find((item) => item.name === name);
 }
 
+function stripLayoutMetadata(layoutByCardId) {
+  return Object.fromEntries(
+    Object.entries(layoutByCardId).map(([cardId, layout]) => [
+      cardId,
+      {
+        resolvedRow: layout.resolvedRow,
+        visualIndex: layout.visualIndex,
+        cardIndexInColumn: layout.cardIndexInColumn,
+      },
+    ]),
+  );
+}
+
 describe("resolver V2 helpers", () => {
   it("compareResolverEntities sorts by previous row, creation order, then card id", () => {
     expect(
@@ -51,7 +64,13 @@ describe("resolver V2 helpers", () => {
       hiddenColumnIds: ["instrument_hidden"],
       transactionContext: { transactionId: "tx" },
     });
-    expect(result.groups).toEqual([{ cardIds: ["a", "b"] }]);
+    expect(result.groups).toEqual([
+      {
+        cardIds: ["a", "b"],
+        linkIds: ["link_ab"],
+        reorderStrategy: "move_to_first",
+      },
+    ]);
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toMatchObject({
       type: "hidden_column_constraint_ignored",
@@ -151,7 +170,9 @@ describe("resolveOrderAfterTransactionV2", () => {
   ])("matches %s", (name) => {
     const item = fixture(name);
     const result = resolveOrderAfterTransactionV2(item.input);
-    expect(result.layoutByCardId).toEqual(item.expected.layoutByCardId);
+    expect(stripLayoutMetadata(result.layoutByCardId)).toEqual(
+      item.expected.layoutByCardId,
+    );
     expect(result.orderedCardIdsByColumnId).toEqual(
       item.expected.orderedCardIdsByColumnId,
     );

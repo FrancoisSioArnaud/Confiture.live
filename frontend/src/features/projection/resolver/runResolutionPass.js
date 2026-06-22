@@ -1,5 +1,7 @@
 import { createResolverWarning } from "./resolverWarnings";
 import { compareLayoutEntries } from "./compareResolverEntities";
+import { RESOLUTION_COST } from "./resolverCosts";
+import { PROPAGATION_PRIORITY } from "./resolverPriorities";
 
 export const RESOLUTION_LIMITS = Object.freeze({
   MAX_PASSES: 50,
@@ -99,7 +101,101 @@ function moveWithinColumnToRow(layout, entry, targetRow) {
   return { moved: true, displaced };
 }
 
-function repairCollisions(layout, conflicts) {
+function setPriority(priorityRows, cardId, row, priority) {
+  const current = priorityRows.get(cardId);
+  if (
+    !current ||
+    priority > current.priority ||
+    (priority === current.priority && row < current.row)
+  )
+    priorityRows.set(cardId, { row, priority });
+}
+
+function priorityFor(priorityRows, cardId) {
+  return priorityRows.get(cardId);
+}
+
+function scoreGroupTarget(entries, targetRow, priorityRows) {
+  return entries.reduce((score, entry) => {
+    if (entry.fixed && entry.resolvedRow !== targetRow)
+      return RESOLUTION_COST.IMPOSSIBLE;
+    const distance = Math.abs(entry.resolvedRow - targetRow);
+    const entryPriority = priorityFor(priorityRows, entry.cardId);
+    const priority = entryPriority?.priority ?? 0;
+    const priorityBonus =
+      entryPriority?.row === targetRow
+        ? priority * RESOLUTION_COST.ROW_DISTANCE
+        : 0;
+    const secondary =
+      priority >= PROPAGATION_PRIORITY.USER_MOVE
+        ? 0
+        : RESOLUTION_COST.MOVE_SECONDARY_CARD;
+    const inversion =
+      (entry.previousResolvedRow ?? entry.resolvedRow) > targetRow
+        ? RESOLUTION_COST.RELATIVE_ORDER_INVERSION
+        : 0;
+    return (
+      score +
+      distance * RESOLUTION_COST.ROW_DISTANCE +
+      secondary +
+      inversion +
+      RESOLUTION_COST.MOVE_LINK_GROUP -
+      priorityBonus
+    );
+  }, 0);
+}
+
+function fixedBlockerAtRow(layout, entry, row) {
+  return entriesByColumn(layout, entry.columnId).find(
+    (candidate) =>
+      candidate.cardId !== entry.cardId &&
+      candidate.fixed &&
+      candidate.resolvedRow === row,
+  );
+}
+
+function groupDesiredRows(entries, targetRow) {
+  const sortedEntries = [...entries].sort(compareLayoutEntries);
+  const hasDuplicateColumn =
+    new Set(sortedEntries.map((entry) => entry.columnId)).size <
+    sortedEntries.length;
+  return new Map(
+    sortedEntries.map((entry, index) => [
+      entry.cardId,
+      hasDuplicateColumn ? targetRow + index : targetRow,
+    ]),
+  );
+}
+
+function canPlaceGroupAtRow(layout, entries, targetRow) {
+  const desiredRows = groupDesiredRows(entries, targetRow);
+  return entries.every((entry) => {
+    const desiredRow = desiredRows.get(entry.cardId);
+    if (entry.fixed) return entry.resolvedRow === desiredRow;
+    return !fixedBlockerAtRow(layout, entry, desiredRow);
+  });
+}
+
+function candidateRowsNearestFirst(preferredRow) {
+  const start = Math.max(1, preferredRow);
+  const rows = [];
+  for (
+    let distance = 0;
+    distance <= RESOLUTION_LIMITS.MAX_CANDIDATE_ROW_DISTANCE;
+    distance += 1
+  ) {
+    if (distance === 0) {
+      rows.push(start);
+      continue;
+    }
+    rows.push(start + distance);
+    if (start - distance >= 1) rows.push(start - distance);
+  }
+  return rows;
+}
+
+function repairCollisions(layout, conflicts, transactionContext = {}) {
+  const warnings = [];
   let repairCount = 0;
   allColumnIds(layout).forEach((columnId) => {
     const byRow = new Map();
@@ -109,6 +205,23 @@ function repairCollisions(layout, conflicts) {
     });
     [...byRow.values()].forEach((entries) => {
       if (entries.length < 2) return;
+      const fixedEntries = entries
+        .filter((entry) => entry.fixed)
+        .sort(compareLayoutEntries);
+      if (fixedEntries.length > 1) {
+        warnings.push(
+          createResolverWarning(
+            "column_collision_unresolvable",
+            "same_column_collision_with_fixed_cards",
+            {
+              transactionId: transactionContext.transactionId,
+              cardIds: fixedEntries.map((entry) => entry.cardId),
+              columnIds: [columnId],
+            },
+          ),
+        );
+        return;
+      }
       const keep =
         entries.find((entry) => entry.fixed) ??
         entries.sort(compareLayoutEntries)[0];
@@ -120,20 +233,20 @@ function repairCollisions(layout, conflicts) {
         });
     });
   });
-  return repairCount;
+  return { repairCount, warnings };
 }
 
 function repairLinks(
   layout,
-  links,
+  linkGroups,
   conflicts,
   transactionContext,
   priorityRows,
 ) {
   const warnings = [];
   let repairCount = 0;
-  links.forEach((link) => {
-    const entries = (link.targetCardIds ?? [])
+  linkGroups.forEach((group) => {
+    const entries = (group.cardIds ?? [])
       .map((id) => layout[id])
       .filter(Boolean);
     if (entries.length < 2) return;
@@ -149,39 +262,85 @@ function repairLinks(
         createResolverWarning(
           "link_unresolvable",
           "linked_cards_fixed_on_different_rows",
+            {
+              transactionId: transactionContext.transactionId,
+              cardIds: entries.map((entry) => entry.cardId),
+              linkIds: group.linkIds ?? [],
+            },
+          ),
+        );
+      return;
+    }
+    const candidates = new Set(fixedRows);
+    entries.forEach((entry) => {
+      const priority = priorityFor(priorityRows, entry.cardId);
+      if (priority) candidates.add(priority.row);
+      candidates.add(entry.resolvedRow);
+    });
+    let targetRow = fixedRows[0];
+    if (!Number.isFinite(targetRow)) {
+      const rows = entries.map((entry) => entry.resolvedRow);
+      if (group.reorderStrategy === "move_to_last")
+        candidates.add(Math.max(...rows));
+      else if (group.reorderStrategy === "average_position")
+        candidates.add(
+          Math.round(rows.reduce((sum, row) => sum + row, 0) / rows.length),
+        );
+      else candidates.add(Math.min(...rows));
+      targetRow = [...candidates]
+        .filter(Number.isFinite)
+        .map((row) => Math.max(1, row))
+        .sort((a, b) => {
+          const score =
+            scoreGroupTarget(entries, a, priorityRows) -
+            scoreGroupTarget(entries, b, priorityRows);
+          if (score !== 0) return score;
+          return a - b;
+        })[0];
+    }
+    targetRow = Math.max(1, targetRow);
+    const candidateRow = candidateRowsNearestFirst(targetRow).find((row) =>
+      canPlaceGroupAtRow(layout, entries, row),
+    );
+    if (!Number.isFinite(candidateRow)) {
+      warnings.push(
+        createResolverWarning(
+          "link_unresolvable",
+          "link_target_blocked_by_fixed_card",
           {
             transactionId: transactionContext.transactionId,
-            cardIds: entries.map((entry) => entry.cardId),
-            linkIds: [link.linkId],
+            cardIds: entries.map((entry) => entry.cardId).sort(),
+            linkIds: group.linkIds ?? [],
           },
         ),
       );
       return;
     }
-    let targetRow = fixedRows[0];
-    const priorityEntry = entries.find((entry) =>
-      priorityRows.has(entry.cardId),
-    );
-    if (!Number.isFinite(targetRow) && priorityEntry)
-      targetRow = priorityRows.get(priorityEntry.cardId);
-    if (!Number.isFinite(targetRow)) {
-      const rows = entries.map((entry) => entry.resolvedRow);
-      if (link.reorderStrategy === "move_to_last")
-        targetRow = Math.max(...rows);
-      else if (link.reorderStrategy === "average_position")
-        targetRow = Math.round(
-          rows.reduce((sum, row) => sum + row, 0) / rows.length,
-        );
-      else targetRow = Math.min(...rows);
-    }
-    targetRow = Math.max(1, targetRow);
+    const desiredRows = groupDesiredRows(entries, candidateRow);
     entries.sort(compareLayoutEntries).forEach((entry) => {
-      if (entry.resolvedRow !== targetRow) {
-        const result = moveWithinColumnToRow(layout, entry, targetRow);
+      const desiredRow = desiredRows.get(entry.cardId);
+      if (entry.resolvedRow !== desiredRow) {
+        const result = moveWithinColumnToRow(layout, entry, desiredRow);
         if (result.moved) {
           repairCount += 1;
+          const sourcePriority =
+            priorityFor(priorityRows, entry.cardId)?.priority ??
+            PROPAGATION_PRIORITY.LINKED_TO_INDIRECT_PUSH;
+          setPriority(
+            priorityRows,
+            entry.cardId,
+            desiredRow,
+            Math.min(sourcePriority, PROPAGATION_PRIORITY.LINKED_TO_PUSHED_CARD),
+          );
           result.displaced.forEach(({ cardId, row }) =>
-            priorityRows.set(cardId, row),
+            setPriority(
+              priorityRows,
+              cardId,
+              row,
+              sourcePriority >= PROPAGATION_PRIORITY.LINKED_TO_PUSHED_CARD
+                ? PROPAGATION_PRIORITY.PUSHED_BY_LINKED_CARD
+                : PROPAGATION_PRIORITY.LINKED_TO_INDIRECT_PUSH,
+            ),
           );
         }
       }
@@ -236,29 +395,93 @@ export function layoutHash(layout) {
 
 export function runResolutionPass(
   layout,
-  { links = [], conflicts = [], transactionContext = {} } = {},
+  { links = [], linkGroups = [], conflicts = [], transactionContext = {} } = {},
 ) {
   const next = Object.fromEntries(
     Object.entries(layout).map(([id, entry]) => [id, { ...entry }]),
   );
   const warnings = [];
   let repairCount = 0;
-  repairCount += repairCollisions(next, conflicts);
+  const initialCollisionResult = repairCollisions(
+    next,
+    conflicts,
+    transactionContext,
+  );
+  repairCount += initialCollisionResult.repairCount;
+  warnings.push(...initialCollisionResult.warnings);
   const priorityRows = new Map();
+  if (transactionContext.anchorCardId && next[transactionContext.anchorCardId]) {
+    setPriority(
+      priorityRows,
+      transactionContext.anchorCardId,
+      next[transactionContext.anchorCardId].resolvedRow,
+      transactionContext.intent === "move"
+        ? PROPAGATION_PRIORITY.USER_MOVE
+        : PROPAGATION_PRIORITY.STABILITY_DEFAULT,
+    );
+  }
+  (transactionContext.affectedCardIds ?? [])
+    .filter((cardId) => next[cardId])
+    .sort((a, b) => String(a).localeCompare(String(b)))
+    .forEach((cardId) =>
+      setPriority(
+        priorityRows,
+        cardId,
+        next[cardId].resolvedRow,
+        PROPAGATION_PRIORITY.PUSHED_BY_USER_MOVE,
+      ),
+    );
+  Object.values(next)
+    .sort(compareLayoutEntries)
+    .filter(
+      (entry) =>
+        entry.cardId !== transactionContext.anchorCardId &&
+        Number.isFinite(
+          entry.previousResolvedRow ?? entry.card?.previousResolvedRow,
+        ) &&
+        (entry.previousResolvedRow ?? entry.card?.previousResolvedRow) !==
+          entry.resolvedRow,
+    )
+    .forEach((entry) =>
+      setPriority(
+        priorityRows,
+        entry.cardId,
+        entry.resolvedRow,
+        PROPAGATION_PRIORITY.PUSHED_BY_USER_MOVE,
+      ),
+    );
   const linkResult = repairLinks(
     next,
-    links,
+    linkGroups.length > 0
+      ? linkGroups
+      : links.map((link) => ({
+          cardIds: link.targetCardIds ?? [],
+          linkIds: [link.linkId],
+          reorderStrategy: link.reorderStrategy,
+        })),
     conflicts,
     transactionContext,
     priorityRows,
   );
   repairCount += linkResult.repairCount;
   warnings.push(...linkResult.warnings);
-  repairCount += repairCollisions(next, conflicts);
+  const postLinkCollisionResult = repairCollisions(
+    next,
+    conflicts,
+    transactionContext,
+  );
+  repairCount += postLinkCollisionResult.repairCount;
+  warnings.push(...postLinkCollisionResult.warnings);
   const conflictResult = repairConflicts(next, conflicts, transactionContext);
   repairCount += conflictResult.repairCount;
   warnings.push(...conflictResult.warnings);
-  repairCount += repairCollisions(next, conflicts);
+  const finalCollisionResult = repairCollisions(
+    next,
+    conflicts,
+    transactionContext,
+  );
+  repairCount += finalCollisionResult.repairCount;
+  warnings.push(...finalCollisionResult.warnings);
   return {
     layout: next,
     repairCount,
