@@ -617,6 +617,8 @@ Contraintes dures :
 - links alignés si possible
 - conflicts séparés si possible
 - card toujours dans sa colonne instrument
+- `resolvedRow` comme vérité logique des plateaux
+- `visualIndex` global comme vérité d’affichage compact
 
 Contraintes soft :
 - respecter l’intention de la dernière action
@@ -640,7 +642,9 @@ Règles clés :
 - les holes sont des cards normales pour ordre, lock, played et links explicites ;
 - `appearance_skipped` repousse seulement l’appearance ciblée après délink ponctuel ;
 - les rounds ne sont pas une contrainte d’ordre et peuvent être mélangés ;
-- supprimer un link ou conflict ne restaure pas un ancien ordre : le resolver part de l’ordre courant et répare seulement ce qui reste nécessaire.
+- supprimer un link ou conflict ne restaure pas un ancien ordre : le resolver part de l’ordre courant et répare seulement ce qui reste nécessaire ;
+- le plateau affiché est déduit du `visualIndex` global produit par le solver, pas du rang local d’une card dans sa colonne ;
+- deux cards qui partagent le même `resolvedRow` doivent être affichées sur le même `visualIndex` global.
 
 ### 8.3 Recalcul global après modification d’ordre
 
@@ -663,6 +667,16 @@ Toute transaction pouvant modifier l’ordre ou les contraintes doit appeler le 
 La suppression d’un link ou d’un conflict ne doit pas provoquer un retour magique à un ancien ordre. Le resolver part de l’ordre résolu courant et ne bouge que ce qui est nécessaire.
 
 Le resolver doit respecter les limites canoniques : `MAX_PASSES = 50`, `MAX_REPAIRS_PER_PASS = cards visibles * 4`, détection de `layoutHash` répété, et warnings `resolver_max_passes_reached` / `resolver_cycle_detected`.
+
+La projection finale doit exposer pour chaque card au minimum :
+
+```txt
+resolvedRow     // logique, stable pour contraintes
+visualIndex     // affichage compact global
+cardIndexInColumn // rang local uniquement si utile au rendu
+```
+
+Le front ne doit pas reconstruire les plateaux avec “première/deuxième/troisième card de chaque colonne”. Il doit utiliser les `visualIndex` globaux fournis par la projection.
 
 ---
 
@@ -747,15 +761,14 @@ Raison : privilégier légèrement la stabilité vers le haut et éviter de trop
 
 ### 9.3 Contraintes de link
 
-Un link est refusé si :
+Un link est refusé avant transaction seulement si l’impossibilité est structurelle et détectable sans lancer le solver complet :
 
-- deux targets sont dans le même instrument ;
-- une target est played et devrait bouger ;
-- une target est locked et devrait bouger ;
-- un conflict existe directement entre deux targets du link ;
-- l’alignement créerait un conflict impossible à résoudre ;
-- l’alignement nécessiterait de déplacer une autre card played/locked ;
-- une target n’existe plus.
+- deux targets visibles sont dans le même instrument ;
+- un conflict direct existe déjà entre deux targets du link ;
+- une target n’existe plus dans la projection active ;
+- l’UI sait déjà que deux targets fixed du groupe sont sur des `resolvedRows` différents et que le link ne peut pas être aligné.
+
+Le simple fait qu’une target soit `played` ou `locked` ne suffit pas à refuser le link. Si une target fixed peut servir de `targetRow` et que les autres targets sont mobiles, le link est valide. Si l’alignement devient impossible pendant le replay, le resolver garde les fixed à leur place et produit un `projectionWarning` canonique.
 
 Un drag manuel dans une zone contenant un link n’est pas refusé pour cette seule raison. Si le drag déplace une autre card devant une target linkée, cette target linkée peut changer de plateau et les autres targets du link doivent suivre.
 

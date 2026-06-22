@@ -11,7 +11,7 @@ Il complète :
 - `data_model.md`
 - `visual_spec_table_cards.md`
 
-Le tableau est l’écran principal de gestion d’une jam. Il affiche les instruments en colonnes et les passages en cards. Les plateaux sont déduits par alignement horizontal des cards de chaque colonne.
+Le tableau est l’écran principal de gestion d’une jam. Il affiche les instruments en colonnes et les passages en cards. Les plateaux sont déduits par le `visualIndex` global calculé par le solver de réorder, pas par le rang local des cards dans chaque colonne.
 
 ---
 
@@ -43,17 +43,26 @@ Chaque colonne contient :
 
 ## 1.2 Plateaux déduits
 
-Un plateau est déduit par la position horizontale des cards.
+Un plateau affiché est déduit du `visualIndex` global produit par le solver.
 
 Exemple :
 
 ```txt
-Plateau 1 = première card visible de chaque colonne
-Plateau 2 = deuxième card visible de chaque colonne
-Plateau 3 = troisième card visible de chaque colonne
+Plateau affiché 1 = toutes les cards avec visualIndex 1
+Plateau affiché 2 = toutes les cards avec visualIndex 2
+Plateau affiché 3 = toutes les cards avec visualIndex 3
 ```
 
-Le tableau ne stocke pas directement une ligne plateau comme vérité métier. Les plateaux sont une projection visuelle à partir des colonnes.
+À ne pas faire :
+
+```txt
+Plateau 1 = première card visible de chaque colonne
+Plateau 2 = deuxième card visible de chaque colonne
+```
+
+Cette ancienne règle casse l’alignement dès qu’une colonne a une row vide ou qu’un link force une card à une ligne logique différente.
+
+Le tableau ne stocke pas directement une ligne plateau comme vérité métier durable. La vérité de résolution est `resolvedRow`, et l’affichage compact utilise `visualIndex`. Deux cards ayant le même `resolvedRow` doivent être affichées sur le même `visualIndex`. Une cellule vide dans une colonne n’est pas un trou métier : c’est simplement l’absence de card sur ce plateau affiché.
 
 ## 1.3 Mobile/tablette
 
@@ -314,6 +323,8 @@ Il ne faut plus appliquer un tri obligatoire par `appearanceIndex` / `positionIn
 
 ```txt
 Afficher les cards dans l’ordre résolu fourni par la projection.
+Aligner les cards avec le `visualIndex` global fourni par la projection.
+Afficher une cellule vide quand une colonne n’a pas de card pour un `visualIndex` donné.
 Afficher le round comme information de card si utile.
 Accepter qu’une round 2 apparaisse avant une round 1 si le solver l’a décidé.
 ```
@@ -323,10 +334,11 @@ Accepter qu’une round 2 apparaisse avant une round 1 si le solver l’a décid
 ```txt
 Réordonner dans le composant React par round.
 Revenir à un tri round-first après suppression d’un link ou conflict.
-Créer des espaces artificiels dans les autres colonnes.
+Déduire un plateau par le rang local de la card dans sa colonne.
+Créer de vrais holes métier pour remplir les cellules vides d’autres colonnes.
 ```
 
-Les holes visibles dans une colonne occupent une position seulement dans cette colonne. Ils ne créent pas d’espaces artificiels dans les autres colonnes.
+Les holes visibles dans une colonne occupent une position seulement dans cette colonne. Ils ne créent pas de holes artificiels dans les autres colonnes. Les cellules vides nécessaires à l’alignement visuel sont un rendu de grille, pas des cards.
 
 ## 5.4 Ajout après reveal de round
 

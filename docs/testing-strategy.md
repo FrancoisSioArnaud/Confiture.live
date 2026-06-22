@@ -134,8 +134,10 @@ Cas minimaux :
 32. max passes atteint avec warning `resolver_max_passes_reached` ;
 33. `projectionWarnings` produits au format standard ;
 34. `resolvedRow` stable pour played/locked malgré normalisation `visualIndex` ;
-35. score égal départagé par ordre précédent, ordre de création, puis id ;
-36. replay après undo linéaire produisant un état stable.
+35. deux cards avec le même `resolvedRow` obtiennent le même `visualIndex` global ;
+36. le rang local dans une colonne ne sert jamais à définir un plateau logique ;
+37. score égal départagé par ordre précédent, ordre de création, puis id ;
+38. replay après undo linéaire produisant un état stable.
 
 Invariants obligatoires à vérifier dans les tests pertinents :
 
@@ -147,6 +149,7 @@ Invariants obligatoires à vérifier dans les tests pertinents :
 - les rounds ne sont jamais utilisés comme priorité d’ordre ;
 - les colonnes hidden ne déplacent jamais les cards visibles ;
 - les holes suivent les mêmes règles que les appearances pour ordre, lock, played et links explicites ;
+- le `visualIndex` est une compression globale des `resolvedRows`, pas un index local par colonne ;
 - aucun résultat ne dépend du DOM, de React, de Zustand, de Dexie, de Date.now() ou de Math.random().
 ```
 

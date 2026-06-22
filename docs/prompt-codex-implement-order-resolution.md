@@ -11,7 +11,7 @@ Lis d’abord toute la documentation suivante avant de modifier le code :
 
 Objectif : implémenter un moteur frontend pur et déterministe de résolution d’ordre, basé sur un solver de contraintes discrètes.
 
-Les sections `4.1` à `4.15` de `docs/order-resolution-hierarchy-spec.md` sont normatives. Elles doivent être appliquées telles quelles : hiérarchie hard/conditional/soft, politique refus vs warning, format des `projectionWarnings`, séparation `resolvedRow`/`visualIndex`, stratégie de collision, scoring chiffré, propagation chiffrée, choix de `targetRow`, ordre exact des passes, conditions d’arrêt, colonnes hidden, holes, `appearance_skipped`, validations UI pré-transaction et invariants de tests.
+Les sections `4.1` à `4.15` de `docs/order-resolution-hierarchy-spec.md` sont normatives. Elles doivent être appliquées telles quelles : hiérarchie hard/conditional/soft, politique refus vs warning, format des `projectionWarnings`, séparation `resolvedRow`/`visualIndex`/`cardIndexInColumn`, stratégie de collision, scoring chiffré, propagation chiffrée, choix de `targetRow`, ordre exact des passes, conditions d’arrêt, colonnes hidden, holes, `appearance_skipped`, validations UI pré-transaction et invariants de tests.
 
 Créer ou remplacer le module :
 
@@ -60,7 +60,8 @@ Implémentation attendue :
    - filtrage canonique des colonnes hidden ;
    - règles holes comme cards normales pour ordre/lock/played/link explicite ;
    - règles `appearance_skipped` : délink ponctuel puis push de l’appearance seule ;
-   - séparation stricte `resolvedRow` / `visualIndex` ;
+   - séparation stricte `resolvedRow` / `visualIndex` / `cardIndexInColumn` ;
+   - `visualIndex` calculé comme compression globale des `resolvedRows` visibles, jamais comme index local par colonne ;
    - normalisation finale stable sans modifier les `resolvedRow` fixed ;
    - production de `projectionWarnings` déterministes au format standard de la spec.
 
@@ -81,14 +82,14 @@ Implémentation attendue :
    - refus UI/pré-transaction pour les actions manifestement impossibles listées dans la spec ;
    - replay défensif avec `projectionWarnings` pour les events invalides ou devenus insolubles ;
    - format standard des warnings avec `type`, `severity`, `reason`, `transactionId`, `cardIds`, `message` ;
-   - `resolvedRow` pour constraints, `visualIndex` pour affichage compact ;
+   - `resolvedRow` pour constraints, `visualIndex` global pour affichage compact, `cardIndexInColumn` seulement pour le rendu local ;
    - collision : fixed garde la place, sinon priorité la plus haute, sinon stabilité, card poussée vers le slot valide le plus proche avec préférence vers le bas en cas d’égalité ;
    - scoring numérique `RESOLUTION_COST` ;
    - propagation numérique `PROPAGATION_PRIORITY` ;
    - `targetRow` des links : fixed row, priorité >= 500, stratégie enregistrée, candidateRows alternatives ;
    - limites `RESOLUTION_LIMITS` : `MAX_PASSES = 50`, repairs par passe = cards visibles * 4, distance candidate max = 200 ;
    - warning `resolver_cycle_detected` si un `layoutHash` revient deux fois ;
-   - colonnes hidden absentes de `buildVisibleCards` et contraintes hidden ignorées dans le resolver visible ;
+   - colonnes hidden absentes de `buildVisibleCards` et contraintes hidden ignorées dans le resolver visible sans déplacer les cards visibles ;
    - holes traités comme cards normales, sauf pas de conflicts automatiques et pas de génération future ;
    - skip : repousse uniquement l’appearance ciblée, sans modifier le participant ni les appearances futures ;
    - validations UI pré-transaction listées en section 4.14 ;
@@ -145,6 +146,8 @@ Implémentation attendue :
    - max passes atteint avec warning `resolver_max_passes_reached` ;
    - `projectionWarnings` produits au format standard ;
    - `resolvedRow` stable pour played/locked malgré normalisation `visualIndex` ;
+   - même `resolvedRow` => même `visualIndex` global ;
+   - aucune logique de plateau basée sur la nième card d’une colonne ;
    - score égal départagé par ordre précédent, ordre de création, puis id ;
    - undo/redo linéaire puis replay cohérent.
 

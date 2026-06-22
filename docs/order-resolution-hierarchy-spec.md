@@ -100,11 +100,23 @@ Une card ordonnable du tableau :
 
 Une card reste toujours dans sa colonne instrument. Il n’y a pas de déplacement horizontal manuel.
 
-### Row résolue
+### Row résolue, visualIndex et plateau affiché
 
-La row résolue est la ligne logique utilisée par le solver pour aligner les links et séparer les conflicts.
+Le solver distingue obligatoirement trois notions.
 
-Elle peut être différente de l’index visuel compact final. Une normalisation visuelle peut être faite à la fin si elle ne modifie pas la composition des plateaux joués ou verrouillés.
+```txt
+resolvedRow = ligne logique entière utilisée par le solver pour links, conflicts, played, locked et collisions.
+visualIndex = ligne d’affichage compacte dérivée de resolvedRow à l’échelle du tableau visible.
+cardIndexInColumn = ordre local d’une card dans sa colonne, uniquement utile pour mapper/render une liste.
+```
+
+`resolvedRow` est la vérité de résolution. Deux cards alignées par link ont le même `resolvedRow`. Deux cards en conflict doivent avoir des `resolvedRows` différents.
+
+`visualIndex` est calculé après résolution par compression globale des `resolvedRows` visibles, pas colonne par colonne. Toutes les cards qui ont le même `resolvedRow` doivent obtenir le même `visualIndex`, même si certaines colonnes n’ont aucune card sur cette ligne.
+
+Donc l’UI ne doit pas définir un plateau comme “la n-ième card de chaque colonne”. Un plateau affiché correspond à un `visualIndex` global. Une cellule vide dans une colonne signifie seulement “aucune card sur ce plateau affiché”, ce n’est pas un hole métier.
+
+Une normalisation visuelle ne doit jamais modifier un `resolvedRow` fixed.
 
 ### Fixed card
 
@@ -334,24 +346,29 @@ skip_target_missing
 
 L’UI organisateur n’affiche pas forcément tous les warnings. En revanche, le moteur doit toujours les produire pour debug, tests et admin.
 
-### 4.4 Définition exacte de `resolvedRow` et `visualIndex`
+### 4.4 Définition exacte de `resolvedRow`, `visualIndex` et affichage
 
-Le resolver doit distinguer deux notions.
+Le resolver doit distinguer trois notions et ne jamais les mélanger.
 
 ```txt
-resolvedRow = ligne logique utilisée pour links, conflicts, played, locked et collisions.
-visualIndex = index compact utilisé pour afficher une colonne dans l’UI.
+resolvedRow        = ligne logique entière utilisée par les contraintes.
+visualIndex        = ligne d’affichage compacte dérivée globalement des resolvedRows visibles.
+cardIndexInColumn  = position locale d’une card dans la liste de sa colonne.
 ```
 
-Règles :
+Règles normatives :
 
 ```txt
-- `resolvedRow` est la valeur de référence pour déterminer si deux cards sont sur le même plateau logique.
-- `visualIndex` peut être recalculé à la fin pour afficher une liste compacte.
+- `resolvedRow` est la seule valeur utilisée pour déterminer same plateau, links, conflicts, played, locked et collisions.
+- `resolvedRow` doit être un entier positif >= 1.
+- `visualIndex` est calculé après résolution par compression globale des resolvedRows de tout le tableau visible.
+- Deux cards avec le même `resolvedRow` doivent avoir le même `visualIndex`, même si elles sont dans des colonnes différentes.
+- Une colonne peut avoir une cellule vide sur un `visualIndex` donné ; ce vide n’est pas un hole métier.
+- `cardIndexInColumn` ne doit jamais servir à tester un link, un conflict ou un plateau joué.
 - Une card played conserve son `resolvedRow` historique.
 - Une card locked conserve son `resolvedRow` tant qu’elle reste locked.
-- La normalisation visuelle ne doit jamais changer la composition des plateaux joués ou verrouillés.
-- Les tests de links/conflicts utilisent `resolvedRow`, jamais `visualIndex`.
+- La normalisation visuelle ne doit jamais changer un `resolvedRow` fixed.
+- Les tests de links/conflicts utilisent `resolvedRow`, jamais `visualIndex` ni `cardIndexInColumn`.
 ```
 
 En cas d’ambiguïté, le mot `row` dans la spec resolver signifie `resolvedRow`.
@@ -359,8 +376,12 @@ En cas d’ambiguïté, le mot `row` dans la spec resolver signifie `resolvedRow
 Exemple autorisé :
 
 ```txt
-resolvedRows internes : 1, 3, 7
-visualIndex affiché   : 1, 2, 3
+resolvedRows visibles globales : 1, 3, 7
+visualIndex global correspondant : 1, 2, 3
+
+Chant row 1 → visualIndex 1
+Guitare row 7 → visualIndex 3
+Basse row 3 → visualIndex 2
 ```
 
 Exemple interdit :
@@ -370,7 +391,13 @@ A played resolvedRow 4
 normalisation finale → A resolvedRow 2
 ```
 
-Une normalisation compacte peut produire un `visualIndex`, mais ne doit pas réécrire les `resolvedRow` fixes.
+Exemple interdit côté UI :
+
+```txt
+Plateau 2 = deuxième card de chaque colonne
+```
+
+Cette règle casse l’alignement dès qu’une colonne a une row vide. Le plateau affiché doit être basé sur le `visualIndex` global, pas sur le rang local dans chaque colonne.
 
 ### 4.5 Stratégie exacte de réparation des collisions
 
@@ -565,8 +592,11 @@ CandidateRows alternatives quand la `targetRow` initiale est bloquée :
 4. targetRow + 2 ;
 5. targetRow - 2 ;
 6. continuer jusqu’à trouver une row valide ;
-7. préférer le bas en cas de coût strictement égal.
+7. ignorer toute row candidate < 1 ;
+8. préférer le bas en cas de coût strictement égal.
 ```
+
+La recherche s’arrête à `MAX_CANDIDATE_ROW_DISTANCE`. Elle doit être déterministe : à distance égale, tester toujours le bas avant le haut après le premier essai.
 
 Une row candidate est valide uniquement si :
 
@@ -682,8 +712,16 @@ Règles canoniques :
 - Les cards hidden ne sont pas incluses dans `buildVisibleCards`.
 - Les links impliquant au moins une card hidden sont ignorés pour l’alignement visible.
 - Les conflicts impliquant au moins une card hidden sont ignorés pour la séparation visible.
-- Les contraintes hidden ignorées doivent produire un warning `hidden_column_constraint_ignored` si elles empêchent de comprendre l’état visible ou si l’UI/admin demande les warnings détaillés.
+- Ignorer une contrainte hidden ne doit jamais déplacer une card visible.
 - Montrer à nouveau une colonne relance le resolver avec ses cards redevenues visibles.
+```
+
+Politique de warning :
+
+```txt
+- Projection organisateur normale : pas de warning obligatoire quand une contrainte est ignorée uniquement parce qu’une colonne est hidden.
+- Mode debug/admin ou tests détaillés : produire `hidden_column_constraint_ignored` avec `severity: info`.
+- Si une contrainte hidden référence une target réellement manquante ou supprimée, produire plutôt `missing_target`.
 ```
 
 Un instrument hidden ne doit jamais forcer une card visible à bouger. L’historique reste rejouable, mais la projection visible ignore les contraintes qui traversent une colonne masquée.
@@ -810,6 +848,8 @@ Tous les tests du resolver doivent vérifier les invariants suivants quand ils s
 20. Aucun résultat ne dépend du DOM, de React, de Zustand, de Dexie, de `Date.now()` ou de `Math.random()`.
 21. Les égalités de scoring sont départagées par ordre précédent, ordre de création, puis id stable.
 22. `visualIndex` peut être compacté, mais les tests de contraintes utilisent toujours `resolvedRow`.
+23. Deux cards ayant le même `resolvedRow` dans deux colonnes visibles obtiennent le même `visualIndex` global.
+24. Le rang local d’une card dans sa colonne ne définit jamais un plateau logique.
 ```
 
 ---
@@ -1184,20 +1224,22 @@ Cela évite les comportements où un link marche une fois sur deux selon l’ord
 
 ## 13. Normalisation finale
 
-À la fin, le solver peut compacter l’affichage des colonnes :
+À la fin, le solver peut compacter l’affichage, mais uniquement en produisant un `visualIndex` global.
 
 ```txt
-rows internes : 1, 3, 7
-index visuel : 1, 2, 3
+resolvedRows visibles globales : 1, 3, 7
+visualIndex global correspondant : 1, 2, 3
 ```
 
-Mais il ne doit jamais changer la composition ou l’ordre historique des plateaux joués/verrouillés.
+La normalisation ne doit jamais réécrire les `resolvedRow`. Elle ajoute seulement une information d’affichage.
 
-Recommandation : distinguer deux notions :
+Règles :
 
 ```txt
-resolvedRow  = row logique utilisée par les contraintes
-visualIndex  = index compact pour affichage
+- Deux cards ayant le même resolvedRow obtiennent toujours le même visualIndex.
+- Une colonne sans card sur une row globale affiche une cellule vide, pas un hole.
+- Le rang local d’une card dans sa colonne ne doit jamais servir à déduire un plateau joué.
+- La composition des plateaux joués/verrouillés reste définie par resolvedRow.
 ```
 
 ---
@@ -1364,5 +1406,7 @@ Le moteur doit avoir des tests couvrant au minimum les scénarios suivants, plus
 33. max passes atteint avec warning `resolver_max_passes_reached` ;
 34. `projectionWarnings` produits au format standard ;
 35. `resolvedRow` stable pour played/locked malgré normalisation `visualIndex` ;
-36. score égal départagé par ordre précédent, ordre de création, puis id ;
-37. undo/redo linéaire puis replay cohérent.
+36. deux cards avec le même `resolvedRow` obtiennent le même `visualIndex` global ;
+37. le rang local dans une colonne ne sert jamais à définir un plateau logique ;
+38. score égal départagé par ordre précédent, ordre de création, puis id ;
+39. undo/redo linéaire puis replay cohérent.
