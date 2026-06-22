@@ -109,6 +109,21 @@ Exemples :
 - appearance supprimée puis déplacée par un event ultérieur ignoré ;
 - resolver incapable de satisfaire une intention à cause d’un `played` ou `locked`.
 
+Les warnings issus du resolver doivent suivre le format standard défini dans `docs/order-resolution-hierarchy-spec.md`, section `4.3 Format standard des projectionWarnings`.
+
+Format minimal attendu :
+
+```js
+{
+  type: "link_unresolvable",
+  severity: "warning",
+  reason: "linked_cards_fixed_on_different_rows",
+  transactionId: "transaction_xxx",
+  cardIds: ["appearance_a", "appearance_b"],
+  message: "Impossible d’aligner ce link : plusieurs cards fixes sont sur des lignes différentes."
+}
+```
+
 Ces warnings sont destinés au debug/admin, pas à l’UI organisateur sauf cas explicitement prévu.
 
 ---

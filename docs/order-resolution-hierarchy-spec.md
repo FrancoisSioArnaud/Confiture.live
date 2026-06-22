@@ -163,11 +163,369 @@ L’anchor est importante, mais elle ne bat jamais `played` ou `locked`.
 
 ---
 
-## 4. Contraintes dures
+## 4. Arbitrages canoniques du resolver
+
+Cette section verrouille les décisions d’arbitrage. Le code, les tests et les prompts Codex doivent appliquer ces règles sans réinterprétation.
+
+### 4.1 Hiérarchie exacte des contraintes
+
+Le resolver classe les règles en trois niveaux.
+
+#### Contraintes dures absolues
+
+Ces contraintes ne peuvent jamais être cassées par le solver. Si une action les viole directement, elle doit être refusée avant transaction quand c’est possible. Si un event invalide existe déjà dans l’historique, la projection doit préserver l’invariant et émettre un `projectionWarning`.
+
+```txt
+1. Une card reste dans sa colonne instrument.
+2. Une colonne visible ne peut pas avoir deux cards sur le même resolvedRow final.
+3. Une appearance played ne change jamais de resolvedRow.
+4. Un hole played ne change jamais de resolvedRow.
+5. Une appearance locked ne change jamais de resolvedRow.
+6. Un hole locked ne change jamais de resolvedRow.
+```
+
+#### Contraintes dures conditionnelles
+
+Ces contraintes doivent être satisfaites si une solution existe sans casser une contrainte dure absolue.
+
+```txt
+7. Les links actifs doivent être alignés sur le même resolvedRow.
+8. Les conflicts actifs doivent être séparés sur des resolvedRows différents.
+```
+
+Si un link ou conflict ne peut pas être résolu à cause de cards fixed, le solver ne force pas le déplacement. Il garde les cards fixed à leur place et produit un warning déterministe.
+
+#### Contraintes soft
+
+Ces contraintes ne doivent jamais casser une contrainte dure. Elles servent uniquement à choisir la meilleure réparation parmi plusieurs solutions valides.
+
+```txt
+9. Respecter l’intention de la dernière action utilisateur.
+10. Propager la priorité aux cards poussées et aux groupes linkés concernés.
+11. Minimiser le nombre de cards déplacées.
+12. Minimiser la distance totale de déplacement.
+13. Préserver l’ordre relatif précédent autant que possible.
+14. Utiliser un fallback stable par ordre précédent, ordre de création, puis id.
+```
+
+Le conflict passe avant l’intention utilisateur : si le dernier drag place deux cards en conflict sur la même row, le solver doit réparer le conflict même si cela éloigne l’anchor de son emplacement idéal.
+
+Le round ne fait partie d’aucun niveau de priorité. Il reste une metadata.
+
+### 4.2 Politique `refus avant transaction` vs `projectionWarning`
+
+Le système doit refuser avant création de transaction les actions manifestement impossibles ou interdites.
+
+Refus obligatoire avant transaction :
+
+```txt
+- drag manuel d’une card played ;
+- drag manuel d’une card locked ;
+- link entre deux cards de la même colonne visible ;
+- link entre deux cards déjà en conflict direct ;
+- conflict entre deux cards déjà linkées dans le même groupe ;
+- suppression ou déplacement manuel d’un hole/card played ;
+- move qui change la colonne instrument d’une card.
+```
+
+Pendant le replay, la projection doit rester défensive. Si un event invalide est déjà présent dans l’historique ou si une impossibilité n’apparaît qu’après plusieurs transactions, le resolver doit :
+
+```txt
+1. préserver toutes les contraintes dures absolues ;
+2. appliquer ce qui est encore résoluble ;
+3. produire un projectionWarning stable ;
+4. continuer le replay sans crash.
+```
+
+Warnings de projection obligatoires :
+
+```txt
+- link impossible à aligner car plusieurs cards fixed du groupe sont sur des resolvedRows différents ;
+- conflict impossible à résoudre car les deux côtés sont fixed sur le même resolvedRow ;
+- target de link/conflict manquante pendant le replay ;
+- groupe linké contenant deux cards d’une même colonne visible ;
+- contradiction link + conflict découverte pendant le replay ;
+- maximum de passes atteint ;
+- cycle ou oscillation détectée.
+```
+
+Le solver ne doit pas accepter partiellement une action en silence. Toute contrainte non satisfaite doit être observable dans `projectionWarnings`.
+
+### 4.3 Format standard des `projectionWarnings`
+
+Tous les warnings retournés par le resolver doivent suivre ce format stable :
+
+```js
+{
+  type: "link_unresolvable",
+  severity: "warning",
+  reason: "linked_cards_fixed_on_different_rows",
+  transactionId: "transaction_xxx",
+  eventId: "event_xxx",
+  cardIds: ["appearance_a", "appearance_b"],
+  linkIds: ["link_xxx"],
+  conflictIds: [],
+  columnIds: ["instrument_guitar"],
+  message: "Impossible d’aligner ce link : plusieurs cards fixes sont sur des lignes différentes."
+}
+```
+
+Champs obligatoires :
+
+```txt
+type
+severity
+reason
+transactionId
+cardIds
+message
+```
+
+Champs optionnels mais stables si disponibles :
+
+```txt
+eventId
+linkIds
+conflictIds
+columnIds
+```
+
+`severity` autorisées :
+
+```txt
+info      : incohérence mineure ou event ignoré sans impact visible
+warning   : contrainte non satisfaite mais projection utilisable
+error     : projection partielle, action à corriger côté données ou UI
+```
+
+Types canoniques :
+
+```txt
+link_unresolvable
+conflict_unresolvable
+column_collision_unresolvable
+invalid_action_replayed
+missing_target
+resolver_max_passes_reached
+resolver_cycle_detected
+hidden_column_constraint_ignored
+```
+
+Reasons canoniques minimales :
+
+```txt
+linked_cards_fixed_on_different_rows
+linked_cards_same_column
+linked_cards_in_direct_conflict
+conflicted_cards_fixed_on_same_row
+card_target_missing
+link_target_missing
+conflict_target_missing
+fixed_card_move_refused
+same_column_collision_with_fixed_cards
+max_passes_reached
+layout_cycle_detected
+hidden_column_not_resolved
+```
+
+L’UI organisateur n’affiche pas forcément tous les warnings. En revanche, le moteur doit toujours les produire pour debug, tests et admin.
+
+### 4.4 Définition exacte de `resolvedRow` et `visualIndex`
+
+Le resolver doit distinguer deux notions.
+
+```txt
+resolvedRow = ligne logique utilisée pour links, conflicts, played, locked et collisions.
+visualIndex = index compact utilisé pour afficher une colonne dans l’UI.
+```
+
+Règles :
+
+```txt
+- `resolvedRow` est la valeur de référence pour déterminer si deux cards sont sur le même plateau logique.
+- `visualIndex` peut être recalculé à la fin pour afficher une liste compacte.
+- Une card played conserve son `resolvedRow` historique.
+- Une card locked conserve son `resolvedRow` tant qu’elle reste locked.
+- La normalisation visuelle ne doit jamais changer la composition des plateaux joués ou verrouillés.
+- Les tests de links/conflicts utilisent `resolvedRow`, jamais `visualIndex`.
+```
+
+En cas d’ambiguïté, le mot `row` dans la spec resolver signifie `resolvedRow`.
+
+Exemple autorisé :
+
+```txt
+resolvedRows internes : 1, 3, 7
+visualIndex affiché   : 1, 2, 3
+```
+
+Exemple interdit :
+
+```txt
+A played resolvedRow 4
+normalisation finale → A resolvedRow 2
+```
+
+Une normalisation compacte peut produire un `visualIndex`, mais ne doit pas réécrire les `resolvedRow` fixes.
+
+### 4.5 Stratégie exacte de réparation des collisions
+
+Une collision existe quand deux cards visibles d’une même colonne veulent le même `resolvedRow`.
+
+```txt
+A.columnId = B.columnId
+row(A) = row(B)
+→ collision à réparer
+```
+
+Règle de décision :
+
+```txt
+1. Une card fixed garde toujours sa place.
+2. Si une seule card est fixed, l’autre est poussée.
+3. Si les deux cards sont fixed, la collision est impossible à réparer.
+4. Sinon, la card avec la priorité de propagation la plus haute garde la place.
+5. Sinon, l’anchor ou la card directement manipulée garde la place.
+6. Sinon, la card la plus proche de son ancienne position garde la place.
+7. Sinon, préserver l’ordre relatif précédent.
+8. Sinon, départager par ordre de création puis id stable.
+```
+
+La card poussée doit aller vers le slot valide le plus proche dans la même colonne.
+
+Recherche du slot :
+
+```txt
+1. tester row + 1 ;
+2. tester row - 1 ;
+3. tester row + 2 ;
+4. tester row - 2 ;
+5. continuer jusqu’au premier slot valide ;
+6. en cas d’égalité stricte, préférer le bas.
+```
+
+Un slot est valide seulement si :
+
+```txt
+- il ne contient pas de card fixed incompatible ;
+- il ne crée pas de collision finale ;
+- il ne rend pas un link ou conflict irréparable si une alternative moins coûteuse existe.
+```
+
+Si la card poussée appartient à un groupe linké, ce déplacement devient un signal de propagation pour tout le groupe.
+
+### 4.6 Scoring exact des réparations
+
+Le resolver doit utiliser un scoring déterministe pour choisir entre plusieurs réparations possibles.
+
+Constantes canoniques :
+
+```js
+const RESOLUTION_COST = {
+  IMPOSSIBLE: Number.POSITIVE_INFINITY,
+
+  MOVE_PLAYED: Number.POSITIVE_INFINITY,
+  MOVE_LOCKED: Number.POSITIVE_INFINITY,
+  CHANGE_COLUMN: Number.POSITIVE_INFINITY,
+  FINAL_COLUMN_COLLISION: Number.POSITIVE_INFINITY,
+
+  UNRESOLVED_LINK: 100000,
+  UNRESOLVED_CONFLICT: 100000,
+  USER_ANCHOR_NOT_PRESERVED: 10000,
+
+  MOVE_LINK_GROUP: 1000,
+  MOVE_SECONDARY_CARD: 100,
+  RELATIVE_ORDER_INVERSION: 50,
+  MOVED_CARD_COUNT: 25,
+  ROW_DISTANCE: 10,
+  VISUAL_CHURN: 5,
+
+  STABLE_TIEBREAKER: 1
+}
+```
+
+Règles :
+
+```txt
+- déplacer une card played ou locked est impossible ;
+- changer la colonne d’une card est impossible ;
+- laisser une collision finale dans une colonne visible est impossible ;
+- laisser un link ou conflict non résolu est très coûteux et doit produire un warning si aucune réparation valide n’existe ;
+- ne pas respecter l’anchor est permis seulement si une contrainte dure l’impose ;
+- déplacer un groupe linké coûte plus cher que déplacer une card libre isolée ;
+- le round n’ajoute aucun coût ;
+- en cas de score égal, utiliser un tri stable par ancien ordre, ordre de création, puis id.
+```
+
+La distance de déplacement est calculée sur `resolvedRow` :
+
+```txt
+abs(nextResolvedRow - previousResolvedRow) * ROW_DISTANCE
+```
+
+Le coût `RELATIVE_ORDER_INVERSION` s’applique quand deux cards non directement concernées changent d’ordre relatif sans nécessité pour résoudre une contrainte dure.
+
+### 4.7 Propagation de priorité chiffrée
+
+Le resolver doit maintenir une priorité par card pendant une résolution. Si plusieurs chemins donnent une priorité à la même card, garder la priorité la plus haute.
+
+Valeurs canoniques :
+
+```js
+const PROPAGATION_PRIORITY = {
+  USER_MOVE: 1000,
+  USER_CREATED_CARD: 950,
+  USER_LOCKED_CARD: 900,
+  USER_LINK_STRATEGY_TARGET: 850,
+  PUSHED_BY_USER_MOVE: 800,
+  LINKED_TO_PUSHED_CARD: 700,
+  PUSHED_BY_LINKED_CARD: 600,
+  LINKED_TO_INDIRECT_PUSH: 500,
+  CONFLICT_REPAIR_TARGET: 400,
+  STABILITY_DEFAULT: 100
+}
+```
+
+Dégradation obligatoire :
+
+```txt
+- push direct : priorité source - 200 minimum ;
+- link depuis une card poussée : priorité source - 100 minimum ;
+- réparation de conflict : priorité maximale 400 sauf si l’anchor est impliquée ;
+- priorité minimale utile : 100 ;
+- sous 100, fallback stabilité.
+```
+
+Propagation :
+
+```txt
+1. Une action utilisateur donne une priorité initiale à son anchor ou à ses cards créées.
+2. Une card qui garde une row après collision peut pousser une autre card.
+3. La card poussée reçoit une priorité dérivée.
+4. Si cette card appartient à un link group, les autres membres reçoivent une priorité dérivée.
+5. Si le réalignement du groupe pousse d’autres cards, la propagation continue.
+6. La propagation s’arrête quand aucun déplacement nouveau n’est produit, quand une impossibilité est détectée, ou quand les limites du resolver sont atteintes.
+```
+
+Exemple :
+
+```txt
+A user_move priority 1000
+A pousse B → B priority 800
+B link C → C priority 700
+C pousse D → D priority 600
+D link E → E priority 500
+```
+
+Les priorités ne sont pas des contraintes dures. Elles départagent les réparations possibles après respect des contraintes dures.
+
+---
+
+## 5. Contraintes dures
 
 Les contraintes dures doivent être satisfaites ou produire un warning/refus explicite.
 
-### 4.1 Visibilité et appartenance
+### 5.1 Visibilité et appartenance
 
 - Une card supprimée n’est pas affichée.
 - Une participation supprimée ne génère plus d’appearances futures.
@@ -175,7 +533,7 @@ Les contraintes dures doivent être satisfaites ou produire un warning/refus exp
 - Un instrument hidden ne participe plus au tableau visible.
 - Une card reste dans sa colonne instrument.
 
-### 4.2 Unicité dans une colonne
+### 5.2 Unicité dans une colonne
 
 Une colonne ne peut pas contenir deux cards sur la même row résolue :
 
@@ -184,7 +542,7 @@ A.columnId = B.columnId
 → row(A) != row(B)
 ```
 
-### 4.3 Played
+### 5.3 Played
 
 Une card jouée ne bouge jamais.
 
@@ -196,7 +554,7 @@ Règles :
 - un ajout ultérieur ne peut pas modifier sa position historique ;
 - un hole joué suit la même règle.
 
-### 4.4 Locked
+### 5.4 Locked
 
 Une card locked ne bouge jamais tant qu’elle n’est pas unlock.
 
@@ -208,7 +566,7 @@ Règles :
 - un ajout ultérieur ne doit pas la décaler ;
 - un hole locked suit la même règle.
 
-### 4.5 Links
+### 5.5 Links
 
 Un link actif impose :
 
@@ -225,7 +583,7 @@ Règles :
 - un link ne peut pas contredire un conflict direct ;
 - un link ne peut pas déplacer du played ou du locked.
 
-### 4.6 Conflicts
+### 5.6 Conflicts
 
 Un conflict actif impose :
 
@@ -241,14 +599,14 @@ Règles :
 - les conflicts `instrument_constraint` et `manual` utilisent le même resolver ;
 - un conflict ne peut pas déplacer du played ou du locked.
 
-### 4.7 Holes
+### 5.7 Holes
 
 - Un hole occupe une vraie position dans une colonne.
 - Un hole peut être linked, conflicted, locked ou played selon son état.
 - Un hole joué ou locked est fixe.
 - Un hole ne génère pas de hole automatique dans les rounds suivants.
 
-### 4.8 Rounds
+### 5.8 Rounds
 
 Les rounds ne sont pas une contrainte d’ordre.
 
@@ -261,22 +619,24 @@ Règles :
 
 ---
 
-## 5. Contraintes soft
+## 6. Contraintes soft
 
 Les contraintes soft servent à départager plusieurs solutions valides.
 
-Priorités de coût recommandées :
+Le scoring exact est celui de la section 4.6. Résumé :
 
 ```txt
-interdit : déplacer played
-interdit : déplacer locked
+impossible : déplacer played
+impossible : déplacer locked
+impossible : changer de colonne
+impossible : laisser une collision finale dans une colonne visible
 très cher : laisser un link désaligné
 très cher : laisser un conflict non résolu
 cher : ne pas respecter l’intention de la dernière action
 moyen : bouger une card indirectement concernée
 faible : déplacer une card libre de quelques rows
 faible : changer l’ordre relatif de cards non concernées
-fallback : ordre de création / id stable
+fallback : ordre précédent / ordre de création / id stable
 ```
 
 Le round ne doit pas apparaître dans le coût de résolution.
@@ -291,7 +651,7 @@ Le solver doit minimiser :
 
 ---
 
-## 6. États impossibles
+## 7. États impossibles
 
 Certains états ne doivent pas être réparés en boucle. Ils doivent être refusés avant transaction quand c’est évident, ou produire un `projectionWarning` pendant le replay.
 
@@ -330,21 +690,13 @@ A conflict B
 → impossible
 ```
 
-Warning recommandé :
-
-```js
-{
-  type: "link_unresolvable",
-  reason: "linked_cards_fixed_on_different_rows",
-  cardIds: ["appearance_a", "appearance_b"]
-}
-```
+Les warnings doivent suivre le format standard défini en section 4.3.
 
 ---
 
-## 7. Algorithme de résolution
+## 8. Algorithme de résolution
 
-### 7.1 Pipeline global
+### 8.1 Pipeline global
 
 ```txt
 Pour chaque transaction active :
@@ -357,7 +709,7 @@ Pour chaque transaction active :
 
 Le resolver peut réconcilier tout le tableau visible. Il n’est pas obligé de limiter la résolution à une zone locale.
 
-### 7.2 Pseudo-code
+### 8.2 Pseudo-code
 
 ```js
 function resolveOrderAfterTransaction(state, context) {
@@ -403,7 +755,7 @@ function resolveOrderAfterTransaction(state, context) {
 }
 ```
 
-### 7.3 Ordre de traitement des violations
+### 8.3 Ordre de traitement des violations
 
 Le solver cherche les violations dans cet ordre :
 
@@ -419,7 +771,7 @@ Le solver cherche les violations dans cet ordre :
 
 ---
 
-## 8. Résolution des links
+## 9. Résolution des links
 
 Pour chaque groupe linké, le solver choisit une row cible.
 
@@ -471,27 +823,15 @@ Si une target a été déplacée par la dernière action ou poussée par propaga
 
 ---
 
-## 9. Résolution des collisions
+## 10. Résolution des collisions
 
-Quand deux cards se retrouvent sur la même row dans une colonne, le solver garde la card la plus prioritaire et pousse l’autre vers le slot valide le plus proche.
+Quand deux cards se retrouvent sur la même row dans une colonne, le solver applique la stratégie canonique de la section 4.5 : la card fixed ou la plus prioritaire garde la place, l’autre est poussée vers le slot valide le plus proche, en préférant le bas en cas d’égalité stricte.
 
-Priorité :
-
-```txt
-1. played
-2. locked
-3. anchor ou card directement manipulée
-4. card poussée par propagation prioritaire
-5. card appartenant à un groupe linké en cours d’alignement
-6. card la plus stable dans l’ordre précédent
-7. id stable
-```
-
-Si la card poussée appartient à un link, cette card devient un relais de priorité pour son propre groupe linké.
+Si la card poussée appartient à un link, cette card devient un relais de priorité pour son propre groupe linké selon les règles chiffrées de la section 4.7.
 
 ---
 
-## 10. Résolution des conflicts
+## 11. Résolution des conflicts
 
 Si deux cards en conflict sont sur la même row, le solver déplace la card dont le coût de déplacement est le plus faible.
 
@@ -511,7 +851,7 @@ Si aucune réparation ne peut séparer les deux cards sans déplacer du fixed, l
 
 ---
 
-## 11. Propagation de priorité
+## 12. Propagation de priorité
 
 La propagation est obligatoire.
 
@@ -523,13 +863,13 @@ B link C
 → C gagne une priorité sur les autres cards de sa colonne
 ```
 
-Le solver doit maintenir une file de propagation conceptuelle :
+Le solver doit maintenir une file de propagation conceptuelle en appliquant les valeurs canoniques de la section 4.7 :
 
 ```js
 [
-  { cardId: "A", reason: "user_move", priority: 100 },
-  { cardId: "B", reason: "pushed_by_A", priority: 80 },
-  { cardId: "C", reason: "linked_to_B", priority: 70 }
+  { cardId: "A", reason: "user_move", priority: 1000 },
+  { cardId: "B", reason: "pushed_by_A", priority: 800 },
+  { cardId: "C", reason: "linked_to_B", priority: 700 }
 ]
 ```
 
@@ -545,7 +885,7 @@ Cela évite les comportements où un link marche une fois sur deux selon l’ord
 
 ---
 
-## 12. Normalisation finale
+## 13. Normalisation finale
 
 À la fin, le solver peut compacter l’affichage des colonnes :
 
@@ -565,7 +905,7 @@ visualIndex  = index compact pour affichage
 
 ---
 
-## 13. Transactions qui déclenchent le resolver
+## 14. Transactions qui déclenchent le resolver
 
 Le resolver doit être appelé après toute transaction qui modifie l’ordre, les cards visibles ou les contraintes :
 
@@ -586,7 +926,7 @@ Même si une action ne semble rien déplacer, appeler le resolver doit être san
 
 ---
 
-## 14. Validation avant transaction vs replay défensif
+## 15. Validation avant transaction vs replay défensif
 
 ### Avant transaction
 
@@ -611,9 +951,9 @@ Elle doit :
 
 ---
 
-## 15. Exemples de référence
+## 16. Exemples de référence
 
-### 15.1 Drag simple avec collision
+### 16.1 Drag simple avec collision
 
 ```txt
 Avant : A, B, C
@@ -623,7 +963,7 @@ Après : A, C, B
 
 C garde la position demandée. B est poussée.
 
-### 15.2 Drag qui pousse une card linkée
+### 16.2 Drag qui pousse une card linkée
 
 ```txt
 Chant   : A, B
@@ -634,7 +974,7 @@ Action : A est déplacé après B, ce qui pousse B
 
 B est poussée dans Chant. D doit suivre B en Guitare si elle est mobile. Si D pousse C ou une autre card, la propagation continue.
 
-### 15.3 Link avec target fixe
+### 16.3 Link avec target fixe
 
 ```txt
 A locked row 2
@@ -644,7 +984,7 @@ A link B
 
 B rejoint la row 2 si possible. A ne bouge pas.
 
-### 15.4 Link impossible avec deux targets fixes
+### 16.4 Link impossible avec deux targets fixes
 
 ```txt
 A locked row 2
@@ -654,7 +994,7 @@ A link B
 
 Warning : link impossible, les deux targets sont fixes sur des rows différentes.
 
-### 15.5 Conflict simple
+### 16.5 Conflict simple
 
 ```txt
 A row 3
@@ -664,7 +1004,7 @@ A conflict B
 
 Le solver déplace la card au coût le plus faible vers le slot valide le plus proche.
 
-### 15.6 Conflict impossible
+### 16.6 Conflict impossible
 
 ```txt
 A locked row 3
@@ -674,7 +1014,7 @@ A conflict B
 
 Warning : conflict impossible, les deux targets sont fixes sur la même row.
 
-### 15.7 Rounds mélangés
+### 16.7 Rounds mélangés
 
 ```txt
 Avant : A r1, B r1, A r2, B r2
@@ -684,13 +1024,13 @@ Après possible : B r2, A r1, B r1, A r2
 
 Le résultat est valide si toutes les contraintes dures sont satisfaites. Le round n’interdit pas ce mélange.
 
-### 15.8 Suppression de link ou conflict
+### 16.8 Suppression de link ou conflict
 
 Supprimer une contrainte ne restaure pas un ancien ordre. Le solver repart de l’ordre résolu courant et ne bouge que ce qui est nécessaire pour satisfaire les contraintes restantes.
 
 ---
 
-## 16. Tests minimaux attendus
+## 17. Tests minimaux attendus
 
 Le moteur doit avoir des tests couvrant au minimum :
 
