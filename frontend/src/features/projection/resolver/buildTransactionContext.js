@@ -339,26 +339,35 @@ const EVENT_CONTEXT_BUILDERS = Object.freeze({
       validationHints: ["target_must_exist"],
       possibleWarnings: ["missing_target:card_target_missing"],
     }),
-  [EVENT_TYPES.APPEARANCE_SKIPPED]: (_state, event) => {
+  [EVENT_TYPES.APPEARANCE_SKIPPED]: (state, event) => {
     const skippedCardId = event.payload?.appearanceId ?? null;
+    const replacementCardId =
+      event.payload?.replacementCardId ??
+      targetToCardId(event.payload?.replacement) ??
+      event.payload?.createdHoleId ??
+      null;
+    const skippedResolvedRow =
+      event.payload?.preferredResolvedRow ??
+      event.payload?.targetResolvedRow ??
+      previousResolvedRow(state, skippedCardId);
     return context({
       intent: "skip",
       anchorCardId: skippedCardId,
       affectedCardIds: [
         skippedCardId,
-        event.payload?.replacementCardId,
+        replacementCardId,
         event.payload?.createdHoleId,
       ],
-      preferredResolvedRow:
-        event.payload?.preferredResolvedRow ??
-        event.payload?.targetResolvedRow ??
-        null,
+      preferredResolvedRow: skippedResolvedRow,
       skippedCardId,
       removedLinkIds: event.payload?.removedLinkIds ?? [],
       metadata: {
         skippedAppearanceId: skippedCardId,
-        replacementCardId: event.payload?.replacementCardId ?? null,
+        skippedResolvedRow,
+        replacementCardId,
         createdHoleId: event.payload?.createdHoleId ?? null,
+        // Legacy replay-only hint. It must not become canonical ordering truth.
+        legacyOriginalPlateauIndex: event.payload?.originalPlateauIndex,
       },
       validationHints: ["refuse_skip_if_target_played_or_locked"],
       possibleWarnings: [

@@ -162,7 +162,10 @@ describe('projectJamState', () => {
       tx(6, [{ type: 'appearance_skipped', payload: { appearanceId: 'appearance_a', instrumentId: 'instrument_guitar', originalPlateauIndex: 2, replacement: { mode: 'none' }, createdHoleId: null, removedLinkIds: ['link_1'], confirmedDelink: true } }]),
     ] });
 
-    expect(state.appearances.appearance_a.skippedAtPlateauIndex).toBe(2);
+    expect(state.appearances.appearance_a.skipped).toBe(true);
+    expect(state.appearances.appearance_a.skippedResolvedRow).toBe(1);
+    expect(state.appearances.appearance_a.legacyOriginalPlateauIndex).toBe(2);
+    expect(state.appearances.appearance_a.skippedAtPlateauIndex).toBeUndefined();
     expect(state.links.link_1.status).toBe('removed');
   });
 

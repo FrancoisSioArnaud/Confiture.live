@@ -143,7 +143,7 @@ beforeEach(async () => {
   vi.useRealTimers();
   await resetLocalDbForTests();
   resetSyncStatusForTests();
-  jamStore.setState({ jamId: null, transactions: [], events: [], snapshot: null, projection: projectJamState(), projectionWarnings: [], lastProjectedAt: null });
+  jamStore.setState({ jamId: null, transactions: [], events: [], snapshot: null, projection: projectJamState(), projectionWarnings: [], lastProjectedAt: null, lastTransactionError: null });
 });
 
 
@@ -156,6 +156,111 @@ describe('local-first sync layer', () => {
     expect(projection.jam.name).toBe('Jam sync');
     expect(jamStore.getState().projection.jam.name).toBe('Jam sync');
     expect(getSyncStatus('jam_sync')).toMatchObject({ status: SYNC_STATUS.PENDING, pendingCount: 1 });
+  });
+
+  it('refuses an invalid local transaction before enqueueing it as pending', async () => {
+    await jamStore.getState().applyLocalTransaction(transaction(1), { sync: false });
+    const invalid = singleEventTransaction(2, 'not_allowed_event', {});
+
+    await expect(jamStore.getState().applyLocalTransaction(invalid, { sync: false }))
+      .rejects.toMatchObject({
+        name: 'TransactionValidationError',
+        validation: { ok: false, reason: 'unsupported_event_type' },
+      });
+
+    expect(await getLocalTransactions('jam_sync')).toHaveLength(1);
+    expect(await getPendingTransactions('jam_sync')).toHaveLength(1);
+    expect(jamStore.getState().lastTransactionError).toMatchObject({
+      ok: false,
+      reason: 'unsupported_event_type',
+    });
+  });
+
+  it('refuses links in the same column and conflicts on already linked cards centrally', async () => {
+    await jamStore.getState().applyLocalTransaction(transaction(1), { sync: false });
+    await jamStore.getState().applyLocalTransaction(participantTransaction(2, 'a', 'order_0'), { sync: false });
+    await jamStore.getState().applyLocalTransaction(participantTransaction(3, 'b', 'order_1'), { sync: false });
+
+    const sameColumnLink = singleEventTransaction(4, 'link_created', {
+      linkId: 'link_same_column',
+      targets: [
+        { type: 'appearance', id: 'appearance_participation_a_guitar_1' },
+        { type: 'appearance', id: 'appearance_participation_b_guitar_1' },
+      ],
+      reorderStrategy: 'move_to_first',
+    });
+    await expect(jamStore.getState().applyLocalTransaction(sameColumnLink, { sync: false }))
+      .rejects.toMatchObject({ validation: { reason: 'link_targets_same_column' } });
+
+    await jamStore.getState().applyLocalTransaction(singleEventTransaction(5, 'instrument_added', {
+      instrumentId: 'instrument_voice',
+      label: 'Voix',
+      orderKey: 'order_voice',
+      visible: true,
+      isDefault: false,
+    }), { sync: false });
+    await jamStore.getState().applyLocalTransaction({
+      ...participantTransaction(6, 'c', 'order_0'),
+      events: participantTransaction(6, 'c', 'order_0').events.map((event) =>
+        event.type === 'participation_added'
+          ? { ...event, payload: { ...event.payload, participationId: 'participation_c_voice', instrumentId: 'instrument_voice' } }
+          : event,
+      ),
+    }, { sync: false });
+    await jamStore.getState().applyLocalTransaction(singleEventTransaction(7, 'link_created', {
+      linkId: 'link_guitar_voice',
+      targets: [
+        { type: 'appearance', id: 'appearance_participation_a_guitar_1' },
+        { type: 'appearance', id: 'appearance_participation_c_voice_1' },
+      ],
+      reorderStrategy: 'move_to_first',
+    }), { sync: false });
+    const linkedConflict = singleEventTransaction(8, 'conflict_created', {
+      conflictId: 'conflict_linked',
+      scope: 'appearance',
+      targetIds: [
+        'appearance_participation_a_guitar_1',
+        'appearance_participation_c_voice_1',
+      ],
+      reason: 'manual',
+    });
+
+    await expect(jamStore.getState().applyLocalTransaction(linkedConflict, { sync: false }))
+      .rejects.toMatchObject({ validation: { reason: 'conflict_targets_same_link_group' } });
+    expect((await getPendingTransactions('jam_sync')).map((item) => item.transactionId))
+      .not.toContain('transaction_conflict_created_8');
+  });
+
+  it('refuses manual moves for locked and played cards centrally', async () => {
+    await jamStore.getState().applyLocalTransaction(transaction(1), { sync: false });
+    await jamStore.getState().applyLocalTransaction(participantTransaction(2, 'a', 'order_0'), { sync: false });
+    await jamStore.getState().applyLocalTransaction(participantTransaction(3, 'b', 'order_1'), { sync: false });
+    await jamStore.getState().applyLocalTransaction(singleEventTransaction(4, 'appearance_locked', {
+      appearanceId: 'appearance_participation_a_guitar_1',
+    }), { sync: false });
+
+    await expect(jamStore.getState().applyLocalTransaction(singleEventTransaction(5, 'appearance_moved_between', {
+      appearanceId: 'appearance_participation_a_guitar_1',
+      instrumentId: 'instrument_guitar',
+      afterTarget: { type: 'appearance', id: 'appearance_participation_b_guitar_1' },
+      beforeTarget: null,
+    }), { sync: false })).rejects.toMatchObject({ validation: { reason: 'card_locked_cannot_move' } });
+
+    await jamStore.getState().applyLocalTransaction(singleEventTransaction(6, 'appearance_unlocked', {
+      appearanceId: 'appearance_participation_a_guitar_1',
+    }), { sync: false });
+    await jamStore.getState().applyLocalTransaction(singleEventTransaction(7, 'plateau_played', {
+      plateauIndex: 0,
+      targets: [{ type: 'appearance', id: 'appearance_participation_a_guitar_1' }],
+      playedAt: '2026-06-22T00:00:00.000Z',
+    }), { sync: false });
+
+    await expect(jamStore.getState().applyLocalTransaction(singleEventTransaction(8, 'appearance_moved_between', {
+      appearanceId: 'appearance_participation_a_guitar_1',
+      instrumentId: 'instrument_guitar',
+      afterTarget: { type: 'appearance', id: 'appearance_participation_b_guitar_1' },
+      beforeTarget: null,
+    }), { sync: false })).rejects.toMatchObject({ validation: { reason: 'card_played_cannot_move' } });
   });
 
   it('pushes pending transactions successfully and records server sequence state', async () => {

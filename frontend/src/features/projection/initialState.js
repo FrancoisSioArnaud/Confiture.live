@@ -12,6 +12,7 @@ export function createInitialProjectionState(snapshot = null) {
     links: {},
     conflicts: {},
     visibleRoundsByInstrument: {},
+    playedRows: {},
     playedPlateaux: {},
     locks: {},
     layoutByCardId: {},

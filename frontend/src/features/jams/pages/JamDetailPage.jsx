@@ -96,7 +96,13 @@ export function JamDetailPage() {
       enqueueFeedback('Action impossible : la jam n’est pas disponible pour l’édition', 'warning');
       return null;
     }
-    return jamStore.getState().applyLocalTransaction(withReservedClientSequence(transaction));
+    return jamStore.getState()
+      .applyLocalTransaction(withReservedClientSequence(transaction))
+      .catch((error) => {
+        const message = error?.validation?.message ?? error?.message ?? 'Transaction refusée.';
+        enqueueFeedback(message, 'warning');
+        return null;
+      });
   }
 
   return (

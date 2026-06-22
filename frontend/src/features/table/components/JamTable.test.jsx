@@ -31,6 +31,23 @@ function tableProjection() {
         locked: false,
         played: false,
       }],
+      rows: [{
+        visualIndex: 1,
+        resolvedRow: 1,
+        cardId: 'appearance_1',
+        card: {
+          id: 'appearance_1',
+          type: 'appearance',
+          appearanceId: 'appearance_1',
+          participantId: 'participant_nicolas',
+          participationId: 'participation_1',
+          instrumentId: 'instrument_guitar',
+          appearanceIndex: 1,
+          locked: false,
+          played: false,
+        },
+        isVisualEmptyCell: false,
+      }],
     }],
     countersByInstrument: { instrument_guitar: { notYetPlayedFirstTime: 1 } },
     playedPlateaux: {},
@@ -114,5 +131,21 @@ describe('JamTable insertion zones and compact cards', () => {
     expect(within(card).getByRole('button', { name: 'Menu card' })).toBeInTheDocument();
     expect(within(card).getByRole('button', { name: 'Déplacer verticalement' })).toBeInTheDocument();
     expect(actionButtons).toHaveLength(3);
+  });
+
+  it('renders the projection rows it receives without aligning by local card index', () => {
+    const projection = tableProjection();
+    projection.visibleResolvedRows = [3, 8];
+    projection.columns[0].cards[0].resolvedRow = 8;
+    projection.columns[0].cards[0].visualIndex = 2;
+    projection.columns[0].rows = [
+      { visualIndex: 1, resolvedRow: 3, cardId: null, card: null, isVisualEmptyCell: true },
+      { visualIndex: 2, resolvedRow: 8, cardId: 'appearance_1', card: projection.columns[0].cards[0], isVisualEmptyCell: false },
+    ];
+
+    renderTable({ projection });
+
+    expect(screen.getByTestId('empty-cell-instrument_guitar-1')).toBeInTheDocument();
+    expect(screen.getByTestId('appearance-card-appearance_1')).toBeInTheDocument();
   });
 });

@@ -92,22 +92,135 @@ describe('projection engine business rules', () => {
     expect(state.locks).toEqual({});
   });
 
-  it('marks played plateau targets, only unplays the latest plateau, and keeps played cards immobile', () => {
+  it('captures the current resolvedRow when locking appearances and holes, then keeps them fixed', () => {
+    const state = project([
+      ...baseJamTransactions(),
+      tx(5, [
+        { type: 'appearance_materialized', payload: { appearanceId: 'appearance_a', participationId: 'p_a', instrumentId: 'instrument_guitar', appearanceIndex: 1, positionKey: 'a' } },
+        { type: 'appearance_materialized', payload: { appearanceId: 'appearance_b', participationId: 'p_b', instrumentId: 'instrument_guitar', appearanceIndex: 1, positionKey: 'b' } },
+        { type: 'hole_added', payload: { holeId: 'hole_c', instrumentId: 'instrument_guitar', appearanceIndex: 1, reason: 'manual', afterTarget: null, beforeTarget: null, positionKey: 'c' } },
+      ]),
+      tx(6, [{ type: 'appearance_locked', payload: { appearanceId: 'appearance_a' } }, { type: 'hole_locked', payload: { holeId: 'hole_c' } }]),
+      tx(7, [
+        { type: 'appearance_moved_between', payload: { appearanceId: 'appearance_a', instrumentId: 'instrument_guitar', afterTarget: { type: 'hole', id: 'hole_c' }, beforeTarget: null, movedLinkedGroup: false } },
+        { type: 'hole_moved_between', payload: { holeId: 'hole_c', instrumentId: 'instrument_guitar', afterTarget: { type: 'appearance', id: 'appearance_b' }, beforeTarget: null, movedLinkedGroup: false } },
+      ]),
+    ]);
+
+    expect(state.appearances.appearance_a).toMatchObject({
+      locked: true,
+      lockedResolvedRow: 1,
+      preferredResolvedRow: 1,
+      resolvedRow: 1,
+    });
+    expect(state.holes.hole_c).toMatchObject({
+      locked: true,
+      lockedResolvedRow: 3,
+      preferredResolvedRow: 3,
+      resolvedRow: 3,
+    });
+    expect(state.layoutByCardId.appearance_a.resolvedRow).toBe(1);
+    expect(state.layoutByCardId.hole_c.resolvedRow).toBe(3);
+    expect(state.appearances.appearance_a.lockedAtPlateauIndex).toBeUndefined();
+    expect(state.holes.hole_c.lockedAtPlateauIndex).toBeUndefined();
+  });
+
+  it('marks and unplays plateau targets by resolvedRow and keeps played cards immobile', () => {
     const state = project([
       ...baseJamTransactions(),
       tx(5, [{ type: 'appearance_materialized', payload: { appearanceId: 'appearance_a', participationId: 'p_a', instrumentId: 'instrument_guitar', appearanceIndex: 1, positionKey: 'a' } }]),
       tx(6, [{ type: 'hole_added', payload: { holeId: 'hole_b', instrumentId: 'instrument_guitar', appearanceIndex: 1, reason: 'manual', afterTarget: null, beforeTarget: null, positionKey: 'b' } }]),
-      tx(7, [{ type: 'plateau_played', payload: { plateauIndex: 1, targets: [{ type: 'appearance', id: 'appearance_a' }], playedAt: '2026-01-15T21:00:00.000Z' } }]),
-      tx(8, [{ type: 'plateau_played', payload: { plateauIndex: 2, targets: [{ type: 'hole', id: 'hole_b' }], playedAt: '2026-01-15T21:05:00.000Z' } }]),
-      tx(9, [{ type: 'plateau_unplayed', payload: { plateauIndex: 1, targets: [{ type: 'appearance', id: 'appearance_a' }] } }]),
+      tx(7, [{ type: 'plateau_played', payload: { plateauIndex: 99, playedResolvedRow: 1, targetResolvedRow: 1, targets: [{ type: 'appearance', id: 'appearance_a' }], playedAt: '2026-01-15T21:00:00.000Z' } }]),
+      tx(8, [{ type: 'plateau_played', payload: { plateauIndex: 2, playedResolvedRow: 2, targetResolvedRow: 2, targets: [{ type: 'hole', id: 'hole_b' }], playedAt: '2026-01-15T21:05:00.000Z' } }]),
+      tx(9, [{ type: 'plateau_unplayed', payload: { plateauIndex: 42, playedResolvedRow: 1, targetResolvedRow: 1, targets: [{ type: 'appearance', id: 'appearance_a' }] } }]),
       tx(10, [{ type: 'appearance_moved_between', payload: { appearanceId: 'appearance_a', instrumentId: 'instrument_guitar', afterTarget: { type: 'hole', id: 'hole_b' }, beforeTarget: null, movedLinkedGroup: false } }]),
     ]);
 
-    expect(state.appearances.appearance_a.played).toBe(true);
+    expect(state.appearances.appearance_a.played).toBe(false);
     expect(state.holes.hole_b.played).toBe(true);
-    expect(state.playedPlateaux).toEqual({ 1: true, 2: true });
-    expect(state.projectionWarnings.map((warning) => warning.code)).toContain('non_last_plateau_unplayed_ignored');
-    expect(state.projectionWarnings.map((warning) => warning.type)).toContain('invalid_action_replayed');
+    expect(state.playedRows).toEqual({ 2: true });
+    expect(state.playedPlateaux).toEqual({ 2: true });
+  });
+
+  it('uses resolvedRow rather than legacy plateauIndex for played rows during replay', () => {
+    const transactions = [
+      ...baseJamTransactions(),
+      tx(5, [{ type: 'appearance_materialized', payload: { appearanceId: 'appearance_a', participationId: 'p_a', instrumentId: 'instrument_guitar', appearanceIndex: 1, positionKey: 'a' } }]),
+      tx(6, [{ type: 'hole_added', payload: { holeId: 'hole_b', instrumentId: 'instrument_guitar', appearanceIndex: 1, reason: 'manual', afterTarget: null, beforeTarget: null, positionKey: 'b' } }]),
+      tx(7, [{ type: 'plateau_played', payload: { plateauIndex: 0, playedResolvedRow: 5, targetResolvedRow: 5, targets: [{ type: 'appearance', id: 'appearance_a' }], playedAt: '2026-01-15T21:00:00.000Z' } }]),
+      tx(8, [{ type: 'plateau_played', payload: { plateauIndex: 999, playedResolvedRow: 9, targetResolvedRow: 9, targets: [{ type: 'hole', id: 'hole_b' }], playedAt: '2026-01-15T21:05:00.000Z' } }]),
+      tx(9, [{ type: 'plateau_unplayed', payload: { plateauIndex: 0, playedResolvedRow: 5, targetResolvedRow: 5, targets: [{ type: 'appearance', id: 'appearance_a' }] } }]),
+    ];
+
+    const first = project(transactions);
+    const second = project(transactions);
+    expect(first.appearances.appearance_a.played).toBe(false);
+    expect(first.holes.hole_b.played).toBe(true);
+    expect(first.playedRows).toEqual({ 9: true });
+    expect(first.playedPlateaux).toEqual({ 9: true });
+    expect(second.playedRows).toEqual(first.playedRows);
+    expect(second.appearances.appearance_a.played).toBe(
+      first.appearances.appearance_a.played,
+    );
+    expect(second.holes.hole_b.played).toBe(first.holes.hole_b.played);
+  });
+
+  it('creates played_empty_slot holes as fixed business cards on targetResolvedRow', () => {
+    const state = project([
+      ...baseJamTransactions(),
+      tx(5, [
+        { type: 'hole_added', payload: { holeId: 'hole_empty_guitar', instrumentId: 'instrument_guitar', appearanceIndex: 1, reason: 'played_empty_slot', afterTarget: null, beforeTarget: null, positionKey: 'empty_guitar', preferredResolvedRow: 7, targetResolvedRow: 7 } },
+        { type: 'plateau_played', payload: { plateauIndex: 0, playedResolvedRow: 7, targetResolvedRow: 7, targets: [{ type: 'hole', id: 'hole_empty_guitar' }], playedAt: '2026-01-15T21:00:00.000Z' } },
+      ]),
+      participantWithParticipation(6, { participantId: 'participant_later', name: 'Later', participationId: 'participation_later_guitar', instrumentId: 'instrument_guitar', baseOrderKey: 'a' }),
+    ]);
+
+    expect(state.holes.hole_empty_guitar).toMatchObject({
+      reason: 'played_empty_slot',
+      targetResolvedRow: 7,
+      preferredResolvedRow: 7,
+      played: true,
+      playedResolvedRow: 7,
+      resolvedRow: 7,
+    });
+    expect(state.layoutByCardId.hole_empty_guitar.resolvedRow).toBe(7);
+  });
+
+  it('places multiple played_empty_slot holes from one transaction on the same global resolvedRow', () => {
+    const state = project([
+      ...baseJamTransactions(),
+      tx(5, [
+        { type: 'hole_added', payload: { holeId: 'hole_empty_guitar', instrumentId: 'instrument_guitar', appearanceIndex: 1, reason: 'played_empty_slot', afterTarget: null, beforeTarget: null, positionKey: 'empty_guitar', preferredResolvedRow: 4, targetResolvedRow: 4 } },
+        { type: 'hole_added', payload: { holeId: 'hole_empty_drums', instrumentId: 'instrument_drums', appearanceIndex: 1, reason: 'played_empty_slot', afterTarget: null, beforeTarget: null, positionKey: 'empty_drums', preferredResolvedRow: 4, targetResolvedRow: 4 } },
+        { type: 'plateau_played', payload: { plateauIndex: 0, playedResolvedRow: 4, targetResolvedRow: 4, targets: [{ type: 'hole', id: 'hole_empty_guitar' }, { type: 'hole', id: 'hole_empty_drums' }], playedAt: '2026-01-15T21:00:00.000Z' } },
+      ]),
+    ]);
+
+    expect(state.layoutByCardId.hole_empty_guitar.resolvedRow).toBe(4);
+    expect(state.layoutByCardId.hole_empty_drums.resolvedRow).toBe(4);
+    expect(state.holes.hole_empty_guitar.played).toBe(true);
+    expect(state.holes.hole_empty_drums.played).toBe(true);
+  });
+
+  it('keeps normal unplayed holes movable and does not materialize visual empty cells without hole_added', () => {
+    const visualOnly = project([
+      ...baseJamTransactions(),
+      participantWithParticipation(5, { participantId: 'participant_voice', name: 'Voice', participationId: 'participation_voice', instrumentId: 'instrument_vocals', baseOrderKey: 'a' }),
+    ]);
+    expect(Object.keys(visualOnly.holes)).toEqual([]);
+
+    const movedHole = project([
+      ...baseJamTransactions(),
+      tx(5, [
+        { type: 'hole_added', payload: { holeId: 'hole_a', instrumentId: 'instrument_guitar', appearanceIndex: 1, reason: 'manual', afterTarget: null, beforeTarget: null, positionKey: 'a' } },
+        { type: 'hole_added', payload: { holeId: 'hole_b', instrumentId: 'instrument_guitar', appearanceIndex: 1, reason: 'manual', afterTarget: null, beforeTarget: null, positionKey: 'b' } },
+      ]),
+      tx(6, [{ type: 'hole_moved_between', payload: { holeId: 'hole_a', instrumentId: 'instrument_guitar', afterTarget: { type: 'hole', id: 'hole_b' }, beforeTarget: null, movedLinkedGroup: false } }]),
+    ]);
+    expect(movedHole.holes.hole_a.played).toBe(false);
+    expect(movedHole.layoutByCardId.hole_a.resolvedRow).toBeGreaterThan(
+      movedHole.layoutByCardId.hole_b.resolvedRow,
+    );
   });
 
   it('adds/removes holes and removes links targeting removed holes', () => {
@@ -133,9 +246,39 @@ describe('projection engine business rules', () => {
     ]);
 
     expect(state.links.link_skip.status).toBe('removed');
-    expect(state.appearances.appearance_participation_nicolas_guitar_1.skippedAtPlateauIndex).toBe(1);
+    expect(state.appearances.appearance_participation_nicolas_guitar_1.skipped).toBe(true);
+    expect(state.appearances.appearance_participation_nicolas_guitar_1.skippedResolvedRow).toBe(1);
+    expect(state.appearances.appearance_participation_nicolas_guitar_1.legacyOriginalPlateauIndex).toBe(1);
+    expect(state.appearances.appearance_participation_nicolas_guitar_1.skippedAtPlateauIndex).toBeUndefined();
     expect(state.participants.participant_nicolas.presenceStatus).toBeUndefined();
     expect(state.participants.participant_nicolas.status).toBe('active');
+  });
+
+  it('skips and pushes only the targeted appearance without moving its future appearances', () => {
+    const beforeSkipTransactions = [
+      ...baseJamTransactions(),
+      tx(5, [{ type: 'instrument_round_visibility_changed', payload: { instrumentId: 'instrument_guitar', visibleRoundCount: 2 } }]),
+      participantWithParticipation(6, { participantId: 'participant_nicolas', name: 'Nicolas', participationId: 'participation_nicolas_guitar', instrumentId: 'instrument_guitar', baseOrderKey: 'a' }),
+      participantWithParticipation(7, { participantId: 'participant_lina', name: 'Lina', participationId: 'participation_lina_guitar', instrumentId: 'instrument_guitar', baseOrderKey: 'b' }),
+      tx(8, [{ type: 'hole_added', payload: { holeId: 'hole_replacement', instrumentId: 'instrument_guitar', appearanceIndex: 1, reason: 'call_drawer_without_musician', afterTarget: null, beforeTarget: null, positionKey: 'c' } }]),
+      tx(9, [
+        { type: 'link_created', payload: { linkId: 'link_skipped_only', targets: [{ type: 'appearance', id: 'appearance_participation_nicolas_guitar_1' }, { type: 'hole', id: 'hole_replacement' }], anchorTarget: { type: 'appearance', id: 'appearance_participation_nicolas_guitar_1' }, reorderStrategy: 'move_to_first' } },
+      ]),
+    ];
+    const beforeSkip = project(beforeSkipTransactions);
+    const futureRowBeforeSkip = beforeSkip.layoutByCardId.appearance_participation_nicolas_guitar_2.resolvedRow;
+
+    const afterSkip = project([
+      ...beforeSkipTransactions,
+      tx(10, [
+        { type: 'appearance_skipped', payload: { appearanceId: 'appearance_participation_nicolas_guitar_1', instrumentId: 'instrument_guitar', targetResolvedRow: 1, originalPlateauIndex: 42, replacement: { mode: 'hole', holeId: 'hole_replacement' }, createdHoleId: 'hole_replacement', removedLinkIds: ['link_skipped_only'], confirmedDelink: true } },
+      ]),
+    ]);
+
+    expect(afterSkip.links.link_skipped_only.status).toBe('removed');
+    expect(afterSkip.appearances.appearance_participation_nicolas_guitar_1.skipped).toBe(true);
+    expect(afterSkip.appearances.appearance_participation_nicolas_guitar_2.skipped).not.toBe(true);
+    expect(afterSkip.layoutByCardId.appearance_participation_nicolas_guitar_2.resolvedRow).toBe(futureRowBeforeSkip);
   });
 
   it('marks a participant left by keeping played history and removing future calculated appearances', () => {

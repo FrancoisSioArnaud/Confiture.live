@@ -219,6 +219,20 @@ function expectWarningsInCatalog(result) {
   });
 }
 
+function normalizedWarnings(result) {
+  return result.projectionWarnings.map(
+    ({ type, reason, severity, cardIds, linkIds, conflictIds, columnIds }) => ({
+      type,
+      reason,
+      severity,
+      cardIds,
+      linkIds,
+      conflictIds,
+      columnIds,
+    }),
+  );
+}
+
 function withPreviousLayout(input, layoutByCardId, nextContext = {}) {
   return {
     ...clone(input),
@@ -443,6 +457,302 @@ describe("resolver invariants", () => {
     expect(result.layoutByCardId.round_2_before_round_1.visualIndex).toBeLessThan(
       result.layoutByCardId.round_1_after_round_2.visualIndex,
     );
+  });
+
+  it("aligns transitive link groups and propagates pushed-card priority", () => {
+    const input = {
+      cards: [
+        makeCard("transitive", "instrument_voice", 1, { cardId: "A" }),
+        makeCard("transitive", "instrument_voice", 2, { cardId: "B" }),
+        makeCard("transitive", "instrument_guitar", 1, { cardId: "D" }),
+        makeCard("transitive", "instrument_guitar", 2, { cardId: "C" }),
+        makeCard("transitive", "instrument_bass", 3, { cardId: "E" }),
+      ],
+      links: [
+        { linkId: "link_B_C", targetCardIds: ["B", "C"], active: true },
+        { linkId: "link_C_E", targetCardIds: ["C", "E"], active: true },
+      ],
+      conflicts: [],
+      hiddenColumnIds: [],
+      previousLayout: {
+        byCardId: {
+          A: { resolvedRow: 1 },
+          B: { resolvedRow: 2 },
+          D: { resolvedRow: 1 },
+          C: { resolvedRow: 2 },
+          E: { resolvedRow: 3 },
+        },
+      },
+      transactionContext: {
+        transactionId: "transaction_transitive_links",
+        intent: "move",
+        anchorCardId: "A",
+        afterTargetCardId: "B",
+        beforeTargetCardId: null,
+        affectedCardIds: ["A"],
+      },
+    };
+    const result = resolveOrderAfterTransactionV2(input);
+    expect(result.layoutByCardId.B.resolvedRow).toBe(1);
+    expect(result.layoutByCardId.C.resolvedRow).toBe(1);
+    expect(result.layoutByCardId.E.resolvedRow).toBe(1);
+    expect(result.layoutByCardId.A.resolvedRow).toBe(2);
+    expect(result.layoutByCardId.D.resolvedRow).toBe(2);
+  });
+
+  it("moves a linked group as a logical block when one member is pushed", () => {
+    const input = {
+      cards: [
+        makeCard("block", "instrument_voice", 1, { cardId: "A" }),
+        makeCard("block", "instrument_voice", 2, { cardId: "B" }),
+        makeCard("block", "instrument_guitar", 2, { cardId: "C" }),
+        makeCard("block", "instrument_bass", 2, { cardId: "D" }),
+      ],
+      links: [
+        { linkId: "link_B_C", targetCardIds: ["B", "C"], active: true },
+        { linkId: "link_C_D", targetCardIds: ["C", "D"], active: true },
+      ],
+      conflicts: [],
+      hiddenColumnIds: [],
+      previousLayout: {
+        byCardId: {
+          A: { resolvedRow: 1 },
+          B: { resolvedRow: 2 },
+          C: { resolvedRow: 2 },
+          D: { resolvedRow: 2 },
+        },
+      },
+      transactionContext: {
+        transactionId: "transaction_group_block",
+        intent: "move",
+        anchorCardId: "A",
+        afterTargetCardId: "B",
+        beforeTargetCardId: null,
+        affectedCardIds: ["A"],
+      },
+    };
+    const result = resolveOrderAfterTransactionV2(input);
+    expect(result.layoutByCardId.B.resolvedRow).toBe(1);
+    expect(result.layoutByCardId.C.resolvedRow).toBe(1);
+    expect(result.layoutByCardId.D.resolvedRow).toBe(1);
+  });
+
+  it("warns for a fixed/fixed collision in the same column and still returns a complete layout", () => {
+    const input = {
+      cards: [
+        makeCard("collision", "instrument_voice", 1, {
+          cardId: "fixed_a",
+          locked: true,
+        }),
+        makeCard("collision", "instrument_voice", 1, {
+          cardId: "fixed_b",
+          locked: true,
+        }),
+      ],
+      links: [],
+      conflicts: [],
+      hiddenColumnIds: [],
+      previousLayout: {
+        byCardId: {
+          fixed_a: { resolvedRow: 1 },
+          fixed_b: { resolvedRow: 1 },
+        },
+      },
+      transactionContext: { transactionId: "transaction_fixed_collision" },
+    };
+    const result = resolveOrderAfterTransactionV2(input);
+    expect(result.layoutByCardId.fixed_a).toMatchObject({
+      cardId: "fixed_a",
+      columnId: "instrument_voice",
+      resolvedRow: 1,
+    });
+    expect(result.layoutByCardId.fixed_b).toMatchObject({
+      cardId: "fixed_b",
+      columnId: "instrument_voice",
+      resolvedRow: 1,
+    });
+    expect(normalizedWarnings(result)).toContainEqual({
+      type: "column_collision_unresolvable",
+      reason: "same_column_collision_with_fixed_cards",
+      severity: "error",
+      cardIds: ["fixed_a", "fixed_b"],
+      linkIds: undefined,
+      conflictIds: undefined,
+      columnIds: ["instrument_voice"],
+    });
+  });
+
+  it("warns when fixed linked cards are on different rows", () => {
+    const input = {
+      cards: [
+        makeCard("link_fixed", "instrument_voice", 1, {
+          cardId: "fixed_link_a",
+          locked: true,
+        }),
+        makeCard("link_fixed", "instrument_guitar", 3, {
+          cardId: "fixed_link_b",
+          locked: true,
+        }),
+      ],
+      links: [
+        {
+          linkId: "link_fixed_rows",
+          targetCardIds: ["fixed_link_a", "fixed_link_b"],
+          active: true,
+        },
+      ],
+      conflicts: [],
+      hiddenColumnIds: [],
+      previousLayout: {
+        byCardId: {
+          fixed_link_a: { resolvedRow: 1 },
+          fixed_link_b: { resolvedRow: 3 },
+        },
+      },
+      transactionContext: { transactionId: "transaction_fixed_link_rows" },
+    };
+    const result = resolveOrderAfterTransactionV2(input);
+    expect(normalizedWarnings(result)).toContainEqual({
+      type: "link_unresolvable",
+      reason: "linked_cards_fixed_on_different_rows",
+      severity: "warning",
+      cardIds: ["fixed_link_a", "fixed_link_b"],
+      linkIds: ["link_fixed_rows"],
+      conflictIds: undefined,
+      columnIds: undefined,
+    });
+  });
+
+  it("warns when fixed conflicted cards share a row", () => {
+    const input = {
+      cards: [
+        makeCard("conflict_fixed", "instrument_voice", 1, {
+          cardId: "fixed_conflict_a",
+          locked: true,
+        }),
+        makeCard("conflict_fixed", "instrument_guitar", 1, {
+          cardId: "fixed_conflict_b",
+          locked: true,
+        }),
+      ],
+      links: [],
+      conflicts: [
+        {
+          conflictId: "conflict_fixed_row",
+          targetCardIds: ["fixed_conflict_a", "fixed_conflict_b"],
+          active: true,
+        },
+      ],
+      hiddenColumnIds: [],
+      previousLayout: {
+        byCardId: {
+          fixed_conflict_a: { resolvedRow: 1 },
+          fixed_conflict_b: { resolvedRow: 1 },
+        },
+      },
+      transactionContext: { transactionId: "transaction_fixed_conflict" },
+    };
+    const result = resolveOrderAfterTransactionV2(input);
+    expect(normalizedWarnings(result)).toContainEqual({
+      type: "conflict_unresolvable",
+      reason: "conflicted_cards_fixed_on_same_row",
+      severity: "warning",
+      cardIds: ["fixed_conflict_a", "fixed_conflict_b"],
+      linkIds: undefined,
+      conflictIds: ["conflict_fixed_row"],
+      columnIds: undefined,
+    });
+  });
+
+  it("uses a deterministic alternative link target row when the preferred row is fixed-blocked", () => {
+    const input = {
+      cards: [
+        makeCard("alt", "instrument_voice", 1, { cardId: "A" }),
+        makeCard("alt", "instrument_guitar", 1, { cardId: "B" }),
+        makeCard("alt", "instrument_guitar", 1, {
+          cardId: "fixed_blocker",
+          locked: true,
+        }),
+      ],
+      links: [{ linkId: "link_A_B", targetCardIds: ["A", "B"], active: true }],
+      conflicts: [],
+      hiddenColumnIds: [],
+      previousLayout: {
+        byCardId: {
+          A: { resolvedRow: 1 },
+          B: { resolvedRow: 1 },
+          fixed_blocker: { resolvedRow: 1 },
+        },
+      },
+      transactionContext: { transactionId: "transaction_link_alternative" },
+    };
+    const result = resolveOrderAfterTransactionV2(input);
+    expect(result.layoutByCardId.A.resolvedRow).toBe(2);
+    expect(result.layoutByCardId.B.resolvedRow).toBe(2);
+    expect(result.layoutByCardId.fixed_blocker.resolvedRow).toBe(1);
+    expect(
+      normalizedWarnings(result).some(
+        (warning) =>
+          warning.type === "link_unresolvable" &&
+          warning.reason === "link_target_blocked_by_fixed_card",
+      ),
+    ).toBe(false);
+  });
+
+  it("warns when all deterministic link target alternatives are fixed-blocked", () => {
+    const blockers = Array.from({ length: 202 }, (_, index) => index + 1).flatMap(
+      (row) => [
+        makeCard("blocked", "instrument_voice", row, {
+          cardId: `voice_blocker_${row}`,
+          locked: true,
+        }),
+        makeCard("blocked", "instrument_guitar", row, {
+          cardId: `guitar_blocker_${row}`,
+          locked: true,
+        }),
+      ],
+    );
+    const input = {
+      cards: [
+        makeCard("blocked", "instrument_voice", 1, { cardId: "A" }),
+        makeCard("blocked", "instrument_guitar", 1, { cardId: "B" }),
+        ...blockers,
+      ],
+      links: [{ linkId: "link_blocked", targetCardIds: ["A", "B"], active: true }],
+      conflicts: [],
+      hiddenColumnIds: [],
+      previousLayout: {
+        byCardId: Object.fromEntries(
+          [
+            ["A", { resolvedRow: 1 }],
+            ["B", { resolvedRow: 1 }],
+            ...blockers.map((card) => [
+              card.cardId,
+              { resolvedRow: card.previousResolvedRow },
+            ]),
+          ],
+        ),
+      },
+      transactionContext: { transactionId: "transaction_link_blocked" },
+    };
+    const result = resolveOrderAfterTransactionV2(input);
+    expect(result.layoutByCardId.A).toMatchObject({
+      cardId: "A",
+      columnId: "instrument_voice",
+    });
+    expect(result.layoutByCardId.B).toMatchObject({
+      cardId: "B",
+      columnId: "instrument_guitar",
+    });
+    expect(normalizedWarnings(result)).toContainEqual({
+      type: "link_unresolvable",
+      reason: "link_target_blocked_by_fixed_card",
+      severity: "warning",
+      cardIds: ["A", "B"],
+      linkIds: ["link_blocked"],
+      conflictIds: undefined,
+      columnIds: undefined,
+    });
   });
 
   it("does not let raw JS object or array order change final output", () => {

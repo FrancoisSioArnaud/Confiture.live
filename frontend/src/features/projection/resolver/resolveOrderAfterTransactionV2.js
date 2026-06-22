@@ -66,6 +66,7 @@ export function resolveOrderAfterTransactionV2(input = {}) {
   for (let pass = 0; pass < maxPasses; pass += 1) {
     const result = runResolutionPass(layout, {
       links: linkResult.links,
+      linkGroups: linkResult.groups,
       conflicts: conflictResult.conflicts,
       transactionContext,
     });

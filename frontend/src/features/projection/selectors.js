@@ -46,12 +46,29 @@ export function selectReplacementCandidates(state, instrumentId) {
 }
 
 export function buildColumns(state, layoutByCardId = state.layoutByCardId, visibleResolvedRows = state.visibleResolvedRows) {
-  return selectVisibleInstruments(state).map((instrument) => ({
-    instrument,
-    visibleRoundCount: state.visibleRoundsByInstrument[instrument.instrumentId] ?? 1,
-    visibleResolvedRows: visibleResolvedRows ?? [],
-    cards: selectCardsForInstrument(state, instrument.instrumentId, layoutByCardId),
-  }));
+  const rows = [...(visibleResolvedRows ?? [])].sort((a, b) => a - b);
+  return selectVisibleInstruments(state).map((instrument) => {
+    const cards = selectCardsForInstrument(state, instrument.instrumentId, layoutByCardId);
+    const cardByResolvedRow = new Map(
+      cards.map((card) => [layoutByCardId?.[cardIdForEntity(card)]?.resolvedRow, card]),
+    );
+    return {
+      instrument,
+      visibleRoundCount: state.visibleRoundsByInstrument[instrument.instrumentId] ?? 1,
+      visibleResolvedRows: rows,
+      cards,
+      rows: rows.map((resolvedRow, index) => {
+        const card = cardByResolvedRow.get(resolvedRow) ?? null;
+        return {
+          visualIndex: index + 1,
+          resolvedRow,
+          cardId: card ? cardIdForEntity(card) : null,
+          card,
+          isVisualEmptyCell: !card,
+        };
+      }),
+    };
+  });
 }
 
 export function buildCountersByInstrument(state) {

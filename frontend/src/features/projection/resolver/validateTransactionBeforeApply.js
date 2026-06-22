@@ -233,6 +233,19 @@ function validateCardDeletion(state, event, cardId, kind) {
   return null;
 }
 
+function validateHoleAdded(_state, event) {
+  if (
+    event.payload?.reason === "played_empty_slot" &&
+    !Number.isFinite(event.payload?.targetResolvedRow)
+  )
+    return fail(
+      "played_empty_slot_missing_target_row",
+      "A played empty slot hole requires targetResolvedRow.",
+      { eventId: event.eventId, holeId: event.payload?.holeId },
+    );
+  return null;
+}
+
 function validateTargetEntity(entity, id, kind, event) {
   if (!id || !entity)
     return fail("missing_target", `${kind} target is missing or invalid.`, {
@@ -270,6 +283,8 @@ function validateEvent(state, event) {
       );
     case EVENT_TYPES.HOLE_REMOVED:
       return validateCardDeletion(state, event, event.payload?.holeId, "hole");
+    case EVENT_TYPES.HOLE_ADDED:
+      return validateHoleAdded(state, event);
     case EVENT_TYPES.APPEARANCE_LOCKED:
     case EVENT_TYPES.APPEARANCE_UNLOCKED:
       return validateCardExists(state, event.payload?.appearanceId, {
@@ -321,6 +336,36 @@ function validateEvent(state, event) {
   }
 }
 
+function stateWithEventAppliedForValidation(state, event) {
+  const payload = event.payload ?? {};
+  switch (event.type) {
+    case EVENT_TYPES.HOLE_ADDED:
+      return {
+        ...state,
+        holes: {
+          ...(state.holes ?? {}),
+          [payload.holeId]: {
+            id: payload.holeId,
+            holeId: payload.holeId,
+            type: "hole",
+            instrumentId: payload.instrumentId,
+            columnId: payload.instrumentId,
+            appearanceIndex: payload.appearanceIndex,
+            targetResolvedRow: payload.targetResolvedRow ?? null,
+            preferredResolvedRow:
+              payload.preferredResolvedRow ?? payload.targetResolvedRow ?? null,
+            resolvedRow:
+              payload.targetResolvedRow ?? payload.preferredResolvedRow ?? null,
+            locked: false,
+            played: false,
+          },
+        },
+      };
+    default:
+      return state;
+  }
+}
+
 /**
  * Central pre-apply validation for local/UI transactions.
  *
@@ -334,8 +379,9 @@ function validateEvent(state, event) {
  */
 export function validateTransactionBeforeApply(state = {}, transaction = {}) {
   const events = transaction.events ?? [];
+  let validationState = state;
   for (const event of events) {
-    const error = validateEvent(state, event);
+    const error = validateEvent(validationState, event);
     if (error)
       return {
         ...error,
@@ -345,6 +391,10 @@ export function validateTransactionBeforeApply(state = {}, transaction = {}) {
           ...error.details,
         },
       };
+    validationState = stateWithEventAppliedForValidation(
+      validationState,
+      event,
+    );
   }
   return { ok: true, warnings: [] };
 }

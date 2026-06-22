@@ -141,7 +141,7 @@ function baseJamTx() {
 
 beforeEach(async () => {
   await resetLocalDbForTests();
-  jamStore.setState({ jamId: null, transactions: [], events: [], snapshot: null, projection: projectJamState(), projectionWarnings: [], lastProjectedAt: null });
+  jamStore.setState({ jamId: null, transactions: [], events: [], snapshot: null, projection: projectJamState(), projectionWarnings: [], lastProjectedAt: null, lastTransactionError: null });
 });
 
 describe('jam local-first UX transaction pipeline', () => {
@@ -172,19 +172,19 @@ describe('jam local-first UX transaction pipeline', () => {
       baseJamTx(),
       participantTx(2, 'instrument_vocal', 'a', 'order_0'),
       participantTx(3, 'instrument_vocal', 'b', 'order_1'),
-      participantTx(4, 'instrument_vocal', 'c', 'order_2'),
-      linkTx(5, 'link_a_c', [
-        { type: 'appearance', id: 'appearance_participation_a_instrument_vocal_1' },
-        { type: 'appearance', id: 'appearance_participation_c_instrument_vocal_1' },
-      ], { type: 'appearance', id: 'appearance_participation_a_instrument_vocal_1' }, 'move_to_last'),
+      participantTx(4, 'instrument_guitar', 'c', 'order_0'),
+      linkTx(5, 'link_b_c', [
+        { type: 'appearance', id: 'appearance_participation_b_instrument_vocal_1' },
+        { type: 'appearance', id: 'appearance_participation_c_instrument_guitar_1' },
+      ], { type: 'appearance', id: 'appearance_participation_b_instrument_vocal_1' }, 'move_to_last'),
       moveAppearanceTx(6, 'appearance_participation_a_instrument_vocal_1', 'instrument_vocal', { type: 'appearance', id: 'appearance_participation_b_instrument_vocal_1' }, null),
     ]);
 
-    expect(getCardPlateauIndex(projection, 'instrument_vocal', 'appearance_participation_c_instrument_vocal_1'))
-      .toBe(getCardPlateauIndex(projection, 'instrument_vocal', 'appearance_participation_a_instrument_vocal_1') + 1);
+    expect(getCardPlateauIndex(projection, 'instrument_guitar', 'appearance_participation_c_instrument_guitar_1'))
+      .toBe(getCardPlateauIndex(projection, 'instrument_vocal', 'appearance_participation_b_instrument_vocal_1'));
     const reloaded = await expectStableAfterReload();
-    expect(getCardPlateauIndex(reloaded, 'instrument_vocal', 'appearance_participation_c_instrument_vocal_1'))
-      .toBe(getCardPlateauIndex(reloaded, 'instrument_vocal', 'appearance_participation_a_instrument_vocal_1') + 1);
+    expect(getCardPlateauIndex(reloaded, 'instrument_guitar', 'appearance_participation_c_instrument_guitar_1'))
+      .toBe(getCardPlateauIndex(reloaded, 'instrument_vocal', 'appearance_participation_b_instrument_vocal_1'));
   });
 
   it("keeps played A' pinned when D is added before and after refresh", async () => {
@@ -268,10 +268,10 @@ describe('jam local-first UX transaction pipeline', () => {
     await applyPipeline([
       baseJamTx(),
       participantTx(2, 'instrument_vocal', 'a', 'order_0'),
-      participantTx(3, 'instrument_vocal', 'b', 'order_1'),
+      participantTx(3, 'instrument_guitar', 'b', 'order_0'),
       linkTx(4, 'link_a_b', [
         { type: 'appearance', id: 'appearance_participation_a_instrument_vocal_1' },
-        { type: 'appearance', id: 'appearance_participation_b_instrument_vocal_1' },
+        { type: 'appearance', id: 'appearance_participation_b_instrument_guitar_1' },
       ], { type: 'appearance', id: 'appearance_participation_a_instrument_vocal_1' }, 'average_position'),
     ]);
     const undo = buildLinearUndoTransaction({ jamId, clientId, clientSequenceNumber: 5, transactions: jamStore.getState().transactions });
@@ -287,17 +287,17 @@ describe('jam local-first UX transaction pipeline', () => {
     const projection = await applyPipeline([
       baseJamTx(),
       participantTx(2, 'instrument_vocal', 'a', 'order_0'),
-      participantTx(3, 'instrument_vocal', 'b', 'order_1'),
+      participantTx(3, 'instrument_guitar', 'b', 'order_0'),
       participantTx(4, 'instrument_vocal', 'unused', 'order_2'),
       updateParticipantTx(5, 'a', 'Alice'),
-      lockTx(6, 'appearance_participation_b_instrument_vocal_1'),
-      unlockTx(7, 'appearance_participation_b_instrument_vocal_1'),
+      lockTx(6, 'appearance_participation_b_instrument_guitar_1'),
+      unlockTx(7, 'appearance_participation_b_instrument_guitar_1'),
       linkTx(8, 'link_remove_me', [
         { type: 'appearance', id: 'appearance_participation_a_instrument_vocal_1' },
-        { type: 'appearance', id: 'appearance_participation_b_instrument_vocal_1' },
+        { type: 'appearance', id: 'appearance_participation_b_instrument_guitar_1' },
       ], { type: 'appearance', id: 'appearance_participation_a_instrument_vocal_1' }, 'average_position'),
       removeLinkTx(9, 'link_remove_me'),
-      conflictTx(10, 'conflict_remove_me', ['appearance_participation_a_instrument_vocal_1', 'appearance_participation_b_instrument_vocal_1'], 'appearance_participation_a_instrument_vocal_1'),
+      conflictTx(10, 'conflict_remove_me', ['appearance_participation_a_instrument_vocal_1', 'appearance_participation_b_instrument_guitar_1'], 'appearance_participation_a_instrument_vocal_1'),
       removeConflictTx(11, 'conflict_remove_me'),
       markLeftTx(12, 'b'),
       removeParticipantTx(13, 'unused'),

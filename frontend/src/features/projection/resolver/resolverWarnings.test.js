@@ -14,6 +14,7 @@ const EXPECTED_WARNING_KEYS = [
   ["link_unresolvable", "linked_cards_same_column", "error"],
   ["link_unresolvable", "linked_cards_in_direct_conflict", "error"],
   ["link_unresolvable", "link_target_missing", "warning"],
+  ["link_unresolvable", "link_target_blocked_by_fixed_card", "warning"],
   ["conflict_unresolvable", "conflicted_cards_fixed_on_same_row", "warning"],
   ["conflict_unresolvable", "conflict_target_missing", "warning"],
   [

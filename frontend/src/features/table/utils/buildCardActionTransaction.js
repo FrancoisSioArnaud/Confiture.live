@@ -29,7 +29,6 @@ export function buildToggleLockTransaction({ jamId, clientId, clientSequenceNumb
 }
 
 export function buildRemoveCardTransaction({ jamId, clientId, clientSequenceNumber, card, linked = false }) {
-  if (card.locked || card.played) return null;
   const event = card.type === 'hole'
     ? holeRemoved({ holeId: card.id, confirmedDespiteLink: linked })
     : appearanceRemoved({ appearanceId: card.id, confirmedDespiteLink: linked });
@@ -37,7 +36,6 @@ export function buildRemoveCardTransaction({ jamId, clientId, clientSequenceNumb
 }
 
 export function buildMoveCardTransaction({ jamId, clientId, clientSequenceNumber, card, instrumentId, afterCard = null, beforeCard = null, movedLinkedGroup = false }) {
-  if (card.locked || card.played) return null;
   const payload = { instrumentId, afterTarget: toTarget(afterCard), beforeTarget: toTarget(beforeCard), movedLinkedGroup };
   const event = card.type === 'hole'
     ? holeMovedBetween({ holeId: card.id, ...payload })

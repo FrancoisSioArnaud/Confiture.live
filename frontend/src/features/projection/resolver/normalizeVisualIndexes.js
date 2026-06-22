@@ -20,6 +20,8 @@ export function normalizeVisualIndexes(layout) {
     );
     columnEntries.forEach((entry, index) => {
       layoutByCardId[entry.cardId] = {
+        cardId: entry.cardId,
+        columnId: entry.columnId,
         resolvedRow: entry.resolvedRow,
         visualIndex: visualByRow.get(entry.resolvedRow),
         cardIndexInColumn: index + 1,
