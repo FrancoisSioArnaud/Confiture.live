@@ -161,10 +161,13 @@ Règles :
 
 - le module ne dépend pas de React, MUI, Zustand, Dexie, localStorage ou du DOM ;
 - même state + même context = même projection ;
-- il applique la hiérarchie définie dans `docs/order-resolution-hierarchy-spec.md` ;
-- il protège `played` et `locked` ;
-- il conserve l’anchor de la dernière action autant que possible ;
-- il déplace les cards non-prioritaires pour résoudre conflicts et links ;
-- il complète l’ordre avec manual order, round order, base order et id stable.
+- il applique le solver de contraintes défini dans `docs/order-resolution-hierarchy-spec.md` ;
+- il protège `played` et `locked` comme des cards fixes ;
+- il conserve l’intention de la dernière action autant que possible ;
+- il construit les groupes de links et les conflicts actifs ;
+- il répare collisions, links désalignés et conflicts jusqu’à stabilité ou warning ;
+- il propage la priorité quand une card poussée est elle-même linkée ;
+- il minimise les déplacements et utilise base order / id stable seulement en fallback ;
+- il ne doit jamais utiliser le round comme contrainte d’ordre.
 
 Le store frontend ne doit pas coder une logique d’ordre concurrente dans les composants du tableau. Les composants UI doivent seulement construire des transactions et afficher la projection résolue.

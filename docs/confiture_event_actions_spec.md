@@ -56,32 +56,27 @@ docs/order-resolution-hierarchy-spec.md
 
 Règle non négociable : le même eventLog rejoué depuis zéro doit produire le même tableau final.
 
-La dernière action utilisateur fournit une `anchor` :
+La dernière action utilisateur peut fournir une `anchor` :
 
 - drag manuel → card déplacée ;
-- link → card d’origine du mode link ;
-- conflict → card d’origine du mode conflict ;
-- ajout participation → nouvelle appearance ;
+- ajout participation → nouvelle appearance ou groupe de nouvelles appearances visibles ;
 - action drawer d’appel → décision d’appel ;
-- played/locked → card désormais figée.
+- played/locked → card désormais figée ;
+- link créé → pas d’anchor directionnelle, utiliser la stratégie de link ;
+- conflict créé → pas d’anchor directionnelle, résoudre avec coût minimal ;
+- link/conflict supprimé → pas de retour magique, préserver l’ordre courant sauf contrainte restante.
 
-Le resolver conserve cette anchor autant que possible, puis réorganise les autres cards selon la hiérarchie :
+Le resolver conserve cette anchor autant que possible, puis répare le tableau avec le solver de contraintes défini dans `docs/order-resolution-hierarchy-spec.md`.
+
+Résumé :
 
 ```txt
-removed / left / hidden
-> played
-> locked
-> anchor
-> décisions d’appel
-> conflict
-> link
-> manual order
-> round / appearanceIndex
-> base order
-> id stable
+Contraintes dures : played immobile, locked immobile, une seule card par colonne/row, links alignés si possible, conflicts séparés si possible.
+Contraintes soft : intention de la dernière action, minimisation des déplacements, stabilité de l’ordre courant, fallback stable.
+Round : metadata d’appearance, jamais contrainte d’ordre.
 ```
 
-Les déplacements induits par un link ou un conflict peuvent être des résultats de projection déterministes : ils ne nécessitent pas forcément des events supplémentaires tant que le replay reproduit exactement le même ordre.
+Les déplacements induits par un link, un conflict ou une card poussée peuvent être des résultats de projection déterministes : ils ne nécessitent pas forcément des events supplémentaires tant que le replay reproduit exactement le même ordre.
 
 Un drag n’est pas refusé uniquement parce qu’il touche une card linkée ou conflictuelle. Si la card déplacée n’est ni `played` ni `locked`, la transaction est créée, puis le resolver réajuste le tableau : groupe linké qui suit, conflicts séparés, et pins `played`/`locked` conservés.
 
@@ -572,17 +567,28 @@ Règles :
 
 ## 5.1 Priorités d’immobilité
 
-Ordre de priorité :
+Le resolver n’utilise plus une pile de priorité de tri. Il applique des contraintes dures, puis choisit la réparation au coût le plus faible.
+
+Contraintes dures :
 
 ```txt
-1. played
-2. locked
-3. left / hidden instrument
-4. conflict
-5. link
-6. manual order
-7. base order
-8. generated round order
+- left / hidden / removed filtrés avant affichage
+- played immobile
+- locked immobile
+- une seule card par colonne et par row résolue
+- links alignés si possible
+- conflicts séparés si possible
+- card toujours dans sa colonne instrument
+```
+
+Contraintes soft :
+
+```txt
+- conserver l’intention de la dernière action
+- minimiser le nombre de cards déplacées
+- minimiser la distance de déplacement
+- préserver l’ordre courant quand aucune contrainte ne force un changement
+- fallback stable par ordre de création puis id
 ```
 
 Conséquences :
@@ -591,8 +597,8 @@ Conséquences :
 - une card lockée ne bouge jamais ;
 - un participant `left` ne génère plus d’appearances futures ;
 - un instrument hidden n’apparaît plus dans le tableau ni dans le drawer d’appel ;
-- un conflict gagne toujours contre un link ;
 - un link contradictoire avec un conflict est refusé ;
+- les rounds peuvent être mélangés si le solver en a besoin ;
 - si une action est refusée, afficher une snackbar explicative.
 
 Snackbar recommandée pour link refusé :
@@ -1598,27 +1604,28 @@ Un link est non orienté : il ne contient pas d’anchor et son sens de créatio
 - `scope: participation` s’applique à toute la soirée : toutes les appearances actuelles et futures des participations ciblées héritent du conflict ;
 - après un reveal de round, les nouvelles appearances matérialisées doivent être réévaluées par le resolver ;
 - exemple : un conflict participation `A-C` doit aussi séparer `A'` et `C'` dès que le round suivant est affiché ;
-- si les targets sont déjà sur le même plateau, l’algo doit les séparer ;
-- l’origin card du mode conflict est l’anchor ;
-- la target non-anchor est déplacée vers le slot valide le plus proche : le resolver essaye d’abord les slots suivants, puis les slots précédents si nécessaire ;
-- si l’anchor est jouée ou lockée, elle ne bouge jamais ;
-- si la target non-anchor ne peut pas bouger, l’action est refusée.
+- si les targets sont déjà sur le même plateau, le solver doit les séparer ;
+- le sens de création du conflict ne décide pas quelle card doit bouger ;
+- le solver déplace la card ou le groupe dont le coût de déplacement est le plus faible ;
+- le resolver peut chercher un slot valide en dessous ou au-dessus ;
+- si une target est jouée ou lockée, elle ne bouge jamais ;
+- si aucune target mobile ne peut résoudre le conflict, l’action est refusée ou produit un warning en replay.
 
-Priorité de stabilité :
+Critères de réparation :
 
 ```txt
 1. Ne jamais bouger played.
 2. Ne jamais bouger locked.
-3. Garder l’intention de la dernière action de la dernière action.
-4. Résoudre le conflict en déplaçant la target non-anchor si elle est mobile.
-5. Respecter les links restants si cela ne recrée pas de conflict.
-6. Compléter avec manual order, round order, base order puis id stable.
+3. Éviter de déplacer l’anchor de la dernière action.
+4. Évaluer le coût complet si une card déplacée appartient à un link.
+5. Choisir le slot valide le plus proche.
+6. Ne jamais utiliser le round comme priorité d’ordre.
 ```
 
 Si aucun slot valide n’existe :
 
 ```txt
-Refuser l’action et afficher une snackbar.
+Refuser l’action et afficher une snackbar, ou produire un projectionWarning déterministe si l’event est déjà dans l’historique.
 ```
 
 Snackbar :
@@ -2065,12 +2072,14 @@ Pseudo-règle :
 
 ```txt
 1. Vérifier que les targets sont dans des colonnes différentes.
-2. Vérifier qu’aucun conflict n’existe entre les targets.
-3. Calculer la position cible selon strategy.
-4. Tester le déplacement des targets non alignées.
-5. Refuser si cela déplace played/locked.
-6. Refuser si cela crée un conflict.
-7. Appliquer l’ordre déterministe.
+2. Vérifier qu’aucun conflict direct n’existe entre les targets.
+3. Fusionner les targets via le groupe linké.
+4. Calculer une row cible selon strategy, sauf si une target fixed impose déjà une row.
+5. Tester le déplacement des targets non alignées.
+6. Pousser les cards mobiles qui occupent les slots cibles.
+7. Propager la priorité si une card poussée appartient à un autre link.
+8. Refuser/warning si cela exige de déplacer played/locked ou crée un conflict insoluble.
+9. Continuer jusqu’à stabilité.
 ```
 
 ## 8.3 Position cible

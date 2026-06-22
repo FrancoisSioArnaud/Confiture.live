@@ -1,4 +1,4 @@
-# Prompt Codex — Implémenter `frontend/src/features/projection/orderResolution.js`
+# Prompt Codex — Implémenter le solver de réorder par contraintes
 
 Lis d’abord toute la documentation suivante avant de modifier le code :
 
@@ -9,9 +9,9 @@ Lis d’abord toute la documentation suivante avant de modifier le code :
 - `docs/event-payloads-reference.md`
 - `docs/testing-strategy.md`
 
-Objectif : implémenter un moteur frontend pur et déterministe de résolution d’ordre.
+Objectif : implémenter un moteur frontend pur et déterministe de résolution d’ordre, basé sur un solver de contraintes discrètes.
 
-Créer le module :
+Créer ou remplacer le module :
 
 ```txt
 frontend/src/features/projection/orderResolution.js
@@ -27,21 +27,16 @@ Contraintes non négociables :
 - Même state + même eventLog + même transaction context = même projection.
 - Le même eventLog rejoué deux fois doit produire exactement le même ordre.
 - Les composants UI ne doivent pas contenir de logique concurrente de résolution d’ordre.
+- Le round d’une appearance est une metadata, pas une contrainte d’ordre.
 
-Hiérarchie à implémenter, du plus prioritaire au moins prioritaire :
+Ancienne logique à supprimer :
 
 ```txt
-0. removed / left / hidden
-1. played
-2. locked
-3. anchor de la dernière action utilisateur
-4. décisions d’appel : appearance_skipped / remplacement / faire sans musicien
-5. conflict
-6. link
-7. manual order existant
-8. round / appearanceIndex
-9. base order
-10. fallback stable par id
+- tri round-first obligatoire
+- priorité round / appearanceIndex dans l’ordre final
+- resolver limité à l’anchor et ses links directs
+- conflict orienté par le sens de création
+- retour automatique à un ancien ordre après suppression de link/conflict
 ```
 
 Implémentation attendue :
@@ -49,75 +44,62 @@ Implémentation attendue :
 1. Ajouter `orderResolution.js` avec au minimum :
    - `resolveOrderAfterTransaction(state, context)` ;
    - helpers purs pour collecter les cards actives par colonne ;
-   - identification des anchors ;
-   - identification des cards played/locked ;
-   - construction des groupes linkés ;
-   - détection des conflicts ;
-   - tri stable final.
+   - identification des cards fixed : played, locked, holes played/locked ;
+   - construction des groupes linkés via union-find ;
+   - construction des conflicts actifs ;
+   - détection des impossibilités structurelles ;
+   - recherche des violations : collisions, links désalignés, conflicts actifs ;
+   - réparation itérative bornée ;
+   - scoring des réparations ;
+   - normalisation finale stable ;
+   - production de `projectionWarnings` déterministes.
 
 2. Intégrer le resolver dans le pipeline de projection :
    - appliquer les events d’une transaction ;
    - appeler `resolveOrderAfterTransaction(state, context)` ;
    - passer ensuite à la transaction suivante.
 
-3. Corriger le bug suivant :
+3. Implémenter les contraintes dures :
+   - une card reste dans sa colonne instrument ;
+   - une colonne ne peut pas avoir deux cards sur la même row résolue ;
+   - played ne bouge jamais ;
+   - locked ne bouge jamais ;
+   - links alignés si possible ;
+   - conflicts séparés si possible ;
+   - links impossibles détectés : même colonne, conflict direct, fixed rows différentes ;
+   - conflicts impossibles détectés : deux fixed sur la même row.
 
-```txt
-Avant : A, B, C, A', B', C'
-A, B, C et A' sont joués.
-Ajout de D.
-Attendu : A, B, C, A', D, B', C', D'
-Interdit : A, B, C, D, A', B', C', D'
-```
+4. Implémenter les contraintes soft :
+   - respecter l’intention de la dernière action autant que possible ;
+   - minimiser le nombre de cards déplacées ;
+   - minimiser la distance totale de déplacement ;
+   - préserver l’ordre courant quand aucune contrainte ne force un changement ;
+   - fallback stable par ordre de création puis id ;
+   - ne jamais scorer le round comme priorité.
 
-4. Implémenter la logique d’anchor :
-   - drag manuel : card déplacée ;
-   - link_created : `anchorTarget` ;
-   - conflict_created : `anchorTargetId` ;
-   - participation_added : nouvelles appearances ;
-   - hole_added : nouveau hole ;
-   - appearance_skipped : décision d’appel ;
-   - plateau_played : targets figées.
+5. Implémenter la propagation :
+   - une card déplacée peut pousser une autre card ;
+   - si la card poussée est linkée, son groupe linké doit être réaligné ;
+   - si ce réalignement pousse encore une card linkée, la propagation continue ;
+   - la boucle doit être bornée et retourner `resolver_max_passes_reached` si elle n’atteint pas un état stable.
 
-5. Implémenter les règles link/conflict :
-   - si A est déplacé et linké à C, C suit A ;
-   - si A est anchor et conflict avec B, B bouge si mobile ;
-   - conflict gagne contre link ;
-   - rien ne doit déplacer played ou locked ;
-   - si aucune résolution valide n’existe, produire un warning déterministe ou refuser côté builder si c’est encore possible.
+6. Ajouter ou mettre à jour les tests :
+   - même event log rejoué deux fois → même projection exacte ;
+   - drag simple qui pousse une card mobile ;
+   - drag qui pousse une card linkée et propage son link ;
+   - propagation en chaîne `A pousse B`, `B link C`, `C pousse D`, `D link E` ;
+   - link aligné avec target locked ;
+   - link impossible avec deux targets fixed sur rows différentes ;
+   - conflict simple entre deux cards mobiles ;
+   - conflict où une card est locked ;
+   - conflict impossible entre deux cards fixed ;
+   - création de link refusée si conflict direct ;
+   - création de link refusée si deux targets dans la même colonne ;
+   - suppression de link ne provoquant pas un retour magique ;
+   - suppression de conflict ne provoquant pas un retour magique ;
+   - reveal round puis résolution par solver ;
+   - mélange de rounds autorisé si nécessaire ;
+   - played et locked immobiles ;
+   - undo/redo linéaire puis replay cohérent.
 
-6. Stabiliser played/locked :
-   - quand une card devient played, conserver une position figée dérivée (`playedAtPlateauIndex` / `frozenOrderKey` ou équivalent) ;
-   - quand une card devient locked, conserver sa position courante tant qu’elle reste locked ;
-   - ces champs doivent être recalculables depuis l’eventLog.
-
-7. Ajouter des tests purs frontend couvrant au minimum :
-   - replay identique deux fois ;
-   - ajout D après A' joué ;
-   - drag avec conflict, target mobile ;
-   - drag avec conflict, target played ;
-   - drag avec conflict, target locked ;
-   - drag d’une card linkée ;
-   - drag d’une card linkée avec conflict externe ;
-   - link direct refusé si conflict direct ;
-   - lock empêchant une insertion de passer devant ;
-   - link_removed et conflict_removed ne provoquent pas de retour magique ;
-   - round_revealed respecte played/locked/manual/link/conflict.
-
-8. Adapter les tests existants si nécessaire, mais ne supprime pas de couverture utile.
-
-9. Lancer :
-
-```bash
-cd frontend
-npm test -- --run
-npm run build
-```
-
-Livrable attendu :
-
-- code implémenté ;
-- tests ajoutés/mis à jour ;
-- aucun changement de logique UI non demandé ;
-- pas de refactor massif hors projection/ordering si évitable ;
-- résumé clair des fichiers modifiés et des scénarios validés.
+Livrable attendu : code + tests + mise à jour éventuelle des exports/imports, sans réintroduire de logique d’ordre dans les composants React.

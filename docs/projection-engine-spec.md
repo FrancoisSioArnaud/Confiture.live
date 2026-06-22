@@ -519,53 +519,28 @@ La base de données de V0 n’est pas en production : il n’y a pas besoin de c
 
 ---
 
-### 6.6 Tri round-first par instrument
+### 6.6 Rounds visibles et ordre final
 
-La projection doit trier les cards d’une colonne selon une logique `round-first` :
+Les rounds servent à générer et identifier les appearances visibles, mais ils ne sont plus une contrainte d’ordre du tableau.
 
-```txt
-appearanceIndex ASC
-puis positionInRound ASC
-puis id ASC en fallback stable
-```
+Règles :
 
-La colonne est indépendante des autres colonnes.
+- round 1 reste visible par défaut ;
+- les rounds suivants sont révélés colonne par colonne ;
+- révéler un round rend calculables/visibles les appearances correspondantes ;
+- ajouter une participation alors que plusieurs rounds sont visibles crée toujours une appearance pour chaque round visible de l’instrument ;
+- après génération des appearances, l’ordre final est confié au solver défini dans `docs/order-resolution-hierarchy-spec.md` ;
+- le solver peut mélanger des appearances de rounds différents si cela permet de satisfaire links, conflicts, played, locked ou l’intention utilisateur.
 
-Exemple :
-
-```txt
-Chant : Anna, Léo, Maya, Zoé, Anna', Léo', Maya', Zoé'
-Guitare : Noé, Iris, Tom, Noé', Iris', Tom'
-Batterie : Sam, Nina, Eli, Lou, Max, Sam', Nina', Eli', Lou', Max'
-```
-
-`Noé'` vient immédiatement après `Tom`. Il ne doit pas y avoir de lignes vides dans la colonne Guitare pour attendre `Zoé` ou `Max` dans d’autres colonnes.
-
-Règle technique recommandée :
+À ne plus faire :
 
 ```txt
-roundOrderKey = participation.roundOrderKey ou participation.baseOrderKey
-appearance.roundOrder = stableOrderValue(roundOrderKey)
-appearance.sortRound = appearance.appearanceIndex
+Trier systématiquement par appearanceIndex ASC puis positionInRound ASC.
+Forcer tout le round 1 avant tout le round 2.
+Refuser un ordre uniquement parce qu’une round 2 passe avant une round 1.
 ```
 
-Tri :
-
-```js
-cards.sort((a, b) =>
-  (a.appearanceIndex ?? 1) - (b.appearanceIndex ?? 1)
-  || (a.roundOrder ?? 0) - (b.roundOrder ?? 0)
-  || String(a.id).localeCompare(String(b.id))
-)
-```
-
-À ne pas faire :
-
-```txt
-stableOrderValue(baseOrderKey) * 1000 + appearanceIndex
-```
-
-Cette formule groupe chaque participant avec ses passages successifs (`Noé`, `Noé'`, `Iris`, `Iris'`) et viole la spec.
+Le fallback stable peut encore utiliser `baseOrderKey` ou l’id quand aucune contrainte ne départage deux cards, mais le round ne doit pas être utilisé comme priorité de résolution.
 
 ---
 
@@ -578,10 +553,10 @@ Pour chaque instrument visible :
 3. générer les appearances visibles nécessaires ;
 4. appliquer les suppressions d’appearances ;
 5. insérer les holes actifs ;
-6. appliquer les mouvements manuels ;
-7. appliquer les links ;
-8. appliquer les conflicts ;
-9. respecter les locks et played ;
+6. appliquer les events bruts de déplacement/lock/play/skip ;
+7. construire les cards visibles ;
+8. appeler le solver global de réorder ;
+9. récupérer l’ordre résolu pour cette colonne ;
 10. produire la liste finale de targets de la colonne.
 
 ---
@@ -612,35 +587,39 @@ La hiérarchie d’ordre complète est définie dans :
 docs/order-resolution-hierarchy-spec.md
 ```
 
-Résumé du plus prioritaire au moins prioritaire :
+Le resolver n’applique plus un tri hiérarchique `round-first`. Il applique un solver de contraintes discrètes.
+
+Résumé :
 
 ```txt
-0. removed / left / hidden
-1. played
-2. locked
-3. anchor de la dernière action utilisateur
-4. décisions d’appel : appearance_skipped / remplacement / faire sans musicien
-5. conflict
-6. link
-7. manual order existant
-8. round / appearanceIndex
-9. base order
-10. fallback stable par id
+Contraintes dures :
+- removed / left / hidden filtrés avant affichage
+- played immobile
+- locked immobile
+- une seule card par colonne et par row résolue
+- links alignés si possible
+- conflicts séparés si possible
+- card toujours dans sa colonne instrument
+
+Contraintes soft :
+- respecter l’intention de la dernière action
+- minimiser le nombre de cards déplacées
+- minimiser la distance de déplacement
+- préserver l’ordre relatif courant quand aucune contrainte ne force un changement
+- fallback stable par ordre de création puis id
 ```
 
 Règles clés :
 
-- `played` est toujours figé et conserve sa position historique ;
-- `locked` est figé tant qu’il n’est pas unlock ;
-- l’anchor de la dernière action est conservée autant que possible ;
-- un conflict gagne contre un link ;
-- un link peut déplacer un groupe mobile, mais jamais du played/locked ;
-- une card déplacée qui appartient à un link transmet sa priorité à toutes les autres targets mobiles du link ; ces targets peuvent pousser les cards mobiles de leurs colonnes pour rejoindre le plateau cible ;
-- si une card non linkée décale une target linkée, cette target linkée relaie la priorité au reste du groupe linké ;
-- si une target déplacée par propagation pousse une autre card linkée, cette card poussée devient prioritaire pour son propre link, ce qui permet une résolution en cascade ;
-- un manual reorder existant prime sur l’ordre automatique, mais pas sur les contraintes fortes ;
-- une action de drag ne doit pas être refusée uniquement parce que la zone contient un link ou un conflict ; elle est acceptée si la card déplacée n’est ni played ni locked, puis le resolver réconcilie le tableau ;
-- si une action demande un déplacement réellement impossible à cause de played/locked, elle doit être refusée avant création de l’event, ou ignorée/clampée par projection avec warning si l’event existe déjà.
+- `played` et `locked` sont des murs ;
+- l’anchor de la dernière action est conservée autant que possible, mais ne bat jamais `played` ou `locked` ;
+- les links sont transformés en groupes et alignés comme des blocs logiques ;
+- les conflicts sont bidirectionnels et doivent séparer les cards concernées ;
+- une card déplacée ou poussée transmet sa priorité à ses links ;
+- si une card poussée est linkée à une autre card, cette autre card gagne une priorité indirecte dans sa colonne ;
+- la propagation continue jusqu’à disparition des violations ou warning d’impossibilité ;
+- les rounds ne sont pas une contrainte d’ordre et peuvent être mélangés ;
+- supprimer un link ou conflict ne restaure pas un ancien ordre : le resolver part de l’ordre courant et répare seulement ce qui reste nécessaire.
 
 ### 8.3 Recalcul global après modification d’ordre
 
@@ -1092,9 +1071,11 @@ Cette section renforce la règle de résolution d’ordre définie dans `order-r
 - À chaque transaction, le resolver doit vérifier les conflicts actifs dans les deux sens, quelle que soit la colonne touchée par l’action.
 - Une card ayant un link ou un conflict reste draggable tant qu’elle n’est ni `played` ni `locked`.
 - Un drag qui déplace une card non-linkée dans une zone contenant une target linkée est autorisé : le manual reorder est conservé, puis le groupe linké suit la target linkée décalée.
-- Après un drag, le resolver applique les conséquences : les cards linkées suivent la card déplacée ou la target linkée décalée si possible ; les conflicts qui deviennent actifs sur la nouvelle ligne déplacent l’autre card conflictuelle vers le slot valide le plus proche.
-- Si la card conflictuelle à déplacer ne peut pas descendre, le resolver peut chercher un slot valide au-dessus afin de résoudre immédiatement le conflict sans attendre l’ajout d’une autre participation.
+- Après un drag, le resolver applique les conséquences : les cards linkées suivent la card déplacée ou la target linkée décalée si possible ; les conflicts qui deviennent actifs sur la nouvelle ligne déplacent la card au coût le plus faible vers le slot valide le plus proche.
+- Si une réparation vers le bas n’est pas possible, le resolver peut chercher un slot valide au-dessus.
+- Si une card poussée est elle-même linkée, sa priorité se propage à son groupe linké.
 - Aucune résolution induite ne peut déplacer une card `played` ou `locked`.
+- Le round d’une appearance est une information métier, jamais une contrainte bloquante de tri.
 
 
 ### Redo linéaire

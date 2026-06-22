@@ -298,45 +298,50 @@ Après affichage du round 2 dans chaque colonne :
 | 9 | — | — | Lou' |
 | 10 | — | — | Max' |
 
-Important : `Noé'` vient immédiatement après `Tom`, car la colonne Guitare ne contient que trois musiciens au round 1. On ne laisse pas de trou pour attendre la fin du round 1 des autres colonnes.
+Important : cet exemple décrit seulement la génération initiale des appearances visibles. L’ordre final peut changer après passage dans le solver de réorder. On ne laisse pas de trou artificiel dans une colonne pour attendre la fin d’un round d’une autre colonne.
 
-## 5.3 Ordre de tri attendu
+## 5.3 Ordre visuel résolu
 
-L’ordre visuel d’une colonne doit être :
+L’ordre visuel d’une colonne vient du solver défini dans :
 
 ```txt
-appearanceIndex ASC
-puis positionInRound ASC
-puis id ASC en fallback stable
+docs/order-resolution-hierarchy-spec.md
 ```
 
-Donc on affiche :
+Il ne faut plus appliquer un tri obligatoire par `appearanceIndex` / `positionInRound`.
+
+À faire :
 
 ```txt
-Anna, Léo, Maya, Zoé, Anna', Léo', Maya', Zoé'
+Afficher les cards dans l’ordre résolu fourni par la projection.
+Afficher le round comme information de card si utile.
+Accepter qu’une round 2 apparaisse avant une round 1 si le solver l’a décidé.
 ```
 
-et jamais :
+À ne pas faire :
 
 ```txt
-Anna, Anna', Léo, Léo', Maya, Maya', Zoé, Zoé'
+Réordonner dans le composant React par round.
+Revenir à un tri round-first après suppression d’un link ou conflict.
+Créer des espaces artificiels dans les autres colonnes.
 ```
 
 Les holes visibles dans une colonne occupent une position seulement dans cette colonne. Ils ne créent pas d’espaces artificiels dans les autres colonnes.
 
 ## 5.4 Ajout après reveal de round
 
-Règle importante :
+Règle importante de génération :
 
 ```txt
 Si on ajoute une participation après reveal du round 2 depuis le flux standard,
-la projection ajoute une appearance à la fin du round 1 ET à la fin du round 2 visible.
+la projection crée une appearance pour le round 1 ET une appearance pour le round 2 visible.
 ```
 
 Pour tous les rounds déjà visibles de l’instrument concerné :
 
 ```txt
-la nouvelle participation reçoit une appearance positionnée à la fin du round visible concerné.
+la nouvelle participation reçoit une appearance initialement placée en fin du groupe généré pour ce round.
+L’ordre final est ensuite recalculé par le solver global.
 ```
 
 Pour les rounds non visibles :

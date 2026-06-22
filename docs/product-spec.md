@@ -349,40 +349,28 @@ Règles V0 :
 
 - round 1 visible par défaut ;
 - les rounds suivants sont révélés colonne par colonne ;
-- chaque instrument est indépendant : les cards d’une colonne sont compactées dans cette colonne, sans laisser de trous artificiels pour s’aligner sur la longueur des autres colonnes ;
-- quand un round suivant est révélé dans une colonne, les appearances de ce round se collent immédiatement après les appearances du round précédent dans cette même colonne ;
-- l’ordre visuel d’une colonne est `round ASC`, puis `positionInRound ASC` ;
-- les holes manuels ne sont pas pris en compte pour créer des espaces artificiels dans les autres colonnes ;
+- chaque instrument est indépendant pour la génération des appearances visibles ;
 - les appearances futures peuvent être calculées par défaut ;
 - elles sont matérialisées dès qu’une action spécifique les cible ;
-- si une participation est ajoutée alors que plusieurs rounds sont visibles, une appearance est créée/positionnée à la fin de chaque round visible de l’instrument concerné ;
+- si une participation est ajoutée alors que plusieurs rounds sont visibles, une appearance est créée pour chaque round visible de l’instrument concerné ;
+- l’ordre final des cards n’est pas un tri `round ASC` ;
+- le solver de réorder peut mélanger round 1, round 2, round 3 si c’est nécessaire pour satisfaire played, locked, links, conflicts ou l’intention utilisateur ;
 - l’ajout entre deux cards est exclu de la V0 et déplacé en V1.
 
-Exemple attendu dans une colonne Chant :
+Exemple de génération avant contraintes dans une colonne Chant :
 
 ```text
-Anna
-Léo
-Maya
-Zoé
-Anna'
-Léo'
-Maya'
-Zoé'
+Anna round 1
+Léo round 1
+Maya round 1
+Zoé round 1
+Anna round 2
+Léo round 2
+Maya round 2
+Zoé round 2
 ```
 
-Exemple attendu dans une colonne Guitare plus courte :
-
-```text
-Noé
-Iris
-Tom
-Noé'
-Iris'
-Tom'
-```
-
-La colonne Guitare ne doit pas attendre la longueur de la colonne Chant avant d’afficher `Noé'`.
+Cet ordre de génération n’est pas une garantie d’affichage final. Après chaque transaction, `docs/order-resolution-hierarchy-spec.md` décide l’ordre résolu du tableau.
 
 ---
 

@@ -101,18 +101,22 @@ frontend/src/features/projection/orderResolution.js
 Cas minimaux :
 
 1. même eventLog rejoué deux fois → même projection exacte ;
-2. ajout D après `A, B, C, A'` joués → `A, B, C, A', D, B', C', D'` ;
-3. drag A sur B avec conflict, B mobile → A reste anchor, B bouge ;
-4. drag A sur B avec conflict, B played → action refusée ou warning déterministe ;
-5. drag A sur B avec conflict, B locked → action refusée ou warning déterministe ;
-6. drag A linké à C → C suit A ;
-7. drag A linké à C avec conflict externe mobile → le conflict pousse la card externe ;
-8. link direct refusé si conflict direct ;
-9. lock empêchant un ajout ultérieur de passer devant ;
-10. link_removed ne provoquant pas un retour magique à un ancien ordre ;
-11. conflict_removed ne provoquant pas un retour magique à un ancien ordre ;
-12. round_revealed respectant played/locked/manual/link/conflict ;
-13. replay après undo linéaire produisant un état stable.
+2. drag simple qui pousse une card mobile ;
+3. drag qui pousse une card linkée et propage son link ;
+4. propagation en chaîne `A pousse B`, `B link C`, `C pousse D`, `D link E` ;
+5. link aligné avec une target locked ;
+6. link impossible avec deux targets fixed sur rows différentes ;
+7. conflict simple entre deux cards mobiles ;
+8. conflict où une card est locked ;
+9. conflict impossible entre deux cards fixed ;
+10. link direct refusé si conflict direct ;
+11. link refusé si deux targets sont dans la même colonne ;
+12. link_removed ne provoquant pas un retour magique à un ancien ordre ;
+13. conflict_removed ne provoquant pas un retour magique à un ancien ordre ;
+14. reveal round puis résolution par solver ;
+15. mélange de rounds autorisé si nécessaire ;
+16. played et locked immobiles ;
+17. replay après undo linéaire produisant un état stable.
 
 Ces tests doivent être indépendants de React et tester le moteur de projection comme une fonction pure.
 

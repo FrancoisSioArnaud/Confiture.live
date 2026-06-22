@@ -1,21 +1,47 @@
-# V0 — Résolution d’ordre déterministe et hiérarchie des contraintes
+# V0 — Solver de réorder par contraintes discrètes
 
-Ce document définit la logique officielle de résolution d’ordre du tableau Confiture.live V0.
+Ce document remplace l’ancienne spec de réorder. Il est la référence canonique pour l’ordre des cards du tableau Confiture.live.
 
-Il complète et prime sur les anciennes formulations dispersées dans :
+Anciennes règles supprimées :
 
-- `projection-engine-spec.md` ;
-- `confiture_event_actions_spec.md` ;
-- `v0-round-order-and-no-between-cards.md` ;
-- `event-payloads-reference.md`.
+- pas de hiérarchie `anchor > conflict > link > round order` appliquée comme un tri séquentiel ;
+- pas de contrainte `round ASC / appearanceIndex ASC` dans l’ordre final ;
+- pas de règle disant que le round 1 doit rester entièrement avant le round 2 ;
+- pas de résolution limitée à l’anchor ou à ses links directs ;
+- pas de retour magique à un ancien ordre quand un link ou conflict est supprimé.
 
-Objectif : garantir qu’à partir du même historique d’events, le frontend et le backend reconstruisent toujours exactement le même tableau, action après action.
+Le round reste une information métier de l’appearance. Il sert à identifier `Nicolas guitare round 1`, `Nicolas guitare round 2`, etc. Il ne sert plus à bloquer ou prioriser l’ordre visuel. Si c’est nécessaire pour satisfaire les contraintes, le solver peut mélanger des appearances de rounds différents dans une même colonne.
 
 ---
 
-## 1. Principe fondamental
+## 1. Objectif
 
-La source de vérité n’est pas l’ordre affiché courant.
+À partir d’un état projeté brut, le solver produit l’ordre final du tableau :
+
+```txt
+state brut + dernière transaction
+→ resolveOrderAfterTransaction(state, context)
+→ columns résolues + projectionWarnings
+```
+
+Le solver doit :
+
+- préserver les cards jouées et verrouillées ;
+- aligner les links quand c’est possible ;
+- séparer les conflicts quand c’est possible ;
+- appliquer l’intention de la dernière action utilisateur ;
+- propager les conséquences d’un déplacement à travers les links et les cards poussées ;
+- choisir la solution qui déplace le moins possible le tableau ;
+- détecter explicitement les états impossibles ;
+- rester pur, déterministe et borné.
+
+Même event log + même snapshot + même configuration = même tableau final.
+
+---
+
+## 2. Source de vérité
+
+La source de vérité n’est pas l’ordre React courant ni le DOM.
 
 La source de vérité est :
 
@@ -23,112 +49,43 @@ La source de vérité est :
 eventLog ordonné + transactions actives + configuration de jam
 ```
 
-La projection doit être recalculée de manière déterministe :
+La projection rejoue les transactions dans l’ordre :
 
 ```txt
 état initial
-→ transaction 1 appliquée
-→ résolution d’ordre
-→ transaction 2 appliquée
-→ résolution d’ordre
-→ transaction 3 appliquée
-→ résolution d’ordre
+→ appliquer transaction 1
+→ résoudre l’ordre
+→ appliquer transaction 2
+→ résoudre l’ordre
+→ appliquer transaction 3
+→ résoudre l’ordre
 → état final
 ```
 
-Même entrée = même sortie.
-
-Cela signifie :
-
-- aucune action ne doit appliquer seulement un déplacement local isolé ;
-- chaque action qui modifie l’ordre ou les contraintes déclenche une réconciliation par le moteur ;
-- la dernière action fournit une intention principale, appelée `anchor` ;
-- le moteur conserve cette intention autant que possible ;
-- les autres cards se réorganisent autour en respectant la hiérarchie des contraintes ;
-- le résultat doit être rejouable depuis zéro sans dépendre d’un état React, d’un cache UI ou d’un ordre DOM.
-
-Formulation produit :
-
-```txt
-La dernière action utilisateur exprime l’intention principale.
-Le moteur conserve cette intention autant que possible, puis réorganise les autres cards pour respecter les contraintes, dans l’ordre : played, locked, anchor, décisions d’appel, conflicts, links, manual order, round order, base order.
-```
-
----
-
-## 2. Projection, events et états dérivés
-
-### 2.1 Les events décrivent les intentions
-
-Les events ne doivent pas forcément lister tous les déplacements induits par le moteur.
+Les events expriment l’intention utilisateur. Ils ne listent pas forcément tous les déplacements induits par le solver.
 
 Exemple :
 
 ```txt
 Utilisateur déplace A.
-A est linké à C.
-A conflict avec B.
+A pousse B.
+B est linkée à C.
 ```
 
-La transaction peut contenir seulement l’intention principale :
+La transaction peut contenir uniquement :
 
 ```txt
 appearance_moved_between(A, afterTarget, beforeTarget)
 ```
 
-Puis le resolver déterministe doit produire :
+Le solver doit ensuite dériver :
 
 ```txt
-A reste au plus proche de la position demandée.
-C suit A à cause du link.
-B est poussé à cause du conflict.
+A garde au mieux sa position demandée.
+B est poussée.
+C gagne une priorité indirecte via le link de B.
+Les colonnes impactées sont réparées jusqu’à stabilité.
 ```
-
-Autre cas important :
-
-```txt
-A est linké à C.
-D est déplacé devant C dans la colonne de C.
-```
-
-La transaction peut seulement exprimer :
-
-```txt
-appearance_moved_between(D, beforeTarget=C)
-```
-
-Le resolver doit conserver ce déplacement de D, constater que C a été décalé, puis déplacer A pour rester aligné avec C. Le déplacement de D ne doit pas être refusé ni annulé simplement parce que C a un link.
-
-Ces déplacements induits sont des **résultats de projection**, pas nécessairement des events supplémentaires.
-
-### 2.2 La projection peut stocker des champs dérivés
-
-Pendant le replay, le moteur peut écrire dans la projection des champs dérivés, par exemple :
-
-```js
-{
-  resolvedOrderKey: "...",
-  resolvedPlateauIndex: 4,
-  playedAtPlateauIndex: 3,
-  frozenOrderKey: "...",
-  lastManualOrderKey: "..."
-}
-```
-
-Ces champs sont recalculables depuis l’eventLog. Ils peuvent apparaître dans un snapshot, mais ne remplacent jamais les events comme source de vérité.
-
-### 2.3 Pas d’effet caché non déterministe
-
-Interdit dans le moteur de résolution :
-
-- `Date.now()` ;
-- `Math.random()` ;
-- lecture du DOM ;
-- lecture IndexedDB/localStorage ;
-- ordre dépendant de l’itération non stable d’un objet ;
-- résolution différente selon le navigateur.
-
-Chaque tie-break doit avoir un fallback stable explicite.
 
 ---
 
@@ -136,575 +93,622 @@ Chaque tie-break doit avoir un fallback stable explicite.
 
 ### Card
 
-Une card est une cible ordonnable du tableau :
+Une card ordonnable du tableau :
 
 - `appearance` ;
 - `hole`.
 
-### Plateau résolu
+Une card reste toujours dans sa colonne instrument. Il n’y a pas de déplacement horizontal manuel.
 
-Un plateau résolu est une ligne visuelle du tableau après réconciliation.
+### Row résolue
 
-Le plateau résolu peut être différent du simple tri naturel `round ASC / position ASC` si des contraintes fortes s’appliquent.
+La row résolue est la ligne logique utilisée par le solver pour aligner les links et séparer les conflicts.
+
+Elle peut être différente de l’index visuel compact final. Une normalisation visuelle peut être faite à la fin si elle ne modifie pas la composition des plateaux joués ou verrouillés.
+
+### Fixed card
+
+Une card fixe ne peut pas bouger :
+
+- appearance jouée ;
+- hole joué ;
+- appearance locked ;
+- hole locked.
+
+`played` est historique et définitif. `locked` est une intention organisateur réversible via unlock, mais tant que le lock existe, la card est immobile.
+
+### Link group
+
+Les links sont transformés en groupes par union-find.
+
+```txt
+A link B
+B link C
+→ groupe { A, B, C }
+```
+
+Le solver résout le groupe entier, pas seulement des paires isolées.
+
+### Conflict
+
+Un conflict interdit deux targets d’être sur la même row :
+
+```txt
+row(A) != row(B)
+```
+
+Un conflict est bidirectionnel. Le sens de création ne doit pas orienter le solver.
 
 ### Anchor
 
-L’`anchor` est la card ou le groupe de cards qui exprime l’intention principale de la dernière action utilisateur.
+L’anchor est la card qui porte l’intention principale de la dernière action utilisateur, quand il y en a une.
+
+Exemples :
 
 | Action | Anchor |
 |---|---|
 | `appearance_moved_between` | appearance déplacée |
 | `hole_moved_between` | hole déplacé |
-| `link_created` | pas d’anchor de contrainte ; le link est un groupe non orienté |
-| `conflict_created` | pas d’anchor de contrainte ; le conflict est une interdiction non orientée |
-| `participation_added` | nouvelle appearance du round concerné, avec intention de fin de round visible |
-| `hole_added` | nouveau hole, avec intention de position issue de l’action |
-| `appearance_skipped` | décision d’appel : skipped + replacement/hole éventuel |
-| `plateau_played` | targets du plateau joué, désormais figées |
-| `appearance_locked` / `hole_locked` | card lockée, figée à sa position courante |
-| `round_revealed` | pas d’anchor forte ; ordre naturel + contraintes existantes |
-| `link_removed` / `conflict_removed` | pas d’anchor forte ; préserver l’ordre résolu courant si rien n’oblige à bouger |
+| `participation_added` | nouvelle appearance, ou groupe de nouvelles appearances visibles |
+| `hole_added` | nouveau hole |
+| `appearance_skipped` | appearance skipped ou replacement/hole créé |
+| `plateau_played` | targets figées par le plateau joué |
+| `appearance_locked` / `hole_locked` | card verrouillée |
+| `link_created` | pas d’anchor directionnelle ; utiliser la stratégie de link |
+| `conflict_created` | pas d’anchor directionnelle ; résoudre avec coût minimal |
+| `link_removed` / `conflict_removed` | pas d’anchor ; préserver l’ordre courant sauf contrainte restante |
+| `instrument_round_visibility_changed` | pas d’anchor forte ; ajouter les appearances puis résoudre |
 
-L’anchor vient d’une action utilisateur concrète, par exemple un drag manuel. Un link ou conflict créé ne porte plus d’anchor métier : son sens de création ne doit pas influencer la résolution. L’anchor est forte, mais pas absolue : elle ne peut jamais battre `played` ou `locked`.
-
-
-### Links non orientés
-
-Un link est un groupe non orienté de targets. Il n’a pas d’anchor. Créer le même link depuis A, B ou C doit produire le même résultat.
-
-Règles :
-
-- un link actif contient toujours au moins deux targets ;
-- une target ne peut appartenir qu’à un seul groupe link actif ;
-- créer un link avec une target déjà linkée fusionne les groupes concernés ;
-- retirer une target d’un link conserve le link restant si au moins deux targets restent ;
-- si moins de deux targets restent, le link est supprimé ;
-- supprimer une target ou un link ne provoque pas de retour magique de l’ordre courant.
-
-### Zone impactée
-
-La zone impactée est l’ensemble minimal à réconcilier :
-
-- colonne de l’anchor ;
-- colonnes des cards linkées à l’anchor ;
-- colonnes contenant des conflicts actifs avec l’anchor ;
-- colonnes contenant une card déplacée en cascade.
-
-En V0, il est acceptable de réconcilier tout le tableau visible si l’algorithme reste déterministe et suffisamment simple.
+L’anchor est importante, mais elle ne bat jamais `played` ou `locked`.
 
 ---
 
-## 4. Hiérarchie officielle
+## 4. Contraintes dures
 
-Ordre du plus prioritaire au moins prioritaire :
+Les contraintes dures doivent être satisfaites ou produire un warning/refus explicite.
 
-```txt
-0. removed / left / hidden
-1. played
-2. locked
-3. anchor de la dernière action utilisateur
-4. décisions d’appel : appearance_skipped / remplacement / faire sans musicien
-5. conflict
-6. link
-7. manual order existant
-8. round / appearanceIndex
-9. base order
-10. fallback stable par id
-```
+### 4.1 Visibilité et appartenance
 
-### 0. `removed / left / hidden`
-
-Ce niveau filtre les cards avant résolution.
-
-- Une appearance supprimée n’est pas affichée.
-- Un hole supprimé n’est pas affiché.
+- Une card supprimée n’est pas affichée.
 - Une participation supprimée ne génère plus d’appearances futures.
 - Un participant `left` ne génère plus d’appearances futures non jouées.
-- Un instrument hidden n’apparaît plus dans le tableau ni dans le drawer d’appel.
+- Un instrument hidden ne participe plus au tableau visible.
+- Une card reste dans sa colonne instrument.
 
-Exception : l’historique joué reste visible si la spec le prévoit.
+### 4.2 Unicité dans une colonne
 
-### 1. `played`
+Une colonne ne peut pas contenir deux cards sur la même row résolue :
 
-Une card jouée est immobile.
+```txt
+A.columnId = B.columnId
+→ row(A) != row(B)
+```
+
+### 4.3 Played
+
+Une card jouée ne bouge jamais.
 
 Règles :
 
-- une card jouée ne bouge plus ;
-- un ajout ultérieur ne peut pas passer devant elle si cela modifie son ordre visuel ;
 - un drag ne peut pas la déplacer ;
 - un link ne peut pas la réaligner ;
 - un conflict ne peut pas la repousser ;
-- un lock est secondaire sur une card jouée, car `played` est déjà plus fort.
+- un ajout ultérieur ne peut pas modifier sa position historique ;
+- un hole joué suit la même règle.
 
-Le moteur doit conserver l’ordre historique de jeu des cards jouées. Pour cela, au moment de `plateau_played`, la projection doit figer au minimum :
+### 4.4 Locked
 
-```txt
-playedAtPlateauIndex
-frozenOrderKey ou frozenResolvedIndex
-```
-
-Ces champs peuvent être dérivés pendant le replay.
-
-### 2. `locked`
-
-Une card lockée non jouée est figée tant qu’elle n’est pas unlock.
+Une card locked ne bouge jamais tant qu’elle n’est pas unlock.
 
 Règles :
 
-- une card lockée ne bouge pas ;
 - un drag ne peut pas la déplacer ;
 - un link ne peut pas la réaligner ;
 - un conflict ne peut pas la repousser ;
-- un ajout ultérieur ne doit pas passer devant si cela implique de la décaler.
+- un ajout ultérieur ne doit pas la décaler ;
+- un hole locked suit la même règle.
 
-Différence :
+### 4.5 Links
+
+Un link actif impose :
 
 ```txt
-played = historique réel, immuable
-locked = intention organisateur, réversible via unlock
+row(A) = row(B) = row(C)...
 ```
-
-### 3. Anchor de la dernière action utilisateur
-
-L’anchor indique quelle card doit être préservée lorsque plusieurs cards non figées se gênent.
 
 Règles :
 
-- l’anchor doit rester au plus proche possible de la position demandée ;
-- les autres cards non jouées et non lockées se réorganisent autour ;
-- l’anchor peut pousser une autre card conflictuelle ;
-- l’anchor peut entraîner son groupe linké ;
-- l’anchor ne peut jamais déplacer du `played` ou du `locked`.
+- les links ciblent des appearances/holes concrets, pas seulement des participants ;
+- les links sont non orientés ;
+- créer un link avec une target déjà linkée fusionne les groupes ;
+- un groupe linké ne peut pas contenir deux cards de la même colonne ;
+- un link ne peut pas contredire un conflict direct ;
+- un link ne peut pas déplacer du played ou du locked.
 
-Exemple :
+### 4.6 Conflicts
 
-```txt
-A est déplacé sur le plateau 3.
-B est déjà plateau 3.
-A conflict B.
-A est l’anchor.
-```
-
-Résultat attendu si B est mobile :
+Un conflict actif impose :
 
 ```txt
-A reste plateau 3.
-B est déplacé vers le slot valide le plus proche.
+row(A) != row(B)
 ```
 
-Si B est joué ou locké, le déplacement de A est refusé ou clampé avec warning en replay.
+Règles :
 
-### 4. Décisions d’appel
+- les conflicts sont non orientés ;
+- `scope: appearance` concerne seulement les appearances ciblées ;
+- `scope: participation` s’applique à toutes les appearances actuelles et futures des participations ciblées ;
+- les conflicts `instrument_constraint` et `manual` utilisent le même resolver ;
+- un conflict ne peut pas déplacer du played ou du locked.
 
-Les décisions prises dans le drawer d’appel sont prioritaires, car elles concernent le plateau en cours.
+### 4.7 Holes
+
+- Un hole occupe une vraie position dans une colonne.
+- Un hole peut être linked, conflicted, locked ou played selon son état.
+- Un hole joué ou locked est fixe.
+- Un hole ne génère pas de hole automatique dans les rounds suivants.
+
+### 4.8 Rounds
+
+Les rounds ne sont pas une contrainte d’ordre.
+
+Règles :
+
+- le round identifie l’occurrence d’une participation ;
+- une appearance de round 2 peut être placée avant une appearance de round 1 si le solver en a besoin ;
+- le reveal d’un round ajoute des appearances visibles, puis le solver résout l’ordre ;
+- l’ajout d’une participation après reveal continue de créer une appearance par round visible, mais leur position finale dépend du solver.
+
+---
+
+## 5. Contraintes soft
+
+Les contraintes soft servent à départager plusieurs solutions valides.
+
+Priorités de coût recommandées :
+
+```txt
+interdit : déplacer played
+interdit : déplacer locked
+très cher : laisser un link désaligné
+très cher : laisser un conflict non résolu
+cher : ne pas respecter l’intention de la dernière action
+moyen : bouger une card indirectement concernée
+faible : déplacer une card libre de quelques rows
+faible : changer l’ordre relatif de cards non concernées
+fallback : ordre de création / id stable
+```
+
+Le round ne doit pas apparaître dans le coût de résolution.
+
+Le solver doit minimiser :
+
+- le nombre de cards déplacées ;
+- la distance totale de déplacement ;
+- les inversions d’ordre relatif non nécessaires ;
+- les oscillations entre deux états ;
+- les mouvements visuels non explicables.
+
+---
+
+## 6. États impossibles
+
+Certains états ne doivent pas être réparés en boucle. Ils doivent être refusés avant transaction quand c’est évident, ou produire un `projectionWarning` pendant le replay.
 
 Exemples :
 
-- `appearance_skipped` ;
-- remplacement par un autre musicien ;
-- “faire sans musicien”.
-
-Règles :
-
-- ces décisions ne doivent pas être annulées implicitement par un ajout, un reveal round ou une réorganisation automatique ;
-- elles ne peuvent pas déplacer du `played` ou du `locked` ;
-- si la décision est impossible à cause d’une contrainte forte, l’action doit être refusée avec snackbar avant création de transaction.
-
-### 5. `conflict`
-
-Un conflict est une interdiction de cohabitation.
-
-Règles :
-
-- un conflict est uniquement inter-colonnes en V0 : il ne peut pas cibler deux cards du même instrument ;
-- deux cards en conflict ne peuvent pas rester sur le même plateau, quel que soit le sens de création du conflict ;
-- le conflict est une contrainte bidirectionnelle : `A → C` et `C → A` créent la même interdiction de cohabitation ;
-- le sens de création sert seulement à définir l’anchor préférée au moment de la résolution ;
-- `scope: appearance` concerne uniquement les appearances ciblées ;
-- `scope: participation` concerne toute la soirée : toutes les appearances actuelles et futures issues des participations ciblées héritent du conflict ;
-- quand un round suivant est révélé, le resolver réapplique les conflicts `scope: participation` aux nouvelles appearances matérialisées ;
-- un conflict `scope: participation` doit séparer `A'` et `C'` de la même manière qu’il sépare `A` et `C` si ces appearances se retrouvent sur le même plateau ;
-- un conflict gagne contre un link ;
-- si le conflict concerne l’anchor et une autre card mobile, l’autre card bouge ;
-- si la card à déplacer ne peut pas descendre, le resolver peut chercher un slot valide au-dessus ;
-- si aucune résolution valide n’existe sans déplacer du `played` ou du `locked`, l’action est refusée ou produit un warning déterministe.
-
-### 6. `link`
-
-Un link est une contrainte positive : jouer ensemble.
-
-Règles :
-
-- un link est uniquement inter-colonnes en V0 : il ne peut pas cibler deux cards du même instrument ;
-- un link essaye d’aligner ses targets sur le même plateau ;
-- une card linkée reste déplaçable tant qu’elle n’est ni `played` ni `locked` ;
-- si une card linkée est déplacée, le groupe linké doit suivre ;
-- la card déplacée transmet sa priorité aux autres targets de son link : ces targets deviennent des relais de priorité et peuvent pousser les cards mobiles de leurs propres colonnes pour rejoindre le plateau cible ;
-- si une card non linkée est déplacée avant/après une card linkée et décale cette card linkée, cette card linkée hérite de la priorité du déplacement, puis transmet cette priorité au reste du groupe linké ;
-- si cette propagation pousse une autre card linkée dans une autre colonne, cette autre card hérite à son tour de la priorité et propage son propre link ;
-- aucun déplacement manuel ne doit être refusé uniquement parce qu’il touche une zone contenant un link ;
-- aucun déplacement partiel durable du groupe linké n’est autorisé dans l’ordre résolu final ;
-- le link ne peut pas violer un conflict ;
-- le link ne peut pas déplacer du `played` ou du `locked`.
-
-Si un déplacement manuel d’une card linkée crée un conflict avec une autre card, le moteur essaye d’abord de déplacer l’autre card conflictuelle. Si une card non-linkée décale une target linkée, le resolver conserve le déplacement manuel et réaligne le reste du groupe linké autour de la target décalée.
-
-Transmission de priorité : quand une card déplacée appartient à un link, la position obtenue par cette card après le drag devient la position cible du groupe linké. Chaque autre target mobile du groupe est alors autorisée à déplacer les cards mobiles de sa colonne pour rejoindre cette position. Si cette target pousse une autre card mobile qui appartient à un autre link, cette card poussée devient à son tour un relais de priorité pour son propre link : le resolver propage donc les conséquences en cascade jusqu’à stabilisation. Ce relais de priorité ne peut jamais déplacer une card `played` ou `locked` : dans ce cas, la partie bloquée du link reste fixe et le resolver émet un warning déterministe.
-
-Point d’implémentation obligatoire : la passe link ne doit jamais pré-réappliquer la stratégie `move_to_first` / `move_to_last` / `average_position` avant d’avoir pris en compte le drag manuel. Sinon, le link peut annuler la card déplacée avant que le resolver détecte l’intention utilisateur. Les links doivent être validés d’abord, puis alignés depuis les `resolvedPlateauIndex` après application du manual move.
-
-### 7. `manual order` existant
-
-Le manual order représente les préférences d’ordre déjà enregistrées par drag.
-
-Règles :
-
-- il prime sur l’ordre automatique ;
-- il ne prime pas sur `played` ;
-- il ne prime pas sur `locked` ;
-- il ne prime pas sur l’anchor de la dernière action ;
-- il ne prime pas sur conflicts ou links actifs.
-
-### 8. `round / appearanceIndex`
-
-Le round structure l’ordre naturel :
-
 ```txt
-round 1 complet
-round 2 complet
-round 3 complet
+A link B
+A conflict B
+→ impossible
 ```
 
-Cette règle est inférieure aux décisions humaines et aux contraintes.
-
-### 9. `base order`
-
-Ordre d’arrivée ou ordre de base de la participation dans son instrument.
-
-Exemple :
-
 ```txt
-A, B, C
-Ajout D
-→ A, B, C, D
+A link B
+A.columnId = B.columnId
+→ impossible
 ```
 
-### 10. Fallback stable par id
+```txt
+A locked row 1
+B locked row 3
+A link B
+→ impossible
+```
 
-Dernier recours pour garantir une projection déterministe.
+```txt
+A played row 1
+B played row 3
+A link B
+→ impossible
+```
+
+```txt
+A locked row 2
+B locked row 2
+A conflict B
+→ impossible
+```
+
+Warning recommandé :
+
+```js
+{
+  type: "link_unresolvable",
+  reason: "linked_cards_fixed_on_different_rows",
+  cardIds: ["appearance_a", "appearance_b"]
+}
+```
 
 ---
 
-## 5. Quand lancer la résolution
+## 7. Algorithme de résolution
 
-La résolution doit être lancée après chaque transaction appliquée.
-
-Elle est particulièrement importante après :
-
-- `participation_added` ;
-- `participation_removed` ;
-- `appearance_moved_between` ;
-- `hole_moved_between` ;
-- `link_created` ;
-- `link_removed` ;
-- `conflict_created` ;
-- `conflict_removed` ;
-- `appearance_locked` ;
-- `appearance_unlocked` ;
-- `hole_locked` ;
-- `hole_unlocked` ;
-- `appearance_skipped` ;
-- remplacement depuis drawer d’appel ;
-- `hole_added` ;
-- `hole_removed` ;
-- `plateau_played` ;
-- `plateau_unplayed` ;
-- `round_revealed` ;
-- `participant_marked_left` ;
-- instrument hidden/shown.
-
-Même si une action ne semble pas déplacer de card, le resolver peut être lancé sans risque : il doit être idempotent.
-
----
-
-## 6. Algorithme conceptuel recommandé
-
-Pseudo-flux :
+### 7.1 Pipeline global
 
 ```txt
-Pour chaque transaction active, dans l’ordre déterministe :
-  1. appliquer ses events bruts au state projeté ;
-  2. déterminer l’anchor et l’intention d’ordre de cette transaction ;
+Pour chaque transaction active :
+  1. appliquer les events bruts au state projeté ;
+  2. construire le context de transaction ;
   3. appeler resolveOrderAfterTransaction(state, context) ;
-  4. écrire dans la projection l’ordre résolu déterministe.
+  4. écrire l’ordre résolu dans la projection ;
+  5. continuer avec la transaction suivante.
 ```
 
-À l’intérieur du resolver :
+Le resolver peut réconcilier tout le tableau visible. Il n’est pas obligé de limiter la résolution à une zone locale.
+
+### 7.2 Pseudo-code
+
+```js
+function resolveOrderAfterTransaction(state, context) {
+  const cards = buildVisibleCards(state)
+  const fixed = collectFixedCards(cards)
+  const linkGroups = buildLinkGroups(state.links, cards)
+  const conflicts = buildActiveConflicts(state.conflicts, cards)
+  const constraints = buildConstraints(cards, fixed, linkGroups, conflicts)
+
+  let layout = buildInitialLayout(cards, state.previousResolvedLayout)
+  layout = applyTransactionIntent(layout, context)
+
+  const structuralWarnings = detectStructuralImpossibleCases(layout, constraints)
+  if (structuralWarnings.length > 0) {
+    return { layout: normalizeLayout(layout), warnings: structuralWarnings }
+  }
+
+  for (let pass = 0; pass < MAX_RESOLUTION_PASSES; pass++) {
+    const violations = findViolations(layout, constraints)
+
+    if (violations.length === 0) {
+      return { layout: normalizeLayout(layout), warnings: [] }
+    }
+
+    const violation = pickHighestPriorityViolation(violations)
+    const repairs = findPossibleRepairs(layout, violation, constraints, context)
+
+    if (repairs.length === 0) {
+      return {
+        layout: normalizeLayout(layout),
+        warnings: [buildUnresolvedViolationWarning(violation)]
+      }
+    }
+
+    const repair = chooseLowestCostRepair(repairs, context)
+    layout = applyRepair(layout, repair)
+  }
+
+  return {
+    layout: normalizeLayout(layout),
+    warnings: [{ type: "resolver_max_passes_reached" }]
+  }
+}
+```
+
+### 7.3 Ordre de traitement des violations
+
+Le solver cherche les violations dans cet ordre :
 
 ```txt
-1. Construire les cards visibles actives.
-2. Partir de l’ordre résolu précédent de la projection.
-3. Appliquer les filtres removed / left / hidden.
-4. Identifier et figer played.
-5. Identifier et figer locked.
-6. Identifier l’anchor et sa position souhaitée.
-7. Construire les groupes linkés.
-8. Placer l’anchor ou son groupe au plus proche de l’intention demandée.
-9. Résoudre les conflicts en déplaçant la card la moins prioritaire.
-10. Réconcilier les links restants sans violer les conflicts, en tenant compte des link targets éventuellement déplacées par une card non linkée.
-11. Préserver le manual order existant quand il ne contredit pas `played`, `locked` ou un conflict impossible à résoudre.
-12. Compléter avec round / appearanceIndex, puis base order, puis id.
-13. Répéter jusqu’à stabilisation ou impossibilité explicite.
+1. collision dans une même colonne
+2. link désaligné
+3. conflict sur la même row
+4. intention de transaction non respectée
+5. instabilité excessive / mouvements inutiles
 ```
 
-La résolution doit avoir un nombre maximal d’itérations pour éviter les boucles infinies. Si ce maximum est atteint, le moteur doit produire un `projectionWarning` déterministe.
+`played` et `locked` ne sont pas des violations à réparer. Ce sont des murs. Si une violation touche une card fixe, le solver tente de bouger les autres cards. Si toutes les cards concernées sont fixes, l’état est impossible.
 
 ---
 
-## 7. Validation avant transaction vs replay défensif
+## 8. Résolution des links
 
-### 7.1 Avant création de transaction
+Pour chaque groupe linké, le solver choisit une row cible.
 
-L’UI doit refuser une action si elle sait que la résolution nécessiterait de :
+### Cas 1 — une card du groupe est fixe
 
-- déplacer une card `played` ;
-- déplacer une card `locked` ;
-- violer un conflict ;
-- casser un link sans action explicite de délink ;
-- déplacer une card hors de sa colonne ;
-- créer un ordre non déterministe.
+```txt
+A locked row 4
+B libre
+C libre
+→ targetRow = 4
+```
 
-### 7.2 Pendant le replay
+B et C doivent rejoindre la row 4 si leurs colonnes le permettent.
 
-Si un event invalide existe malgré tout dans l’historique, la projection ne doit pas crasher.
+### Cas 2 — plusieurs cards fixes sur la même row
+
+```txt
+A locked row 4
+B played row 4
+C libre
+→ targetRow = 4
+```
+
+C suit.
+
+### Cas 3 — plusieurs cards fixes sur des rows différentes
+
+```txt
+A locked row 2
+B played row 5
+→ impossible
+```
+
+### Cas 4 — aucune card fixe
+
+La row cible dépend de la stratégie copiée au moment de `link_created` :
+
+```txt
+move_to_first
+move_to_last
+average_position
+```
+
+- `move_to_first` : row la plus haute des targets.
+- `move_to_last` : row la plus basse des targets.
+- `average_position` : moyenne des rows des targets, arrondie vers la row la plus haute en cas d’égalité.
+
+Si une target a été déplacée par la dernière action ou poussée par propagation, elle peut devenir la référence prioritaire du groupe pour cette passe.
+
+---
+
+## 9. Résolution des collisions
+
+Quand deux cards se retrouvent sur la même row dans une colonne, le solver garde la card la plus prioritaire et pousse l’autre vers le slot valide le plus proche.
+
+Priorité :
+
+```txt
+1. played
+2. locked
+3. anchor ou card directement manipulée
+4. card poussée par propagation prioritaire
+5. card appartenant à un groupe linké en cours d’alignement
+6. card la plus stable dans l’ordre précédent
+7. id stable
+```
+
+Si la card poussée appartient à un link, cette card devient un relais de priorité pour son propre groupe linké.
+
+---
+
+## 10. Résolution des conflicts
+
+Si deux cards en conflict sont sur la même row, le solver déplace la card dont le coût de déplacement est le plus faible.
+
+Critères :
+
+```txt
+1. ne jamais déplacer played
+2. ne jamais déplacer locked
+3. éviter de déplacer l’anchor
+4. éviter de déplacer un groupe linké si cela coûte plus cher
+5. déplacer la card libre vers le slot valide le plus proche
+```
+
+Si déplacer une card conflictuelle implique de déplacer son groupe linké, le solver évalue le coût du groupe complet.
+
+Si aucune réparation ne peut séparer les deux cards sans déplacer du fixed, le solver retourne un warning.
+
+---
+
+## 11. Propagation de priorité
+
+La propagation est obligatoire.
+
+Cas validé :
+
+```txt
+A pousse B
+B link C
+→ C gagne une priorité sur les autres cards de sa colonne
+```
+
+Le solver doit maintenir une file de propagation conceptuelle :
+
+```js
+[
+  { cardId: "A", reason: "user_move", priority: 100 },
+  { cardId: "B", reason: "pushed_by_A", priority: 80 },
+  { cardId: "C", reason: "linked_to_B", priority: 70 }
+]
+```
+
+Quand une card est déplacée ou poussée :
+
+1. elle peut créer une collision dans sa colonne ;
+2. la card poussée peut elle-même appartenir à un link ;
+3. le link de cette card doit être réaligné ;
+4. ce réalignement peut pousser d’autres cards ;
+5. la propagation continue jusqu’à stabilité ou impossibilité.
+
+Cela évite les comportements où un link marche une fois sur deux selon l’ordre des colonnes.
+
+---
+
+## 12. Normalisation finale
+
+À la fin, le solver peut compacter l’affichage des colonnes :
+
+```txt
+rows internes : 1, 3, 7
+index visuel : 1, 2, 3
+```
+
+Mais il ne doit jamais changer la composition ou l’ordre historique des plateaux joués/verrouillés.
+
+Recommandation : distinguer deux notions :
+
+```txt
+resolvedRow  = row logique utilisée par les contraintes
+visualIndex  = index compact pour affichage
+```
+
+---
+
+## 13. Transactions qui déclenchent le resolver
+
+Le resolver doit être appelé après toute transaction qui modifie l’ordre, les cards visibles ou les contraintes :
+
+- ajout/retrait participation ;
+- drag appearance/hole ;
+- création/suppression link ;
+- création/suppression conflict ;
+- lock/unlock ;
+- skip/remplacement depuis drawer d’appel ;
+- hole ajouté/supprimé ;
+- plateau played/unplayed ;
+- reveal round ;
+- participant left ;
+- instrument hidden/shown ;
+- undo/redo.
+
+Même si une action ne semble rien déplacer, appeler le resolver doit être sans risque et idempotent.
+
+---
+
+## 14. Validation avant transaction vs replay défensif
+
+### Avant transaction
+
+L’UI doit refuser une action manifestement impossible :
+
+- déplacer une card played ;
+- déplacer une card locked ;
+- créer un link avec deux targets dans la même colonne ;
+- créer un link entre deux targets en conflict direct ;
+- créer un conflict impossible à résoudre entre deux cards fixes déjà alignées.
+
+### Pendant le replay
+
+Si un event invalide existe malgré tout, la projection ne doit pas crasher.
 
 Elle doit :
 
-- conserver les contraintes fortes ;
+- préserver played/locked ;
 - ignorer ou clamper l’intention impossible ;
-- produire un `projectionWarning` ;
-- continuer le replay de manière déterministe.
+- produire un `projectionWarning` stable ;
+- continuer le replay.
 
 ---
 
-## 8. Exemples de référence
+## 15. Exemples de référence
 
-### 8.1 Ajout après un préfixe joué
-
-État avant :
+### 15.1 Drag simple avec collision
 
 ```txt
-A joué
-B joué
-C joué
-A' joué
-B'
-C'
+Avant : A, B, C
+Action : C déplacé entre A et B
+Après : A, C, B
 ```
 
-Ajout de D.
+C garde la position demandée. B est poussée.
 
-La règle round-first normale voudrait :
+### 15.2 Drag qui pousse une card linkée
 
 ```txt
-A, B, C, D, A', B', C', D'
+Chant   : A, B
+Guitare : C, D
+B link D
+Action : A est déplacé après B, ce qui pousse B
 ```
 
-Mais `A'` est déjà joué. Le résultat attendu est :
+B est poussée dans Chant. D doit suivre B en Guitare si elle est mobile. Si D pousse C ou une autre card, la propagation continue.
+
+### 15.3 Link avec target fixe
 
 ```txt
-A, B, C, A', D, B', C', D'
+A locked row 2
+B libre row 5
+A link B
 ```
 
-`played` gagne sur le round-first.
+B rejoint la row 2 si possible. A ne bouge pas.
 
-### 8.2 Drag qui crée un conflict
+### 15.4 Link impossible avec deux targets fixes
 
 ```txt
-Utilisateur déplace A sur le plateau de B.
-A conflict B.
-A est l’anchor.
-B n’est ni played ni locked.
+A locked row 2
+B played row 5
+A link B
 ```
 
-Résultat :
+Warning : link impossible, les deux targets sont fixes sur des rows différentes.
+
+### 15.5 Conflict simple
 
 ```txt
-A reste à la position demandée.
-B est déplacé vers le slot valide le plus proche.
-Le resolver essaye d’abord les slots suivants, puis les slots précédents si aucun slot suivant n’existe.
+A row 3
+B row 3
+A conflict B
 ```
 
-Une card qui a déjà un conflict reste draggable tant qu’elle n’est ni `played` ni `locked`. Le drag exprime une nouvelle intention ; le resolver réorganise ensuite le tableau si le conflict s’active sur la nouvelle ligne.
+Le solver déplace la card au coût le plus faible vers le slot valide le plus proche.
 
-Si B est `played` ou `locked`, le déplacement de A est refusé ou clampé avec warning déterministe.
-
-### 8.3 Drag d’une card linkée
+### 15.6 Conflict impossible
 
 ```txt
-A est linké à C.
-Utilisateur déplace A.
+A locked row 3
+B played row 3
+A conflict B
 ```
 
-Résultat :
+Warning : conflict impossible, les deux targets sont fixes sur la même row.
+
+### 15.7 Rounds mélangés
 
 ```txt
-A bouge.
-C suit A pour rester sur le même plateau.
+Avant : A r1, B r1, A r2, B r2
+Contrainte : B r2 doit être alignée avec une card d’une autre colonne row 1
+Après possible : B r2, A r1, B r1, A r2
 ```
 
-Une card qui a déjà un link reste draggable tant qu’elle n’est ni `played` ni `locked`. Le drag exprime une nouvelle intention ; le resolver déplace ensuite toutes les cards liées qui peuvent suivre.
+Le résultat est valide si toutes les contraintes dures sont satisfaites. Le round n’interdit pas ce mélange.
 
-Si C ne peut pas suivre à cause de `played`, `locked` ou conflict non résoluble, le déplacement est refusé ou clampé avec warning déterministe.
+### 15.8 Suppression de link ou conflict
 
-### 8.4 Drag d’une card linkée avec conflict externe
-
-```txt
-A est linké à C.
-Utilisateur déplace A au plateau de B.
-A conflict B.
-A est l’anchor.
-C appartient au groupe linké de A.
-B est mobile.
-```
-
-Résultat :
-
-```txt
-A et C sont positionnés ensemble.
-B est déplacé vers le slot valide le plus proche.
-```
-
-Si B est `played` ou `locked`, le déplacement est refusé ou clampé avec warning déterministe.
-
-### 8.5 Création de link contradictoire
-
-```txt
-A conflict C.
-Utilisateur essaye de linker A et C.
-```
-
-Résultat :
-
-```txt
-Le link est refusé.
-Snackbar : Impossible de créer ce link : ces passages ont un conflit.
-```
-
-### 8.6 Suppression de link ou conflict
-
-Supprimer un link ou un conflict ne doit pas faire “revenir magiquement” les cards à un ancien ordre.
-
-Le resolver est relancé, mais il part de l’ordre résolu courant. Si aucune contrainte active n’oblige à bouger, l’ordre reste stable.
+Supprimer une contrainte ne restaure pas un ancien ordre. Le solver repart de l’ordre résolu courant et ne bouge que ce qui est nécessaire pour satisfaire les contraintes restantes.
 
 ---
 
-## 9. Tests minimaux attendus
+## 16. Tests minimaux attendus
 
 Le moteur doit avoir des tests couvrant au minimum :
 
 1. même event log rejoué deux fois → même projection exacte ;
-2. ajout D après `A, B, C, A'` joués ;
-3. drag A sur B avec conflict, B mobile ;
-4. drag A sur B avec conflict, B played ;
-5. drag A linké à C ;
-6. drag A linké à C avec conflict externe mobile ;
-7. drag A linké à C avec conflict externe locked ;
-8. création de link refusée si conflict direct ;
-9. lock empêchant une insertion ultérieure de passer devant ;
-10. suppression de conflict ne provoquant pas un retour magique à l’ordre ancien ;
-11. suppression de link ne provoquant pas un retour magique à l’ordre ancien ;
-12. `round_revealed` respectant played/locked/manual/link/conflict ;
-13. replay après undo linéaire produisant un état cohérent.
-
-
-### 8.8 Exemple conflict bidirectionnel minimal
-
-Setup :
-
-```txt
-Chant   : A, B
-Guitare : C, D
-```
-
-Si l’organisateur crée un conflict `A → C`, A est l’anchor de cette action et C doit se déplacer car A et C sont sur le même plateau. Résultat attendu :
-
-```txt
-Chant   : A, B
-Guitare : D, C
-```
-
-Si l’organisateur crée le même conflict dans l’autre sens `C → A`, C est l’anchor de cette action et A doit se déplacer. Résultat attendu :
-
-```txt
-Chant   : B, A
-Guitare : C, D
-```
-
-Dans les deux cas, le conflict est bidirectionnel et actif immédiatement. Le sens de création ne décide pas si le conflict existe ; il sert seulement à savoir quelle card préserver en priorité pour cette transaction.
-
-Cas sans slot suivant :
-
-```txt
-Chant   : A, B
-Guitare : C, D
-Conflict B → D
-```
-
-D ne peut pas descendre car il est déjà en bas de sa colonne. Le resolver doit donc chercher le slot valide le plus proche au-dessus et produire :
-
-```txt
-Chant   : A, B
-Guitare : D, C
-```
-
-### 8.9 Conflict toute la soirée et reveal round
-
-Setup :
-
-```txt
-Chant : A, B
-Guitare : C, D
-```
-
-L’organisateur crée un conflict `A-C` avec `scope: participation` / “toute la soirée”. Le premier round est résolu :
-
-```txt
-Chant : A, B
-Guitare : D, C
-```
-
-Quand le round 2 est révélé, les appearances `A'`, `B'`, `C'`, `D'` sont matérialisées. Le conflict de participation doit alors s’appliquer automatiquement aux nouvelles appearances :
-
-```txt
-Chant : A, B, A', B'
-Guitare : D, C, D', C'
-```
-
-Il est interdit d’obtenir :
-
-```txt
-Chant : A, B, A', B'
-Guitare : D, C, C', D'
-```
-
-car `A'` et `C'` seraient sur le même plateau.
-
-Avec `scope: appearance`, seul le passage ciblé est concerné. Dans le même setup, un conflict `A-C` scope appearance peut déplacer `C` sous `D`, mais il ne doit pas imposer automatiquement `C'` sous `D'`.
-
-
-
-### 8.7 Plateau joué avec colonnes vides
-
-Quand un plateau est marqué joué, toute la ligne devient historique. Si un instrument visible n’avait aucune card sur cette ligne au moment du jeu, le frontend doit créer un hole `reason: played_empty_slot` avant de créer `plateau_played`. Ce hole est inclus dans les targets jouées.
-
-Conséquence : une participation ajoutée plus tard dans cet instrument ne peut pas se placer sur une ligne déjà jouée ; elle doit être insérée après le trou joué, selon la hiérarchie `played > locked > anchor > ...`.
-
-### 8.8 Anchor de déplacement manuel avec conflict
-
-Lorsqu’un manual reorder crée ou active un conflict, la card déplacée est l’anchor prioritaire. Si A et C sont en conflict et que l’organisateur déplace A sur la ligne de C, le resolver doit essayer de déplacer C. Il ne doit déplacer A qu’en dernier recours si C est impossible à déplacer, et jamais si A est played ou locked.
-
-### 8.9 Conflicts instrument_constraint
-
-Les conflicts `reason: instrument_constraint` créés entre deux participations d’un même participant utilisent exactement le même resolver que les conflicts manuels. Ils ne sont pas un cas spécial : inter-colonnes uniquement, bidirectionnels, scope participation, appliqués aux rounds visibles et futurs.
+2. drag simple qui pousse une card mobile ;
+3. drag qui pousse une card linkée et propage son link ;
+4. propagation en chaîne `A pousse B`, `B link C`, `C pousse D`, `D link E` ;
+5. link aligné avec une target locked ;
+6. link impossible avec deux targets fixed sur des rows différentes ;
+7. conflict simple entre deux cards mobiles ;
+8. conflict où une card est locked ;
+9. conflict impossible entre deux cards fixed ;
+10. création de link refusée si conflict direct ;
+11. création de link refusée si deux targets dans la même colonne ;
+12. suppression de link ne provoquant pas un retour magique à l’ancien ordre ;
+13. suppression de conflict ne provoquant pas un retour magique à l’ancien ordre ;
+14. reveal round puis résolution par solver ;
+15. mélange de rounds autorisé si nécessaire ;
+16. played empêchant toute modification de sa position ;
+17. locked empêchant toute modification de sa position ;
+18. undo/redo linéaire puis replay cohérent.

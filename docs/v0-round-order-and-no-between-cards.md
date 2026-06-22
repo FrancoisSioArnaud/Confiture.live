@@ -1,6 +1,14 @@
-# V0 — Ordre des rounds et suppression de l’ajout entre cards
+# V0 — Rounds visibles et suppression de l’ajout entre cards
 
-Ce document consolide les décisions V0 sur les deuxièmes passages, l’ordre des appearances et la suppression de l’ajout entre cards.
+Ce document conserve les décisions V0 sur la génération des rounds visibles et la suppression de l’ajout entre cards.
+
+Il ne définit plus l’ordre final du tableau. L’ordre final est défini par le solver de contraintes dans :
+
+```txt
+docs/order-resolution-hierarchy-spec.md
+```
+
+Règle importante : **les rounds ne sont pas une contrainte d’ordre**. Une appearance de round 2 peut passer avant une appearance de round 1 si le solver en a besoin pour résoudre links, conflicts, locks, played ou l’intention utilisateur.
 
 ---
 
@@ -25,97 +33,79 @@ Les events de drag vertical (`appearance_moved_between`, `hole_moved_between`) r
 
 ## 2. Rounds par instrument
 
-Chaque instrument est indépendant.
+Chaque instrument est indépendant pour la **génération** des appearances visibles.
 
-Quand on révèle le round 2 d’un instrument, les appearances du round 2 se collent immédiatement à la suite des appearances du round 1 de cette même colonne.
+Règles :
 
-Exemple initial :
+- round 1 est visible par défaut ;
+- les rounds suivants sont révélés colonne par colonne ;
+- révéler un round rend visibles/calculables les appearances correspondantes de cet instrument ;
+- une participation ajoutée alors que plusieurs rounds sont visibles reçoit une appearance pour chaque round visible ;
+- les rounds non visibles restent calculables plus tard ;
+- un hole manuel ne génère pas de hole équivalent dans les rounds suivants.
 
-| Ordre | Chant | Guitare | Batterie |
-|---:|---|---|---|
-| 1 | Anna | Noé | Sam |
-| 2 | Léo | Iris | Nina |
-| 3 | Maya | Tom | Eli |
-| 4 | Zoé | — | Lou |
-| 5 | — | — | Max |
+Exemple de génération avant contraintes :
 
-Après reveal round 2 dans les trois colonnes :
+```txt
+Chant : Anna r1, Léo r1, Maya r1, Anna r2, Léo r2, Maya r2
+```
 
-| Ordre | Chant | Guitare | Batterie |
-|---:|---|---|---|
-| 1 | Anna | Noé | Sam |
-| 2 | Léo | Iris | Nina |
-| 3 | Maya | Tom | Eli |
-| 4 | Zoé | Noé' | Lou |
-| 5 | Anna' | Iris' | Max |
-| 6 | Léo' | Tom' | Sam' |
-| 7 | Maya' | — | Nina' |
-| 8 | Zoé' | — | Eli' |
-| 9 | — | — | Lou' |
-| 10 | — | — | Max' |
-
-`Noé'` vient juste après `Tom`. La colonne Guitare ne laisse pas une ligne vide pour attendre `Zoé` ou `Max` dans les autres colonnes.
+Cet ordre de génération est seulement un point de départ stable. Il peut être modifié par le solver.
 
 ---
 
-## 3. Tri attendu
+## 3. Pas de tri round-first obligatoire
 
-Tri d’une colonne :
+Ancienne règle supprimée :
 
 ```txt
 appearanceIndex ASC
 puis positionInRound ASC
-puis id ASC en fallback stable
+```
+
+À ne plus faire :
+
+```txt
+Forcer tout le round 1 avant tout le round 2.
+Refuser un ordre parce qu’une round 2 passe avant une round 1.
+Réparer un tableau en revenant à un tri round-first.
 ```
 
 À faire :
 
 ```txt
-Anna, Léo, Maya, Zoé, Anna', Léo', Maya', Zoé'
-```
-
-À ne pas faire :
-
-```txt
-Anna, Anna', Léo, Léo', Maya, Maya', Zoé, Zoé'
+Après chaque transaction, appeler le solver de réorder.
+Laisser le solver mélanger les rounds si c’est nécessaire.
+Utiliser le round comme metadata de l’appearance, pas comme priorité d’ordre.
 ```
 
 ---
 
-## 4. Ajout d’un participant quand round 2 est visible
+## 4. Ajout d’un participant quand plusieurs rounds sont visibles
 
-Exemple Guitare :
+Exemple Guitare avec round 1 et round 2 visibles :
 
 ```txt
-Avant : Noé, Iris, Tom, Noé', Iris', Tom'
+Avant génération : Noé r1, Iris r1, Tom r1, Noé r2, Iris r2, Tom r2
 Ajout de Paul
-Après : Noé, Iris, Tom, Paul, Noé', Iris', Tom', Paul'
+Après génération : Noé r1, Iris r1, Tom r1, Paul r1, Noé r2, Iris r2, Tom r2, Paul r2
 ```
 
-La nouvelle participation reçoit une appearance à la fin de chaque round déjà visible.
+Ensuite, le solver peut produire un ordre différent si les contraintes l’exigent.
+
+Exemple valide si un link ou conflict l’impose :
+
+```txt
+Noé r1, Paul r2, Iris r1, Tom r1, Paul r1, Noé r2, Iris r2, Tom r2
+```
+
+Le fait que `Paul r2` passe avant `Paul r1` ou avant d’autres round 1 n’est pas une erreur en soi. Seules les contraintes dures et les warnings du solver déterminent si l’ordre est valide.
 
 ---
 
-## 5. Appearances jouées, rounds visibles et resolver global
+## 5. Played, locked et resolver global
 
-Une appearance jouée ne doit pas être déplacée visuellement par un ajout ultérieur.
-
-Si une insertion logique en fin de round 1 entrerait en conflit avec une card déjà jouée du round 2, `played` gagne contre l’ordre round-first.
-
-Exemple :
-
-```txt
-Avant : A, B, C, A', B', C'
-A, B, C et A' sont joués.
-Ajout de D.
-Après : A, B, C, A', D, B', C', D'
-```
-
-À ne pas faire :
-
-```txt
-A, B, C, D, A', B', C', D'
-```
+Une card jouée ou locked ne doit pas être déplacée par un ajout ultérieur ou par le reveal d’un round.
 
 Règle déterministe :
 
@@ -125,24 +115,16 @@ Après chaque transaction, le moteur de résolution d’ordre recalcule le table
 Le même eventLog doit toujours produire le même tableau final.
 ```
 
-Donc l’ajout de D ne se contente pas de trier par `appearanceIndex`. Il passe par la hiérarchie officielle :
+Contraintes qui priment :
 
 ```txt
-0. removed / left / hidden
-1. played
-2. locked
-3. anchor de la dernière action utilisateur
-4. décisions d’appel : appearance_skipped / remplacement / faire sans musicien
-5. conflict
-6. link
-7. manual order existant
-8. round / appearanceIndex
-9. base order
-10. fallback stable par id
+- played immobile
+- locked immobile
+- une seule card par colonne/row
+- links alignés si possible
+- conflicts séparés si possible
+- intention utilisateur respectée autant que possible
+- minimisation des déplacements
 ```
 
-La hiérarchie complète et les règles d’anchor sont définies dans :
-
-```txt
-docs/order-resolution-hierarchy-spec.md
-```
+Le round ne figure pas dans cette liste.
